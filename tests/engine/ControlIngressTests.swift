@@ -1,0 +1,52 @@
+import Foundation
+import Synchronization
+
+@main enum ControlIngressTests {
+    static func main() {
+        let engine = BridgeEngine.fixture()
+        let executed = Mutex(0)
+        let overflow = Mutex(false)
+        let queue = DispatchQueue(label: "control-test.events")
+        let observation = try! engine.hub.observe(queue: queue, capacity: 256) { event in
+            if case .failure(_, .operationQueueFull) = event { overflow.withLock { $0 = true } }
+        }
+        var id = Switch2ControllerID(rawValue: UUID())
+        engine.btQueue.sync {
+            let peripheral = CBPeripheral(); id = .init(rawValue: peripheral.identifier)
+            let session = ControllerSession(peripheral: peripheral, slot: 0, wasPairingMode: false,
+                queue: engine.btQueue, delegate: engine)
+            engine.connecting[peripheral.identifier] = (session, 0)
+            engine.sessionReady(session)
+        }
+        engine.btQueue.suspend()
+        for _ in 0..<10_000 {
+            engine.withSession(id) { _ in executed.withLock { $0 += 1 } }
+            precondition(engine.controlInbox.withLock { $0.pending.count } <= 128)
+        }
+        engine.btQueue.resume()
+        for _ in 0..<10 { engine.btQueue.sync {}; queue.sync {} }
+        precondition(executed.withLock { $0 } == 128 && overflow.withLock { $0 })
+        print("PASS operation ingress stays at 128, drains in batches and reports typed backpressure")
+        engine.btQueue.sync {
+            let old = engine.sessions[0]!
+            engine.withSession(id) { _ in executed.withLock { $0 += 1 } }
+            engine.retire(old, cancel: false)
+            let peripheral = CBPeripheral(); peripheral.identifier = id.rawValue
+            let replacement = ControllerSession(peripheral: peripheral, slot: 0, wasPairingMode: false,
+                queue: engine.btQueue, delegate: engine)
+            engine.connecting[id.rawValue] = (replacement, 0)
+            engine.sessionReady(replacement)
+        }
+        engine.btQueue.sync {}
+        precondition(executed.withLock { $0 } == 128, "An old operation reached a replacement session")
+        engine.withSession(id) { _ in executed.withLock { $0 += 1 } }
+        engine.btQueue.sync {}
+        precondition(executed.withLock { $0 } == 129)
+        engine.stop(); engine.btQueue.sync {}
+        engine.withSession(id) { _ in executed.withLock { $0 += 1 } }
+        engine.btQueue.sync {}
+        precondition(executed.withLock { $0 } == 129)
+        observation.cancel()
+        print("PASS queued controls cannot cross reconnect or post-stop generation boundaries")
+    }
+}
