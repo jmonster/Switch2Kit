@@ -32,7 +32,6 @@ func checkConsumerAPI() throws {
             let _: UInt64 = controller.state.sequence
         }
     }
-    // Type-check operations without opening a Bluetooth radio during CI.
     let start: () -> Void = manager.start
     let discover: (TimeInterval) throws -> Void = { try manager.discover(for: $0) }
     let rumble: (Switch2ControllerID) throws -> Void = { try manager.pulseRumble(for: $0, strong: 0.2, duration: 0.12) }
@@ -52,7 +51,7 @@ PY
 )
 mkdir -p "$WORK/binary"
 ditto "$FRAMEWORK" "$WORK/binary/Switch2Kit.framework"
-# Force the compiler to consume .swiftinterface rather than same-toolchain binaries.
+# Force .swiftinterface consumption instead of same-toolchain compiled modules.
 find "$WORK/binary/Switch2Kit.framework" -type f -name '*.swiftmodule' -delete
 SDK=$(xcrun --sdk macosx --show-sdk-path)
 for arch in arm64 x86_64; do
@@ -61,7 +60,7 @@ for arch in arm64 x86_64; do
     "$WORK/source/Sources/Consumer/main.swift" -o "$WORK/Consumer-$arch" \
     -Xlinker -rpath -Xlinker "$WORK/binary"
   file "$WORK/Consumer-$arch"
-  lipo -verify_arch "$arch" "$WORK/Consumer-$arch"
+  lipo "$WORK/Consumer-$arch" -verify_arch "$arch"
   if otool -L "$WORK/Consumer-$arch" | grep -q CoreHID; then
     echo 'Independent consumer unexpectedly links CoreHID.' >&2; exit 1
   fi
