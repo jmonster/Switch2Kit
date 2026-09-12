@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import tempfile
 
-BUNDLE_ID = "io.github.jmonster.switch2mac"
+BUNDLE_ID = "wabisabi.ware.gamecubed"
 UNSAFE_ENTITLEMENTS = (
     "get-task-allow", "com.apple.security.get-task-allow",
     "com.apple.security.cs.disable-library-validation",

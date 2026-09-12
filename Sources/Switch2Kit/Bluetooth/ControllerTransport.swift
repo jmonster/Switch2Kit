@@ -20,6 +20,17 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         var scheduled = false
     }
     private let rumbleInbox = Mutex(RumbleInbox())
+    private struct ControlIntent: Sendable {
+        let id: Switch2ControllerID
+        let generation: UUID?
+        let operation: @Sendable (ControllerSession) -> Void
+    }
+    private struct ControlInbox: Sendable {
+        var pending: [ControlIntent] = []
+        var scheduled = false
+        var overflowed = false
+    }
+    private let controlInbox = Mutex(ControlInbox())
     private let hub: ControllerEventHub
     private let diagnostics: Switch2Diagnostics
     private let configuration: Switch2ControllerConfiguration
@@ -111,6 +122,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         btQueue.async { [self] in
             running = false
             rumbleInbox.withLock { $0.pending.removeAll() }
+            controlInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             if central != nil { resetConnections(cancel: true, reason: .stopped) }
             publishState(.paused)
             // A continuation or host completion is never executed on the Bluetooth callback queue.
@@ -121,6 +133,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         btQueue.async { [self] in
             running = false
             rumbleInbox.withLock { $0.pending.removeAll() }
+            controlInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             if central != nil { resetConnections(cancel: true, reason: .stopped) }
             central?.delegate = nil; central = nil
             hub.cancelAll()
@@ -164,14 +177,40 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             else { self.publishManagerStatus() }
         }
     }
-    // Only package companion operations may use this queue-confined seam.
+    // Bounded ingress for LEDs/RSSI/companions. The generation is captured at
+    // submission, so a delayed control request cannot act on a replacement link.
+    // Operations are library/companion code, never arbitrary public host handlers.
     package func withSession(_ id: Switch2ControllerID, operation: @escaping @Sendable (ControllerSession) -> Void) {
-        btQueue.async { [weak self] in
-            guard let self else { return }
-            guard let session = self.sessions.values.first(where: { $0.peripheral.identifier == id.rawValue }),
-                  !session.isRetired else { self.failure(id, .controllerNotReady); return }
-            operation(session)
+        let generation = hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
+        let schedule = controlInbox.withLock { inbox in
+            if inbox.pending.count < 128 {
+                inbox.pending.append(ControlIntent(id: id, generation: generation, operation: operation))
+            } else { inbox.overflowed = true }
+            guard !inbox.scheduled else { return false }
+            inbox.scheduled = true; return true
         }
+        if schedule { btQueue.async { [weak self] in self?.drainControls() } }
+    }
+    private func drainControls() {
+        let (batch, overflowed) = controlInbox.withLock { inbox in
+            let batch = Array(inbox.pending.prefix(32))
+            inbox.pending.removeFirst(batch.count)
+            let overflowed = inbox.overflowed; inbox.overflowed = false
+            return (batch, overflowed)
+        }
+        if overflowed { failure(nil, .operationQueueFull) }
+        for request in batch {
+            guard let session = sessions.values.first(where: { $0.peripheral.identifier == request.id.rawValue }),
+                  !session.isRetired, session.lifetime.id == request.generation else {
+                failure(request.id, .controllerNotReady); continue
+            }
+            request.operation(session)
+        }
+        let again = controlInbox.withLock { inbox in
+            if inbox.pending.isEmpty && !inbox.overflowed { inbox.scheduled = false; return false }
+            return true
+        }
+        if again { btQueue.async { [weak self] in self?.drainControls() } }
     }
     package func failure(_ id: Switch2ControllerID?, _ error: Switch2KitError) {
         hub.publish(snapshot(), event: .failure(id, error))
@@ -449,9 +488,7 @@ extension ControllerTransport: CBCentralManagerDelegate {
         guard central === self.central else { return }
         guard running, !suspended, central.state == .poweredOn, central.isScanning,
               let manu = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data,
-              manu.count > 2,
-              Switch2.u16(manu, 0) == Switch2.nintendoCompanyID,
-              let adv = Switch2.parseAdvertisement(manufacturerData: manu.dropFirst(2)),
+              let adv = Switch2.recognizeAdvertisement(manu),
               connecting[peripheral.identifier] == nil,
               !sessions.values.contains(where: { $0.peripheral.identifier == peripheral.identifier })
         else { return }

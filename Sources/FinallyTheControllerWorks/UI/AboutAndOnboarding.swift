@@ -28,7 +28,7 @@ enum AppInfo {
     /// gesture menu items, keyboard mapping, and the Experiments cluster.
     /// Deliberately a runtime flag rather than a build flag so a beta build
     /// can be un-hidden for development without recompiling:
-    ///   defaults write io.github.jmonster.switch2mac showPreReleaseFeatures -bool YES
+    ///   defaults write wabisabi.ware.gamecubed showPreReleaseFeatures -bool YES
     /// (then relaunch; delete the key to hide again).
     static var showPreReleaseFeatures: Bool {
         UserDefaults.standard.bool(forKey: "showPreReleaseFeatures")
