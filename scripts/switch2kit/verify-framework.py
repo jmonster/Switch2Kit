@@ -8,8 +8,9 @@ import sys
 
 
 def run(*command: str) -> str:
-    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
     print(result.stdout, end="")
+    result.check_returncode()
     return result.stdout
 
 
@@ -30,7 +31,7 @@ def verify(bundle: Path) -> Path:
         raise ValueError("Incorrect framework product name")
     binary = framework / "Switch2Kit"
     run("file", str(binary))
-    run("lipo", "-verify_arch", "arm64", "x86_64", str(binary))
+    run("lipo", str(binary), "-verify_arch", "arm64", "x86_64")
     if set(run("lipo", "-archs", str(binary)).split()) != {"arm64", "x86_64"}:
         raise ValueError("The actual Mach-O architectures differ from the advertised architectures")
     linked = run("otool", "-L", str(binary))
