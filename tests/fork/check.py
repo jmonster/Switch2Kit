@@ -8,7 +8,7 @@ import sys
 
 root = Path(__file__).resolve().parents[2]
 info = plistlib.loads((root / 'Resources/Info.plist').read_bytes())
-assert info['CFBundleIdentifier'] == 'io.github.jmonster.switch2mac'
+assert info['CFBundleIdentifier'] == 'wabisabi.ware.gamecubed'
 assert info['CFBundleDisplayName'].endswith('(jmonster)')
 assert 'Peter Sharma' in info['NSHumanReadableCopyright']
 about = (root / 'Sources/FinallyTheControllerWorks/UI/AboutAndOnboarding.swift').read_text()

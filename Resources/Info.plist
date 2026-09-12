@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>Finally the Controller Works (jmonster)</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.jmonster.switch2mac</string>
+    <string>wabisabi.ware.gamecubed</string>
     <key>CFBundleExecutable</key>
     <string>FinallyTheControllerWorks</string>
     <key>CFBundleVersion</key>

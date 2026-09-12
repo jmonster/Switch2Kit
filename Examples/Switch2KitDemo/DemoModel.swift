@@ -42,10 +42,13 @@ final class DemoModel: ObservableObject {
             }
         } catch { errorMessage = String(describing: error); return }
         keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
-            MainActor.assumeIsolated {
-                guard let self else { return event }
-                return self.key(event)
+            // Keep NSEvent inside the local AppKit callback. Only a Sendable Bool
+            // crosses assumeIsolated's result boundary; NSEvent is not Sendable.
+            let consumed = MainActor.assumeIsolated {
+                guard let self else { return false }
+                return self.key(event) == nil
             }
+            return consumed ? nil : event
         }
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }

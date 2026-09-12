@@ -6,6 +6,7 @@ kit_sources=(
   Sources/Switch2Kit/Public/ControllerTypes.swift
   Sources/Switch2Kit/Public/Lifecycle.swift
   Sources/Switch2Kit/Protocol/Switch2Protocol.swift
+  Sources/Switch2Kit/Protocol/AdvertisementRecognition.swift
   Sources/Switch2Kit/Protocol/DecodedState.swift
   Sources/FinallyTheControllerWorks/Runtime/DirectRumbleCapability.swift
 )

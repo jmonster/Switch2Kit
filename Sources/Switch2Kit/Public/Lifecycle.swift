@@ -81,6 +81,8 @@ public enum Switch2KitError: Error, Equatable, Sendable {
     case invalidParameter
     /// More than 32 event observers were requested; cancel an old observation first.
     case observerLimitReached
+    /// More than 128 pending LED/RSSI/experimental operations; some requests were rejected.
+    case operationQueueFull
     /// A Bluetooth link could not be established.
     case connectionFailed
     /// Service discovery, characteristic subscription or controller handshake failed.

@@ -66,7 +66,7 @@ package final class Switch2Diagnostics: Sendable {
     package func emit(_ level: Switch2LogLevel, _ category: Switch2LogCategory, _ message: String) {
         guard level >= minimum else { return }
         let record = Switch2LogRecord(date: Date(), level: level, category: category,
-                                      message: String(message.prefix(512)))
+                                      message: String(String(decoding: message.utf8.prefix(2048), as: UTF8.self).prefix(512)))
         let schedule = inbox.withLock { state in
             if state.records.count < 128 { state.records.append(record) } else { state.dropped += 1 }
             guard !state.scheduled else { return false }

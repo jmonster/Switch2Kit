@@ -4,7 +4,7 @@ import Switch2Kit
 /// Example-only semantic commands. This module is not part of Switch2Kit's public product.
 package enum NavigationCommand: String, CaseIterable, Hashable, Sendable {
     case up, down, left, right, activate, back
-    var repeats: Bool { self != .activate && self != .back }
+    package var repeats: Bool { self != .activate && self != .back }
 }
 
 /// Distinguishes input ownership so one device cannot release another device's control.
