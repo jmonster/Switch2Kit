@@ -10,3 +10,6 @@ swiftc -swift-version 5 "${kit_flags[@]}" "${kit_session_sources[@]}" \
   Sources/Switch2KitApp/Runtime/ControllerConfiguration.swift \
   "$work/RumbleEngine.swift" tests/rumble/RumbleTests.swift -o "$work/rumble"
 "$work/rumble"
+swiftc -swift-version 5 "${kit_flags[@]}" "${kit_session_sources[@]}" \
+  tests/rumble/SchedulingTests.swift -o "$work/scheduling"
+"$work/scheduling"

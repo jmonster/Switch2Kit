@@ -10,7 +10,7 @@ Intensity is finite `0...1`; zero is mute. Switch 2 Pro Controller and Joy-Con 2
 
 The NSO GameCube controller plays firmware clips: intensity below `0.5` selects soft (preset 3), and `0.5...1` selects strong (preset 2). The controller determines the duration. A submitted clip cannot be cancelled or turned into an arbitrary-duration effect. These commands use the command characteristic, never the HD-motor characteristic.
 
-Every supported model advertises `.rumble`. At most one feedback action per controller is admitted each 500 ms. A busy command lane or blocked radio reports `.operationBusy` instead of storing a delayed clip. Requests are bounded, coalesced per physical controller, expire after 500 ms, and cannot cross connection generations.
+Every supported model advertises `.rumble`. At most one feedback action per controller is admitted each 500 ms. On every model, a busy command lane or blocked radio reports `.operationBusy` instead of storing delayed feedback. A missing characteristic or insufficient write size reports `.protocolFailure`. Rejected feedback does not replace an existing game effect or consume the rate allowance. Requests coalesce per physical controller, expire after 500 ms, and cannot cross connection generations. The inbox holds at most 64 controllers; overflow reports `.operationQueueFull`, while updates to an already-pending controller still replace its intent.
 
 ## Continuous and duration-controlled effects
 
@@ -25,7 +25,7 @@ if controller.capabilities.contains(.continuousRumble) {
 }
 ```
 
-Strong and weak address Pro's left and right actuators; Joy-Con combines them into its one actuator. Pulse durations accept `0.01...0.5` seconds. A newer pulse or continuous intent supersedes the previous one. Old stop callbacks cannot stop a newer effect. Continuous intent expires after 500 ms when the host stops renewing it.
+Strong and weak address Pro's left and right actuators; Joy-Con combines them into its one actuator. Pulse durations accept `0.01...0.5` seconds. A newer pulse or continuous intent supersedes the previous one. Each physical session reuses one stop timer, including when pulses are replaced rapidly. A queued timer event checks the current deadline and generation before stopping an effect. Continuous intent parks the timer, and disconnect cancels it. Continuous intent expires after 500 ms when the host stops renewing it.
 
 GameCube advertises `.rumblePresets` rather than `.continuousRumble`. Use `playRumble` on that model; `setRumble` and `pulseRumble` report `.unsupportedOperation` instead of sending incompatible HD packets.
 
