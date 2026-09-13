@@ -1,59 +1,67 @@
-# Switch2Kit and the controller dashboard
+# Switch2Kit
 
-**Switch2Kit** is a reusable source Swift package for discovering and using Nintendo Switch 2 controllers **inside a macOS application**. The existing **Finally the Controller Works (jmonster)** menu-bar dashboard remains buildable and consumes the library; its SDL, browser, RetroArch, keyboard/mouse and optional virtual-HID outputs remain application features.
+Nintendo Switch 2 controllers on macOS. Use the Swift library in your application or run the Switch2Kit menu-bar app for controller setup, live input, mappings, and game output.
 
-**Library users: [Switch2Kit installation, permissions, examples and API](docs/switch2kit/README.md).**
+**macOS 15+ · Swift 6.2+ · Xcode 26+**
 
-> Redistribution rights are unresolved: an application-wide license has not been supplied. No license is invented by the extraction. See [provenance](docs/switch2kit/provenance.md) before distributing source or an XCFramework.
+## Library
 
-## Use Switch2Kit in your own application
+Add the source package and select the `Switch2Kit` product:
 
-Add this repository as a Swift package and select the **Switch2Kit** library product. SwiftPM source integration is primary. Import the library, retain one manager and a bounded observation, start support and request a discovery window. Your host supplies its own Bluetooth usage description, sandbox capability and permission UI. It does not need CoreHID or Accessibility permission for in-process controller use.
+```swift
+.package(url: "https://github.com/jmonster/Switch2Kit.git", branch: "main")
+```
 
-The supported protocol models are Switch 2 Pro Controller, both Joy-Con 2 units and the NSO GameCube controller. Joy-Con grouping and logical players belong to the host. Stable rumble covers established Pro/Joy-Con HD operations; GameCube presets and NFC/audio research are separated into the unsupported **Switch2KitExperimental** product.
+Import `Switch2Kit`, retain a `Switch2ControllerManager`, observe input, and open a discovery window. Pro Controller 2, left and right Joy-Con 2, and NSO GameCube controllers use one API for input, rumble, player LEDs, and connection management.
+
+[Installation and examples](docs/library/README.md) · [API](docs/library/api.md) · [Bluetooth lifecycle](docs/library/bluetooth-lifecycle.md) · [SwiftUI](docs/library/swiftui.md) · [AppKit](docs/library/appkit.md)
+
+The host supplies its Bluetooth usage description and sandbox Bluetooth capability. In-process input requires neither Accessibility permission nor CoreHID. Output mappings belong to the host; the library does not register a system `GCController`.
+
+## App
 
 ```sh
-swift package describe
+bash scripts/build-app.sh
+open build/Switch2Kit.app
+```
+
+Hold the controller's Sync button, choose **Find New Controllers**, and verify input in Dashboard. Set up the output used by your game:
+
+| Output | Setup |
+| --- | --- |
+| SDL game or emulator | [SDL integration](sdl/README.md) |
+| RetroArch | [Network gamepad](docs/retroarch-integration.md) |
+| Chromium web game | [Browser extension](browser/README.md) |
+
+[Quick start](docs/quick-start.md) · [Rumble](docs/rumble.md) · [App configuration](docs/app-identity.md)
+
+## Build and test
+
+```sh
 swift build
 swift test
+bash tests/run.sh
 bash scripts/build-switch2kit-demo.sh
 bash scripts/build-switch2kit-xcframework.sh
 bash scripts/verify-switch2kit-consumer.sh
 ```
 
-Use macOS with Swift 6.2+ and full Xcode 26+ for Apple-SDK builds. macOS 15 is the declared deployment minimum. The [independent demo](Examples/Switch2KitDemo) displays live input and semantic UI navigation. The [distribution guide](docs/switch2kit/xcframework.md) explains the real universal arm64/x86_64 archive and interface checks. Build/test checks are not physical-controller qualification.
+The independent demo shows live input and local semantic navigation. The XCFramework includes macOS arm64 and x86_64 with textual Swift interfaces. SwiftPM source integration is the default.
 
-## Build and use the existing dashboard
+[Development](docs/development.md) · [XCFramework integration](docs/library/xcframework.md) · [Troubleshooting](docs/library/troubleshooting.md)
 
-Connecting a controller and getting its input into a game are separate steps. Start with [From installation to input in a game](docs/quick-start.md). Some historical guides use the GameCubed name; the actual app output remains **`build/Finally the Controller Works (jmonster).app`**.
+## Repository
 
-```sh
-bash tests/run.sh
-bash scripts/build-app.sh
+```text
+Sources/Switch2Kit/          Controller library
+Sources/Switch2KitApp/       Menu-bar app, output adapters, and controller tools
+Examples/                   Independent demo and navigation router
+Tests/Switch2KitTests/       Library tests
+tests/                      Transport fakes and integration regressions
+docs/                       User and developer guides
+scripts/                    Build, packaging, and verification tools
+browser/                    Browser integration
+sdl/                        SDL patches and build tools
 ```
 
-The dashboard needs an Apple SDK providing CoreHID to compile its optional output; the stable library does not link it. Development builds are ad-hoc signed, not notarized releases. Automatic updates remain disabled. The required dashboard bundle ID is **`wabisabi.ware.gamecubed`**; [identity and signing](docs/app-identity.md) explains the explicit correction from the inconsistent GitHub baseline and its privacy/preferences implications.
-
-Successful macOS build checks provide a development-app ZIP, checksum and source revision. Extract the app and place it in Applications before loading its bundled browser extension. About shows the source revision and whether the build includes local changes.
-
-## Choose an application output
-
-| Intended consumer | Setup | Limits |
-| --- | --- | --- |
-| Compatible SDL3 game or emulator | [SDL bridge](sdl/README.md) | Requires the custom library; not a system-wide driver. Rebuild after changing patches. |
-| RetroArch | [Network gamepad output](docs/retroarch-integration.md) | Disabled by default. No rumble return path; GameCube travel maps to digital L2/R2. Use a trusted network. |
-| Chromium web game | [Browser bridge](browser/README.md) | Disabled by default. Allow the extension's exact ID and apply settings. No Safari/Firefox package. |
-
-CoreHID virtual-controller output still requires Apple's restricted entitlement. Verify compatibility in the intended game rather than assuming a Bluetooth connection or build proves it. Run only one controller-owning bridge/host at a time. Switch2Kit does not make its devices system `GCController` instances or grant unrelated applications access.
-
-The [Pro Controller guide](docs/pro-controller-support.md) covers input, calibration, rumble and output capabilities. NFC/headset audio remain experimental. The browser does not forward GameCube HD-motor commands; GameCube preset diagnostics still need hardware verification. Check analog travel and digital clicks separately.
-
-## Testing and reporting
-
-SwiftPM tests cover the stable API, decoding, discovery, bounded observations/logging and navigation policy. `bash tests/run.sh` retains the protocol, fake Bluetooth boundary and application/output suites. SDL regressions exercise the pinned driver; macOS checks build and verify app bundles, the framework and independent consumers. See [migration and test ownership](docs/switch2kit/migration.md).
-
-Automated checks do not replace physical pairing/reconnection, sleep/wake, multiplayer, latency or real-game testing. Include source revision, macOS and controller firmware, transport/output path and observed behavior in reports. Review logs for sensitive data before sharing. Do not submit raw serials, bond material or experimental sensor/NFC/audio contents by default.
-
-## Credits
-
-See [CREDITS.md](CREDITS.md) for contributors and retained third-party notices. Those acknowledgments do not grant a new application-wide license.
+[Contributors](CREDITS.md)

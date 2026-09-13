@@ -36,6 +36,16 @@ import Foundation
             precondition(output.surfaceQuality == 77 && output.liftDistance == 88)
             precondition(engine.idleSweepTimer != nil)
             print("PASS public snapshots reach the application output boundary with all state fields intact")
+            first.testRumble(intensity: 0)
+            first.testRumble(intensity: .nan)
+            precondition(engine.controllerManager.pulses.isEmpty)
+            first.testRumble(intensity: 0.75)
+            first.testRumble(intensity: 0.75)
+            precondition(engine.controllerManager.pulses.count == 1)
+            let pulse = engine.controllerManager.pulses[0]
+            precondition(pulse.id == controller.id && pulse.strong == 0.75 && pulse.weak == 0 && pulse.duration == 0.4)
+            print("PASS GameCube app rumble uses the public manager with bounded direct-test admission")
+
 
             let neutral = snapshot(id: controller.id, generation: controller.connectionID, model: controller.model)
             engine.receiveController(.input(neutral))

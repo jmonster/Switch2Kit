@@ -6,15 +6,15 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 swiftc "${kit_flags[@]}" -swift-version 6 -warnings-as-errors \
  "${kit_sources[@]}" \
- Sources/FinallyTheControllerWorks/Runtime/OutputHealth.swift \
+ Sources/Switch2KitApp/Runtime/OutputHealth.swift \
  tests/output-health/PolicyTests.swift -o "$work/policy"
 "$work/policy"
 python3 - <<'PY'
 from pathlib import Path
-app=Path('Sources/FinallyTheControllerWorks/FTCWApp.swift').read_text()
-view=Path('Sources/FinallyTheControllerWorks/UI/OutputStatusView.swift').read_text()
-dashboard=Path('Sources/FinallyTheControllerWorks/UI/DashboardView.swift').read_text()
-assert '.disabled(!status.model.hasDirectRumbleTest)' in dashboard
+app=Path('Sources/Switch2KitApp/Switch2KitApp.swift').read_text()
+view=Path('Sources/Switch2KitApp/UI/OutputStatusView.swift').read_text()
+dashboard=Path('Sources/Switch2KitApp/UI/DashboardView.swift').read_text()
+assert '.disabled(!status.model.capabilities.contains(.rumble))' in dashboard
 assert 'engine.testRumble(serial: serial)' in dashboard
 assert 'engine.testRumble(serial: controller.serial)' in view
 assert 'engine.testRumble(player:' not in dashboard + view
@@ -32,7 +32,7 @@ PY
 python3 - "$work" <<'PY'
 from pathlib import Path
 import re, sys
-out=Path(sys.argv[1]);base=Path('Sources/FinallyTheControllerWorks')
+out=Path(sys.argv[1]);base=Path('Sources/Switch2KitApp')
 (out/'State.swift').write_text('// ControllerState is compiled from the production Switch2Kit target.\n')
 for kind, source, fixture in [('UDP','UDPHub','tests/udp/UDPTests.swift'),('NETPAD','NetworkGamepadSink','tests/retroarch/NetworkTests.swift')]:
     s=(base/f'Output/{source}.swift').read_text()
@@ -44,8 +44,8 @@ PY
 for kind in UDP NETPAD; do
   swiftc "${kit_flags[@]}" -swift-version 5 -D "HEALTH_$kind" \
     "${kit_sources[@]}" \
-    Sources/FinallyTheControllerWorks/Runtime/BoundedStateMailbox.swift \
-    Sources/FinallyTheControllerWorks/Runtime/OutputHealth.swift \
+    Sources/Switch2KitApp/Runtime/BoundedStateMailbox.swift \
+    Sources/Switch2KitApp/Runtime/OutputHealth.swift \
     "$work/State.swift" "$work/$kind.swift" "$work/${kind}Types.swift" \
     tests/output-health/Probe.swift tests/output-health/SinkTests.swift -o "$work/$kind"
   "$work/$kind"
@@ -54,8 +54,8 @@ done
 if [ "$(uname -s)" = Darwin ]; then
   swiftc "${kit_flags[@]}" -swift-version 6 -warnings-as-errors \
     "${kit_sources[@]}" \
-    Sources/FinallyTheControllerWorks/Runtime/OutputHealth.swift \
-    Sources/FinallyTheControllerWorks/UI/OutputStatusStore.swift \
+    Sources/Switch2KitApp/Runtime/OutputHealth.swift \
+    Sources/Switch2KitApp/UI/OutputStatusStore.swift \
     tests/output-health/StoreTests.swift -o "$work/store"
   "$work/store"
 fi

@@ -103,9 +103,12 @@ public final class Switch2ControllerManager: ObservableObject {
     /// controller-stored bond is deleted. The host owns any persistent settings removal.
     public nonisolated func forget(_ id: Switch2ControllerID) { transport.disconnect(id, forget: true) }
 
-    /// Sets normalized HD-rumble intent: each channel is 0...1. Pro uses strong=left, weak=right;
-    /// a Joy-Con mixes the channels into its single actuator. GameCube is rejected with a typed event.
-    /// Zero stops rumble. A 500 ms failsafe stops an intent unless renewed; this protects stalled hosts.
+    /// Sets normalized rumble intent: each channel is 0...1. Pro uses strong=left, weak=right;
+    /// a Joy-Con mixes the channels into one actuator. Zero stops HD rumble, and a 500 ms
+    /// failsafe expires HD intent unless renewed. GameCube maps max(strong, weak) to one
+    /// firmware preset: 0 is silent, below 0.5 is soft, and 0.5...1 is strong. Its finite
+    /// clip finishes in firmware and cannot be stopped mid-clip. Requests are admitted at
+    /// most twice per second with no queued retry; busy requests emit `operationQueueFull`.
     /// Repeated intents coalesce in a bounded inbox. Values must be finite and in range.
     public nonisolated func setRumble(for id: Switch2ControllerID, strong: Double, weak: Double = 0) throws {
         guard strong.isFinite, weak.isFinite, (0...1).contains(strong), (0...1).contains(weak) else {
@@ -114,9 +117,11 @@ public final class Switch2ControllerManager: ObservableObject {
         transport.submitRumble(id, strong: strong, weak: weak, duration: nil)
     }
 
-    /// Plays a bounded 0.01...0.5 second HD-rumble pulse. A later pulse/intent replaces it;
-    /// generation checks prevent an old stop callback from cancelling newer rumble.
-    /// The channel mapping and model restrictions are the same as `setRumble`.
+    /// Plays rumble through the selected controller's motor protocol. HD models honor
+    /// duration in 0.01...0.5 seconds; generation checks keep old stops from cancelling
+    /// newer effects. GameCube uses one finite soft/strong firmware clip and ignores
+    /// duration because that protocol has no duration field. Channel mapping and busy
+    /// behavior match `setRumble`. Check `continuousRumble` for duration/stop control.
     public nonisolated func pulseRumble(for id: Switch2ControllerID, strong: Double = 0.5,
                                        weak: Double = 0, duration: TimeInterval = 0.15) throws {
         guard duration.isFinite, (0.01...0.5).contains(duration), strong.isFinite, weak.isFinite,

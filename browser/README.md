@@ -1,11 +1,11 @@
 # Browser bridge
 
 The browser output lets Chromium web games consume controller state from
-GameCubed without a system-wide virtual HID device. See
+Switch2Kit without a system-wide virtual HID device. See
 [access and lifecycle](INTEGRATION.md) for listener limits and security details.
 
 ```
-Controller ──BLE──> GameCubed ──ws://127.0.0.1:24810──> extension ──> navigator.getGamepads()
+Controller ──BLE──> Switch2Kit ──ws://127.0.0.1:24810──> extension ──> navigator.getGamepads()
                             <──────── rumble ─────────────────── vibrationActuator
 ```
 
@@ -18,7 +18,7 @@ Controller ──BLE──> GameCubed ──ws://127.0.0.1:24810──> extensio
 
 ## Install
 
-1. Build and run GameCubed. The browser listener is disabled by default.
+1. Build and run Switch2Kit. The browser listener is disabled by default.
 2. In Chromium, open `chrome://extensions`, enable **Developer mode**, click
    **Load unpacked**, and select `browser/extension` or the folder opened by
    **Browser Bridge Settings → Show bundled extension**. Copy its 32-letter ID.
@@ -91,7 +91,7 @@ clicks, and per-game mappings on hardware.
 The default Nintendo compatibility persona is `Vendor: 057e Product: 2069`,
 not a claim about every model's physical product ID. `PERSONA_DEFAULT` in
 `shim.js` selects the Xbox persona. A site's override is
-`localStorage.ftcwPersona = 'xbox'` (or `'nintendo'`), followed by reload.
+`localStorage.switch2kitPersona = 'xbox'` (or `'nintendo'`), followed by reload.
 
 The extension injects only into sites listed in its manifest. Add only intended
 game sites and reload. Multiple tabs receive the same controllers. Native-client

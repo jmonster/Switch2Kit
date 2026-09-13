@@ -8,7 +8,7 @@ import Foundation
             precondition(!path.title.isEmpty && !path.detail.isEmpty)
             precondition(path.guideURL.scheme == "https")
             precondition(path.guideURL.host == "github.com")
-            precondition(path.guideURL.path == "/jmonster/switch2mac/blob/main/" + path.guidePath)
+            precondition(path.guideURL.path == "/jmonster/Switch2Kit/blob/main/" + path.guidePath)
             precondition(FileManager.default.fileExists(atPath: path.guidePath), "Setup link has no checked-in guide")
         }
         // Keep each integration routed to its own maintained guide.

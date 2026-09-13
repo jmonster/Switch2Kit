@@ -91,9 +91,14 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             guard let session = sessions.values.first(where: { $0.peripheral.identifier == id.rawValue }),
                   !session.isRetired else { failure(id, .controllerNotReady); continue }
             guard intent.generation == session.lifetime.id else { continue }
-            guard session.model.hasHDRumble else { failure(id, .unsupportedOperation); continue }
             guard ProcessInfo.processInfo.systemUptime - intent.submittedAt < 0.5 else {
                 session.applyRumble(strong: 0, weak: 0); continue
+            }
+            if session.model == .nsoGameCube {
+                if !session.applyPresetRumble(intensity: max(intent.strong, intent.weak)) {
+                    failure(id, .operationQueueFull)
+                }
+                continue
             }
             if let duration = intent.duration {
                 session.applyRumblePulse(strong: intent.strong, weak: intent.weak, duration: duration)

@@ -7,7 +7,8 @@ final class PublicValueTests: XCTestCase {
         for model in Switch2ControllerModel.allCases {
             XCTAssertTrue(model.capabilities.contains(.buttons))
             XCTAssertEqual(model.capabilities.contains(.analogTriggers), model == .nsoGameCube)
-            XCTAssertEqual(model.capabilities.contains(.rumble), model != .nsoGameCube)
+            XCTAssertTrue(model.capabilities.contains(.rumble))
+            XCTAssertEqual(model.capabilities.contains(.continuousRumble), model != .nsoGameCube)
         }
     }
     func testFiniteStickAndTriggerBounds() {

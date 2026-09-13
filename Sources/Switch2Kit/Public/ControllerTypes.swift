@@ -38,8 +38,9 @@ public enum Switch2ControllerModel: UInt16, CaseIterable, Codable, Sendable {
         case .joyCon2Left: result.formUnion([.leftStick, .opticalSensor, .rumble])
         case .joyCon2Right: result.formUnion([.rightStick, .opticalSensor, .rumble])
         case .proController2: result.formUnion([.leftStick, .rightStick, .rumble])
-        case .nsoGameCube: result.formUnion([.leftStick, .rightStick, .analogTriggers])
+        case .nsoGameCube: result.formUnion([.leftStick, .rightStick, .analogTriggers, .rumble])
         }
+        if self != .nsoGameCube { result.insert(.continuousRumble) }
         return result
     }
     package var hasAnalogTriggers: Bool { self == .nsoGameCube }
@@ -67,10 +68,12 @@ public struct Switch2ControllerCapabilities: OptionSet, Hashable, Sendable {
     public static let motion = Self(rawValue: 1 << 5)
     /// Raw Joy-Con optical counters and surface telemetry.
     public static let opticalSensor = Self(rawValue: 1 << 6)
-    /// Established HD rumble. GameCube preset research is intentionally excluded.
+    /// Rumble commands: HD motor control or finite GameCube firmware presets.
     public static let rumble = Self(rawValue: 1 << 7)
     /// Four player indicator lights; this does not assign a logical player.
     public static let playerLEDs = Self(rawValue: 1 << 8)
+    /// Continuously variable, cancellable HD rumble; absent on the GameCube preset motor.
+    public static let continuousRumble = Self(rawValue: 1 << 9)
 }
 
 /// Simultaneous digital controls. Opposing D-pad directions can both be present.

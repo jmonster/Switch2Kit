@@ -3,8 +3,8 @@ import Foundation
 @main enum RuntimeTests {
     static func main() throws {
         let info: [String: Any] = ["CFBundleIdentifier": "wabisabi.ware.gamecubed",
-            "LSMinimumSystemVersion": "15.0", "FTCWSourceRevision": String(repeating: "a", count: 40),
-            "FTCWSourceDirty": false, "FTCWBuildArchitecture": RuntimeCompatibility.architecture]
+            "LSMinimumSystemVersion": "15.0", "S2KSourceRevision": String(repeating: "a", count: 40),
+            "S2KSourceDirty": false, "S2KBuildArchitecture": RuntimeCompatibility.architecture]
         let report = try RuntimeCompatibility.report(info: info, os: .init(majorVersion: 15, minorVersion: 7, patchVersion: 9))
         precondition(report.operatingSystem == "15.7.9" && report.hardwareQualification == "not-run")
         precondition((try? RuntimeCompatibility.report(info: info, os: .init(majorVersion: 14, minorVersion: 9, patchVersion: 0))) == nil)

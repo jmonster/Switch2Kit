@@ -14,4 +14,4 @@ Quit the dashboard or any other process owning the same controller. The bundled 
 
 Use arrows/Return/Escape or D-pad/A/B to navigate the nine-item grid. Release controls after focus/reconnect changes. Native GameController.framework snapshots are another input provider to the same semantic router. No synthetic global keyboard/mouse events, Accessibility approval or virtual HID device are involved. Inactive navigation is suppressed; stop/sleep/termination cancel host timers/monitors and retire library sessions.
 
-See [navigation behavior and tests](../docs/switch2kit/navigation.md), [permissions](../docs/switch2kit/README.md) and [lifecycle](../docs/switch2kit/bluetooth-lifecycle.md). Physical radio/controller behavior is not established by a successful example build.
+See [navigation behavior and tests](../docs/library/navigation.md), [permissions](../docs/library/README.md) and [lifecycle](../docs/library/bluetooth-lifecycle.md). Physical radio/controller behavior is not established by a successful example build.

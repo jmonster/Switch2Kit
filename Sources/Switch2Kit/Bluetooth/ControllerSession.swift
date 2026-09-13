@@ -126,6 +126,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     private var rumbleSetAt: TimeInterval = 0
     private var rumbleActive = false
     private var rumbleGeneration: UInt64 = 0
+    private var lastRumbleTestAt: TimeInterval = -.infinity
 
     /// Latest decoded state. All reads and writes belong to the Bluetooth
     /// queue; consumers receive a Sendable value snapshot, never this storage.
@@ -559,9 +560,27 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         maintainTick()
     }
 
-    /// Direct diagnostic, independent of player assignment or game output.
-    /// GameCube clips finish in firmware: they are not duration-controlled
-    /// effects and must not be advertised as general game-rumble support.
+    /// Submits one firmware-timed GameCube effect. No motor-format fallback or delayed retry.
+    /// Returns false when the command lane is occupied, write capacity is unavailable,
+    /// or the two-per-second admission limit is reached. Zero sends no command.
+    @discardableResult
+    package func applyPresetRumble(intensity: Double) -> Bool {
+        guard !ended, isReady, model == .nsoGameCube else { return false }
+        guard let preset = Switch2.GameCubeRumblePreset.forTest(intensity: intensity) else { return true }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastRumbleTestAt >= 0.5, isCommandIdle,
+              chars[Switch2.GATT.commandWrite] != nil,
+              peripheral.canSendWriteWithoutResponse,
+              peripheral.maximumWriteValueLength(for: .withoutResponse) >= 12 else { return false }
+        lastRumbleTestAt = now
+        sendCommand(Switch2.Command.vibration, Switch2.Subcommand.vibrationPlayPreset, preset.payload) { [weak self] result in
+            switch result {
+            case .success: self?.log(.debug, "Rumble preset acknowledged")
+            case .failure: self?.log(.warning, "Rumble preset command failed")
+            }
+        }
+        return true
+    }
 
 
     package func pulseRumble(strong: Double, weak: Double = 0, duration: Double) {
@@ -573,7 +592,11 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     /// Queue-confined so a direct test cannot jump ahead of a newer game
     /// request by enqueueing a second hop onto the same Bluetooth queue.
     package func applyRumblePulse(strong: Double, weak: Double, duration: Double) {
-        guard !ended, duration.isFinite else { return }
+        guard !ended, isReady, duration.isFinite else { return }
+        if model == .nsoGameCube {
+            if !applyPresetRumble(intensity: max(strong, weak)) { log(.warning, "Rumble command busy") }
+            return
+        }
         applyRumble(strong: strong, weak: weak)
         let generation = rumbleGeneration
         queue.asyncAfter(deadline: .now() + max(0, min(5, duration))) { [weak self] in

@@ -37,8 +37,8 @@ if __name__ == "__main__":
     if mode == "session":
         src = Path(os.environ.get("SESSION_SOURCE", "Sources/Switch2Kit/Bluetooth/ControllerSession.swift"))
         (out / "ControllerSession.swift").write_text(fixture(src.read_text()))
-        src = Path("Sources/Switch2KitExperimental/ExperimentalControllerSession.swift")
-        (out / "ExperimentalControllerSession.swift").write_text(fixture(src.read_text()))
+        src = Path("Sources/Switch2KitApp/ControllerTools/ControllerToolSession.swift")
+        (out / "ControllerToolSession.swift").write_text(fixture(src.read_text()))
     elif mode == "transport":
         for name in ["ControllerTransport", "DiscoveryPolicy"]:
             src = Path(f"Sources/Switch2Kit/Bluetooth/{name}.swift")
@@ -46,10 +46,10 @@ if __name__ == "__main__":
     elif mode == "policy":
         src = Path("Sources/Switch2Kit/Bluetooth/DiscoveryPolicy.swift")
         (out / "ControllerPolicy.swift").write_text(fixture(src.read_text()))
-        src = Path("Sources/FinallyTheControllerWorks/Runtime/DiscoveryPolicy.swift")
+        src = Path("Sources/Switch2KitApp/Runtime/DiscoveryPolicy.swift")
         (out / "AppPolicy.swift").write_text(fixture(src.read_text()))
     elif mode == "rumble":
-        src = Path("Sources/FinallyTheControllerWorks/Bluetooth/BridgeEngine.swift").read_text()
+        src = Path("Sources/Switch2KitApp/Bluetooth/BridgeEngine.swift").read_text()
         body = extract(src, "private struct Logical") + "\n" + extract(src, "func testRumble(serial:")
         header = """import Foundation
 typealias ApplicationController = ControllerSession

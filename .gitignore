@@ -7,3 +7,7 @@ signing/*.cer
 signing/
 test.nfc
 *.nfc
+
+__pycache__/
+*.py[cod]
+sdl/libSDL3*.dylib

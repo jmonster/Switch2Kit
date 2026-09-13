@@ -45,15 +45,15 @@ class InstallerTests(unittest.TestCase):
     def assert_preserved(self):
         self.assertEqual((self.destination / "previous-version").read_text(), "preserve me")
         self.assertEqual(self.original, {str(p.relative_to(self.source)): p.read_bytes() for p in self.source.rglob("*") if p.is_file()})
-        self.assertFalse(list(self.destination.parent.glob(".switch2mac-install-*")))
+        self.assertFalse(list(self.destination.parent.glob(".switch2kit-install-*")))
         self.assertFalse(list(self.destination.parent.glob("*.install-lock")))
 
     def test_success_and_provenance(self):
         self.install()
         self.assertFalse((self.destination / "previous-version").exists())
         self.assertEqual(installer.read_plist(self.destination / "Contents/Info.plist")["LSEnvironment"], {"SDL3_DYNAMIC_API": installer.RUNTIME_DYLIB})
-        self.assertTrue((self.destination / "Contents/Resources/switch2mac-install.json").exists())
-        self.assertFalse(list(self.destination.parent.glob(".switch2mac-install-*")))
+        self.assertTrue((self.destination / "Contents/Resources/switch2kit-install.json").exists())
+        self.assertFalse(list(self.destination.parent.glob(".switch2kit-install-*")))
         self.assertEqual(self.original, {str(p.relative_to(self.source)): p.read_bytes() for p in self.source.rglob("*") if p.is_file()})
 
     def test_missing_cli_is_preflight_failure(self):
@@ -61,7 +61,7 @@ class InstallerTests(unittest.TestCase):
         with self.assertRaises(installer.InstallError):
             self.install()
         self.assertTrue((self.destination / "previous-version").exists())
-        self.assertFalse(list(self.destination.parent.glob(".switch2mac-install-*")))
+        self.assertFalse(list(self.destination.parent.glob(".switch2kit-install-*")))
 
     def test_copy_failure_preserves_previous(self):
         with patch.object(installer.shutil, "copy2", side_effect=OSError("disk full")):
@@ -103,7 +103,7 @@ class InstallerTests(unittest.TestCase):
         with patch.object(installer.os, "replace", side_effect=fail):
             with self.assertRaisesRegex(installer.InstallError, "Recovery files retained"):
                 self.install()
-        transactions = list(self.destination.parent.glob(".switch2mac-install-*"))
+        transactions = list(self.destination.parent.glob(".switch2kit-install-*"))
         self.assertEqual(len(transactions), 1)
         self.assertTrue((transactions[0] / "previous.app/previous-version").exists())
         self.assertTrue((transactions[0] / "recovery.json").exists())

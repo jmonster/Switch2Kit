@@ -1,5 +1,5 @@
 #!/bin/bash
-# build-app.sh — build FinallyTheControllerWorks.app from the Swift package.
+# build-app.sh — build Switch2KitApp.app from the Swift package.
 #
 # Usage:
 #   ./scripts/build-app.sh                 # ad-hoc signed (no virtual HID)
@@ -8,25 +8,25 @@
 #   SIGN_ENTITLEMENTS=path/to/fork-entitlements.plist \
 #     ./scripts/build-app.sh               # full signing incl. HID entitlement
 #
-# Output: build/Finally the Controller Works (jmonster).app
+# Output: build/Switch2Kit.app
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-APP_NAME="Finally the Controller Works (jmonster)"
-EXE=FinallyTheControllerWorks
+APP_NAME="Switch2Kit"
+EXE=Switch2KitApp
 OUT="build/$APP_NAME.app"
 
-# Never silently sign this fork with the upstream application's entitlements.
+# Never silently sign this application with the another application's entitlements.
 if [ -n "${PROVISIONING_PROFILE:-}" ]; then
     : "${SIGN_IDENTITY:?Set your own Developer ID signing identity}"
-    : "${SIGN_ENTITLEMENTS:?Provide a fork-specific entitlement plist explicitly}"
+    : "${SIGN_ENTITLEMENTS:?Provide an application-specific entitlement plist explicitly}"
     [ -f "$PROVISIONING_PROFILE" ] && [ -f "$SIGN_ENTITLEMENTS" ] || { echo "Signing input missing" >&2; exit 2; }
     PB=/usr/libexec/PlistBuddy
     BUNDLE_ID=$($PB -c 'Print :CFBundleIdentifier' Resources/Info.plist)
     TEAM=$($PB -c 'Print :com.apple.developer.team-identifier' "$SIGN_ENTITLEMENTS")
     APP_ID=$($PB -c 'Print :com.apple.application-identifier' "$SIGN_ENTITLEMENTS")
-    [ -n "$TEAM" ] && [ "$APP_ID" = "$TEAM.$BUNDLE_ID" ] || { echo "Entitlements do not identify this fork" >&2; exit 2; }
+    [ -n "$TEAM" ] && [ "$APP_ID" = "$TEAM.$BUNDLE_ID" ] || { echo "Entitlements do not identify this application" >&2; exit 2; }
 fi
 
 swift build -c release
@@ -47,9 +47,9 @@ cp browser/extension/manifest.json browser/extension/*.js "$OUT/Contents/Resourc
 REVISION=$(git rev-parse HEAD)
 DIRTY=false
 [ -z "$(git status --porcelain --untracked-files=normal -- Sources Resources browser/extension scripts Package.swift)" ] || DIRTY=true
-/usr/libexec/PlistBuddy -c "Add :FTCWSourceRevision string $REVISION" "$OUT/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :FTCWSourceDirty bool $DIRTY" "$OUT/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Add :FTCWBuildArchitecture string $(uname -m)" "$OUT/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :S2KSourceRevision string $REVISION" "$OUT/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :S2KSourceDirty bool $DIRTY" "$OUT/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :S2KBuildArchitecture string $(uname -m)" "$OUT/Contents/Info.plist"
 
 if [ -n "${SIGN_IDENTITY:-}" ]; then
     if [ -n "${PROVISIONING_PROFILE:-}" ]; then

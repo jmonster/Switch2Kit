@@ -59,7 +59,7 @@ import Foundation
             catch SupportSummary.Failure.writeFailed {}
             precondition(tryRead(url) == minimal, "failure changed previous summary")
             let stages = try FileManager.default.contentsOfDirectory(atPath: root.path)
-            precondition(!stages.contains { $0.hasPrefix(".switch2mac-support-") })
+            precondition(!stages.contains { $0.hasPrefix(".switch2kit-support-") })
         }
         let broken = root.appendingPathComponent("broken.json")
         try FileManager.default.createSymbolicLink(atPath: broken.path, withDestinationPath: root.appendingPathComponent("absent").path)
@@ -79,7 +79,7 @@ import Foundation
         precondition(tryRead(moved.appendingPathComponent("summary.json")) == data)
         precondition(!FileManager.default.fileExists(atPath: parent.appendingPathComponent("summary.json").path))
         let files = try FileManager.default.contentsOfDirectory(atPath: root.path)
-        precondition(!files.contains { $0.hasPrefix(".switch2mac-support-") })
+        precondition(!files.contains { $0.hasPrefix(".switch2kit-support-") })
         print("PASS injected write/fsync/rename failures, pinned-parent replacement, allowlisted bounded summary, identifier exclusion, preview fidelity, private atomic replacement and failure preservation")
     }
     static func tryRead(_ url: URL) -> Data { try! Data(contentsOf: url) }

@@ -8,7 +8,6 @@ kit_sources=(
   Sources/Switch2Kit/Protocol/Switch2Protocol.swift
   Sources/Switch2Kit/Protocol/AdvertisementRecognition.swift
   Sources/Switch2Kit/Protocol/DecodedState.swift
-  Sources/FinallyTheControllerWorks/Runtime/DirectRumbleCapability.swift
 )
 prepare_session_sources() {
   local destination="$1"
@@ -18,8 +17,8 @@ prepare_session_sources() {
     Sources/Switch2Kit/Public/Observation.swift
     Sources/Switch2Kit/Diagnostics/Diagnostics.swift
     "$destination/ControllerSession.swift"
-    "$destination/ExperimentalControllerSession.swift"
+    "$destination/ControllerToolSession.swift"
     tests/session/FrameworkFakes.swift
-    tests/support/ExperimentalFixture.swift
+    tests/support/ControllerToolFixture.swift
   )
 }

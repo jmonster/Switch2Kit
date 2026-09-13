@@ -6,6 +6,6 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 swiftc "${kit_flags[@]}" -swift-version 6 -warnings-as-errors \
  "${kit_sources[@]}" \
- Sources/FinallyTheControllerWorks/Runtime/OutputHealth.swift \
- Sources/FinallyTheControllerWorks/Runtime/SupportSummary.swift tests/support-summary/Tests.swift -o "$work/tests"
+ Sources/Switch2KitApp/Runtime/OutputHealth.swift \
+ Sources/Switch2KitApp/Runtime/SupportSummary.swift tests/support-summary/Tests.swift -o "$work/tests"
 "$work/tests"

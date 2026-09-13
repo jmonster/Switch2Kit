@@ -5,8 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${SIGN_IDENTITY:?Supply your own Developer ID signing identity}"
 : "${NOTARY_KEYCHAIN_PROFILE:?Supply your own notarytool keychain profile}"
-APP="build/Finally the Controller Works (jmonster).app"
-ZIP="build/switch2mac-jmonster.zip"
+APP="build/Switch2Kit.app"
+ZIP="build/switch2kit-jmonster.zip"
 
 bash scripts/build-app.sh
 codesign --verify --strict "$APP"

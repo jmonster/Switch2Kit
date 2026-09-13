@@ -6,21 +6,20 @@ func bridgeLog(_ level: LogLevel, _ category: String, _ message: String) {}
 // Test-only transport/output boundaries. ApplicationController, snapshot conversion,
 // event reconciliation, retirement, pointer policy and grouping come from Sources.
 final class Switch2ControllerManager: @unchecked Sendable {
+    struct Pulse { let id: Switch2ControllerID; let strong: Double; let weak: Double; let duration: Double }
+    var pulses: [Pulse] = []
     var starts = 0, stops = 0
     var disconnects: [Switch2ControllerID] = []
     func start() { starts += 1 }
     func stop(completion: @escaping @Sendable () -> Void) { stops += 1; completion() }
     func disconnect(_ id: Switch2ControllerID) { disconnects.append(id) }
     func setRumble(for id: Switch2ControllerID, strong: Double, weak: Double = 0) throws {}
-    func pulseRumble(for id: Switch2ControllerID, strong: Double, weak: Double = 0, duration: Double) throws {}
+    func pulseRumble(for id: Switch2ControllerID, strong: Double, weak: Double = 0, duration: Double) throws { pulses.append(.init(id: id, strong: strong, weak: weak, duration: duration)) }
     func setPlayerNumber(_ value: Int, for id: Switch2ControllerID) throws {}
     func setPlayerLEDPattern(_ value: UInt8?, for id: Switch2ControllerID) throws {}
     func requestSignalStrength(for id: Switch2ControllerID) {}
 }
-enum ExperimentalAction { case rumbleDiagnostic(intensity: Double) }
-final class Switch2ExperimentalControllerSupport: @unchecked Sendable {
-    func perform(_ action: ExperimentalAction, on id: Switch2ControllerID) throws {}
-}
+final class ControllerTools: @unchecked Sendable {}
 final class Output {
     var resets = 0
     var acceptsPointer = false
@@ -40,7 +39,7 @@ final class BridgeEngine: @unchecked Sendable {
     enum State { case paused, off, unauthorized, scanning, connecting, idle, ready }
     let btQueue = DispatchQueue(label: "application-output-tests")
     let controllerManager = Switch2ControllerManager()
-    let experimentalSupport = Switch2ExperimentalControllerSupport()
+    let controllerTools = ControllerTools()
     let mouseController = Output(), keyboardMapper = Output(), gestureRecognizer = Output()
     var running = true, suspended = false
     var sessions: [Int: ApplicationController] = [:]

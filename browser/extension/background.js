@@ -84,7 +84,7 @@ function track(text) {
 }
 
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== 'ftcw' || ports.size >= 64) return;
+  if (port.name !== 'switch2kit' || ports.size >= 64) return;
   ports.add(port);
   port.onMessage.addListener((text) => {
     if (!ports.has(port) || typeof text !== 'string' || text.length > 65536) return;

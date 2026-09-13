@@ -18,7 +18,7 @@ app = Path(sys.argv[1])
 (app/'Contents/Info.plist').write_bytes(plistlib.dumps({
     'CFBundleIdentifier':'wabisabi.ware.gamecubed','CFBundleExecutable':'App',
     'CFBundlePackageType':'APPL','CFBundleVersion':'1',
-    'FTCWSourceRevision':'a'*40,'FTCWSourceDirty':False}))
+    'S2KSourceRevision':'a'*40,'S2KSourceDirty':False}))
 PY
   codesign --force --sign - "$work/Fixture.app"
   python3 - "$work/Fixture.app" <<'PY'

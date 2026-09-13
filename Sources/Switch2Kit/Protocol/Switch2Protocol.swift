@@ -71,7 +71,7 @@ package enum Switch2 {
 
         package var payload: Data { Data([rawValue, 0, 0, 0]) }
 
-        /// The 50% split is our test UI policy, not a continuous motor gain.
+        /// Normalized magnitude below 0.5 selects soft; 0.5...1 selects strong.
         /// Zero/non-finite intensity is silent; no undocumented stop preset.
         package static func forTest(intensity: Double) -> Self? {
             guard intensity.isFinite, intensity > 0 else { return nil }

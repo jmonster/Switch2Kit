@@ -44,4 +44,3 @@ rm -f "$ROOT/build/Switch2Kit.xcframework.zip"
 ditto -c -k --keepParent "$ROOT/build/Switch2Kit.xcframework" "$ROOT/build/Switch2Kit.xcframework.zip"
 (cd "$ROOT/build" && shasum -a 256 Switch2Kit.xcframework.zip > Switch2Kit.xcframework.zip.sha256)
 echo "Built and inspected: $ROOT/build/Switch2Kit.xcframework (macOS arm64 + x86_64)"
-echo 'Redistribution rights are not established; see docs/switch2kit/provenance.md.'

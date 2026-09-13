@@ -12,7 +12,7 @@ enum TestWrites {
 
 extension LogPipeline {
     static func verifyBatchedWrites() {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ftcw-write-\(UUID().uuidString)")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("switch2kit-write-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let date = Date(timeIntervalSince1970: 0)
         func entries(_ count: Int, message: String = "line\nbreak\rtest") -> [LogEntry] {
