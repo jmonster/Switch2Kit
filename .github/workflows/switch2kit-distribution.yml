@@ -18,28 +18,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Record source for reproducing consumer validation
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build
-          git rev-parse HEAD > build/Switch2Kit-source-revision.txt
-          git archive --format=zip --output=build/Switch2Kit-source.zip HEAD
       - name: Check source ownership boundaries
         run: python3 scripts/switch2kit/check-boundaries.py
       - name: Compile independent source consumer from another directory
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build"
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/scripts/verify-switch2kit-consumer.sh" 2>&1 | tee "$GITHUB_WORKSPACE/build/Switch2Kit-consumers.log"
-      - name: Preserve consumer diagnostics and matching source
+      - name: Preserve consumer diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Switch2Kit-consumer-diagnostics
-          path: |
-            build/Switch2Kit-consumers.log
-            build/Switch2Kit-source.zip
-            build/Switch2Kit-source-revision.txt
+          path: build/Switch2Kit-consumers.log
           retention-days: 7
