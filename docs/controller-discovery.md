@@ -1,35 +1,11 @@
-# Optional quiet-when-ready discovery
+# Dashboard discovery
 
-Automatic discovery remains the default. The opt-in **Controller Discovery**
-window can pause broad scanning once every remembered physical controller is
-ready. Input, keep-alives, existing sessions, output delivery and pairing remain
-unchanged. No idle polling timer is added.
+The dashboard starts in automatic discovery mode. **Controller Discovery** offers `quietWhenReady`, which pauses broad scanning once every remembered physical controller is ready.
 
-Enabling the option opens a full 60-second setup window, rather than stopping
-when the first half of a Joy-Con pair connects. Up to eight successfully ready
-physical peripheral UUIDs are remembered locally, only while this option is on.
-Whenever any remembered controller disappears, the normal scanner resumes via
-the existing lifecycle callbacks. Once all are ready again, discovery quiets.
+Enabling this option opens a full 60-second setup window. Up to eight ready physical controllers are remembered locally while the option is enabled. The window stays open when the first controller connects, allowing both halves of a Joy-Con pair to join. Once the window closes, a missing remembered controller keeps scanning active; reconnecting the complete set pauses it.
 
-An unfamiliar controller cannot join while scanning is paused. Choose **Find
-New Controllers for 60 Seconds**, then hold its Sync button. This opens one
-bounded, replaceable window without retiring current players. If a remembered
-controller is missing afterward, scanning continues for it. **Use Only Currently
-Connected Controllers** closes the window and removes older units from this
-set; it does not unpair a controller or erase mappings. Restore automatic mode
-and clear the cache with the explicit reset button.
+Use **Find New Controllers for 60 Seconds** before holding an unfamiliar controller's Sync button. This replaces the current discovery window without interrupting connected controllers. **Use Only Currently Connected Controllers** closes the window and replaces the remembered set with the current ready set. It does not erase controller bonds or mappings. The reset control clears the set and restores automatic discovery.
 
-Stop, sleep and Bluetooth teardown cancel the window; stale expiry callbacks
-cannot close a replacement window. Advertisements queued before `stopScan` do
-not initiate new connections while discovery is intentionally paused. The
-existing service/characteristic discovery and connection/handshake deadlines
-remain unchanged. CoreBluetooth privacy approval is still required.
+Stop, sleep and Bluetooth teardown cancel discovery windows. Pending expiry callbacks cannot close a replacement window, and advertisements queued before scanning stopped cannot start new connections while discovery is paused. Connected controllers continue receiving input, keep-alives and output independently of scanning.
 
-This implements the safe, opt-in ready-set portion of audit A18. It is not a
-claim that remembered-device retrieval eliminates radio activity: CoreBluetooth
-can have other radio work, and waiting for missing units still scans normally.
-Physical button-wake latency, range, multi-controller pairing and Mac/controller
-energy need comparative measurements before changing the default. The tests
-exercise the production scan-control method and policy with fake radio boundaries,
-not a physical Bluetooth adapter. No controller identifiers are exported by the
-support summary.
+Library hosts choose their own discovery policy. See the [Bluetooth lifecycle guide](switch2kit/bluetooth-lifecycle.md) for on-demand discovery, connection states and reconnect handling.
