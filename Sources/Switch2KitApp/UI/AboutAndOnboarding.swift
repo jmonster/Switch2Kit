@@ -23,12 +23,10 @@ enum AppInfo {
     static let updatesEnabled = false
     static let defaultUpdateFeedURL = ""
 
-    /// Pre-release features hidden from the beta UI: the party-game and
-    /// gesture menu items, keyboard mapping, and the Experiments cluster.
-    /// Deliberately a runtime flag rather than a build flag so a beta build
-    /// can be un-hidden for development without recompiling:
-    ///   defaults write wabisabi.ware.gamecubed showPreReleaseFeatures -bool YES
-    /// (then relaunch; delete the key to hide again).
+    /// Pre-release features hidden from the beta UI: gestures, keyboard mapping,
+    /// and the Experiments cluster. App-control support is retained independently
+    /// of the removed embedded games. Enable the flag in this app's defaults
+    /// domain for development, then relaunch.
     static var showPreReleaseFeatures: Bool {
         UserDefaults.standard.bool(forKey: "showPreReleaseFeatures")
     }
@@ -95,7 +93,6 @@ struct OnboardingView: View {
                 VStack(spacing: 16) {
                     Image(systemName: pages[page].icon)
                         .font(.system(size: 48))
-                        .foregroundStyle(.tint)
                     Text(pages[page].title).font(.title.bold())
                     Text(pages[page].body)
                         .foregroundStyle(.secondary)
