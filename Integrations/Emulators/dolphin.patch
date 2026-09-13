@@ -1,0 +1,240 @@
+--- a/Source/Core/DolphinQt/CMakeLists.txt
++++ b/Source/Core/DolphinQt/CMakeLists.txt
+@@ -689,6 +689,11 @@
+     endif()
+   endif()
+ 
++  if(ENABLE_SWITCH2KIT)
++    set(SWITCH2KIT_BLUETOOTH_USAGE "<key>NSBluetoothAlwaysUsageDescription</key><string>Dolphin uses Bluetooth to connect to the controllers you select.</string>")
++    switch2kit_embed(dolphin-emu)
++  endif()
++
+   if(POSTPROCESS_BUNDLE)
+     # Update library references to make the bundle portable
+     include(DolphinPostprocessBundle)
+--- a/Source/Core/DolphinQt/Config/ControllersPane.cpp
++++ b/Source/Core/DolphinQt/Config/ControllersPane.cpp
+@@ -4,6 +4,12 @@
+ #include "DolphinQt/Config/ControllersPane.h"
+ 
+ #include <QVBoxLayout>
++#ifdef HAVE_SWITCH2KIT
++#include <QLabel>
++#include <QPushButton>
++#include <QTimer>
++#include "InputCommon/ControllerInterface/SDL/SDL.h"
++#endif
+ 
+ #include "DolphinQt/Config/CommonControllersWidget.h"
+ #include "DolphinQt/Config/GamecubeControllersWidget.h"
+@@ -25,5 +31,22 @@
+   layout->addWidget(gamecube_controllers);
+   layout->addWidget(m_wiimote_controllers);
+   layout->addWidget(common);
++#ifdef HAVE_SWITCH2KIT
++  auto* find = new QPushButton(tr("Find Switch 2 Controllers"), this);
++  auto* status = new QLabel(this);
++  status->setWordWrap(true);
++  layout->addWidget(find);
++  layout->addWidget(status);
++  connect(find, &QPushButton::clicked, this, [status] {
++    const int result = ciface::SDL::FindSwitch2Controllers();
++    status->setText(result == 0 ? tr("Hold Sync, then select the SDL controller in Configure.") :
++                                 tr("Controller discovery could not start (%1).").arg(result));
++  });
++  auto* timer = new QTimer(this);
++  connect(timer, &QTimer::timeout, this, [status] {
++    status->setText(QString::fromStdString(ciface::SDL::Switch2ControllerStatus()));
++  });
++  timer->start(500);
++#endif
+   layout->addStretch(1);
+ }
+--- a/Source/Core/DolphinQt/Info.plist.in
++++ b/Source/Core/DolphinQt/Info.plist.in
+@@ -52,5 +52,6 @@
+     <true/>
+     <key>UIDesignRequiresCompatibility</key>
+     <true/>
++    ${SWITCH2KIT_BLUETOOTH_USAGE}
+ </dict>
+ </plist>
+--- a/Source/Core/InputCommon/CMakeLists.txt
++++ b/Source/Core/InputCommon/CMakeLists.txt
+@@ -197,3 +197,18 @@
+   target_link_libraries(inputcommon PUBLIC Hidapi::Hidapi)
+   target_compile_definitions(inputcommon PRIVATE -DHAVE_HIDAPI=1)
+ endif()
++
++option(ENABLE_SWITCH2KIT "Use in-process Switch2Kit controllers on macOS 15+" OFF)
++set(SWITCH2KIT_SOURCE_DIR "" CACHE PATH "Switch2Kit source checkout")
++if(ENABLE_SWITCH2KIT)
++  if(NOT APPLE OR NOT ENABLE_SDL OR NOT ENABLE_QT)
++    message(FATAL_ERROR "Switch2Kit requires macOS with the SDL and Qt backends")
++  endif()
++  if(NOT EXISTS "${SWITCH2KIT_SOURCE_DIR}/Integrations/SDL3/CMakeLists.txt")
++    message(FATAL_ERROR "Set SWITCH2KIT_SOURCE_DIR to the SDK source checkout")
++  endif()
++  add_subdirectory("${SWITCH2KIT_SOURCE_DIR}/Integrations/SDL3" "${CMAKE_BINARY_DIR}/switch2kit")
++  target_link_libraries(inputcommon PUBLIC Switch2Kit::SDL3)
++  target_include_directories(inputcommon PRIVATE "${SWITCH2KIT_SOURCE_DIR}/Integrations/Emulators")
++  target_compile_definitions(inputcommon PUBLIC HAVE_SWITCH2KIT)
++endif()
+--- a/Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp
++++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp
+@@ -6,6 +6,12 @@
+ #include <span>
+ #include <thread>
+ #include <vector>
++
++#ifdef HAVE_SWITCH2KIT
++#include "SDLHost.hpp"
++#include "Common/FileUtil.h"
++#include "Common/IniFile.h"
++#endif
+ 
+ #ifdef _WIN32
+ #include <windows.h>
+@@ -27,6 +33,56 @@
+ 
+ namespace ciface::SDL
+ {
++#ifdef HAVE_SWITCH2KIT
++static Switch2Kit::SDLHost& NativeControllers()
++{
++  static Switch2Kit::SDLHost host;
++  return host;
++}
++
++int FindSwitch2Controllers()
++{
++  return NativeControllers().discover();
++}
++
++std::string Switch2ControllerStatus()
++{
++  const auto state = NativeControllers().snapshot();
++  if (!state.running) return "Select Find, then hold the controller Sync button.";
++  if (state.bluetooth == S2K_BT_UNAUTHORIZED) return "Allow Dolphin Bluetooth access in System Settings.";
++  if (state.bluetooth == S2K_BT_OFF) return "Turn on Bluetooth in System Settings.";
++  if (state.bluetooth == S2K_BT_UNSUPPORTED) return "Bluetooth is unavailable on this Mac.";
++  return std::to_string(state.count) + " connected; " +
++    (state.discovery == S2K_DISCOVERY_SCANNING ? "searching" : "discovery idle");
++}
++
++std::optional<int> Switch2ControllerPreferredId(uint32_t instance)
++{
++  const auto identity = NativeControllers().identity(instance);
++  if (identity.empty()) return std::nullopt;
++  // Persist physical assignment separately from transient SDL enumeration order.
++  static std::mutex mutex;
++  const std::lock_guard lock(mutex);
++  const std::string path = File::GetUserPath(D_CONFIG_IDX) + "Switch2Kit.ini";
++  Common::IniFile ini;
++  ini.Load(path);
++  auto* section = ini.GetOrCreateSection("Controllers");
++  std::optional<int> available;
++  for (int i = 0; i < 64; ++i)
++  {
++    std::string saved;
++    section->Get(std::to_string(i), &saved);
++    if (saved == identity) return i;
++    if (saved.empty() && !available) available = i;
++  }
++  if (available)
++  {
++    section->Set(std::to_string(*available), identity);
++    if (!ini.Save(path)) return std::nullopt;
++  }
++  return available;
++}
++#endif
+ 
+ class InputBackend final : public ciface::InputBackend
+ {
+@@ -193,6 +249,9 @@
+ 
+     Common::ScopeGuard quit_guard([] {
+       // TODO: there seems to be some sort of memory leak with SDL, quit isn't freeing everything up
++#ifdef HAVE_SWITCH2KIT
++      NativeControllers().stop();
++#endif
+       SDL_Quit();
+     });
+     {
+@@ -259,6 +318,9 @@
+ 
+ void InputBackend::UpdateInput(std::vector<std::weak_ptr<ciface::Core::Device>>&)
+ {
++#ifdef HAVE_SWITCH2KIT
++  NativeControllers().pump();
++#endif
+   SDL_UpdateGamepads();
+ }
+ 
+--- a/Source/Core/InputCommon/ControllerInterface/SDL/SDL.h
++++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDL.h
+@@ -5,7 +5,19 @@
+ 
+ #include "InputCommon/ControllerInterface/InputBackend.h"
+ 
++#ifdef HAVE_SWITCH2KIT
++#include <cstdint>
++#include <optional>
++#include <string>
++#endif
++
+ namespace ciface::SDL
+ {
++#ifdef HAVE_SWITCH2KIT
++// Find is a main-thread settings action; input and SDL shutdown use the existing backend loop.
++int FindSwitch2Controllers();
++std::string Switch2ControllerStatus();
++std::optional<int> Switch2ControllerPreferredId(uint32_t instance);
++#endif
+ std::unique_ptr<ciface::InputBackend> CreateInputBackend(ControllerInterface* controller_interface);
+ }  // namespace ciface::SDL
+--- a/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp
++++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp
+@@ -2,6 +2,9 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #include "InputCommon/ControllerInterface/SDL/SDLGamepad.h"
++#ifdef HAVE_SWITCH2KIT
++#include "InputCommon/ControllerInterface/SDL/SDL.h"
++#endif
+ 
+ #include <array>
+ #include <span>
+@@ -25,6 +28,9 @@
+   const char* const sdl_name =
+       (gamepad != nullptr) ? SDL_GetGamepadName(gamepad) : SDL_GetJoystickName(joystick);
+   m_name = (sdl_name != nullptr) ? sdl_name : "Unknown";
++#ifdef HAVE_SWITCH2KIT
++  m_switch2kit_id = Switch2ControllerPreferredId(SDL_GetJoystickID(joystick));
++#endif
+ 
+   // If a Joystick input has a Gamepad equivalent button/hat we don't add it.
+   // "Equivalent" axes are still added as hidden/undetectable inputs to handle
+--- a/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h
++++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h
+@@ -329,6 +329,9 @@
+ 
+   std::string GetName() const override;
+   std::string GetSource() const override;
++#ifdef HAVE_SWITCH2KIT
++  std::optional<int> GetPreferredId() const override { return m_switch2kit_id; }
++#endif
+   SDL_JoystickID GetSDLInstanceID() const;
+   Core::DeviceRemoval UpdateInput() override
+   {
+@@ -371,6 +374,9 @@
+ 
+   SDL_Gamepad* const m_gamepad;
+   std::string m_name;
++#ifdef HAVE_SWITCH2KIT
++  std::optional<int> m_switch2kit_id;
++#endif
+   SDL_Joystick* const m_joystick;
+   SDL_Haptic* m_haptic = nullptr;
+   ControlState m_battery_value;

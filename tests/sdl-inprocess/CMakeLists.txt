@@ -24,6 +24,8 @@ if(APPLE)
   execute_process(COMMAND xcrun --sdk macosx --show-sdk-path OUTPUT_VARIABLE _sdk OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
   execute_process(COMMAND uname -m OUTPUT_VARIABLE _arch OUTPUT_STRIP_TRAILING_WHITESPACE)
   list(APPEND _args -sdk "${_sdk}" -target "${_arch}-apple-macosx15.0")
+else()
+  list(APPEND _args -Xlinker -soname -Xlinker "${CMAKE_SHARED_LIBRARY_PREFIX}S2KSDLFixture${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
 add_custom_command(OUTPUT "${_fixture}"
   COMMAND "${SWITCH2KIT_SWIFTC}" -swift-version 6 -warnings-as-errors -emit-library
@@ -34,7 +36,7 @@ add_custom_command(OUTPUT "${_fixture}"
     "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift" -o "${_fixture}"
   DEPENDS Switch2KitCBuild "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift" VERBATIM)
 add_custom_target(S2KSDLFixtureBuild DEPENDS "${_fixture}")
-add_library(S2KSDLFixture SHARED IMPORTED)
+add_library(S2KSDLFixture SHARED IMPORTED GLOBAL)
 set_target_properties(S2KSDLFixture PROPERTIES IMPORTED_LOCATION "${_fixture}")
 add_dependencies(S2KSDLFixture S2KSDLFixtureBuild)
 add_executable(sdl-inprocess main.cpp)
