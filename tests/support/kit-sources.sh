@@ -17,8 +17,6 @@ prepare_session_sources() {
     Sources/Switch2Kit/Public/Observation.swift
     Sources/Switch2Kit/Diagnostics/Diagnostics.swift
     "$destination/ControllerSession.swift"
-    "$destination/ControllerToolSession.swift"
     tests/session/FrameworkFakes.swift
-    tests/support/ExperimentalFixture.swift
   )
 }

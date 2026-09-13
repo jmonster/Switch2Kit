@@ -19,9 +19,8 @@ enum AppInfo {
         return String(revision.prefix(12)) + (dirty ? " (modified)" : "")
     }
 
-    /// Pre-release app-control features (gestures and keyboard mapping) and
-    /// controller experiments. Enable this flag in the app's defaults domain
-    /// for development, then relaunch.
+    /// Pre-release app-control features (gestures and keyboard mapping). Enable
+    /// this flag in the app's defaults domain for development, then relaunch.
     static var showPreReleaseFeatures: Bool {
         UserDefaults.standard.bool(forKey: "showPreReleaseFeatures")
     }

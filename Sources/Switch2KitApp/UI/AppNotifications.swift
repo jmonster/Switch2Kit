@@ -47,10 +47,6 @@ enum AppConfig {
 /// (resets when the controller reconnects).
 /// Engine posts this (any thread) when it puts a controller to sleep.
 let controllerSleptNotification = Notification.Name("switch2kit.controllerSlept")
-/// Engine posts this (any thread) after an NFC tag read completes.
-/// userInfo: "uid" (String), "text" (String?), "bytes" (Int).
-let nfcTagReadNotification = Notification.Name("switch2kit.nfcTagRead")
-
 @MainActor
 final class NotificationManager: ObservableObject {
 
@@ -95,20 +91,7 @@ final class NotificationManager: ObservableObject {
                     body: "No input for a while — press any button to reconnect.")
             }
         }
-        NotificationCenter.default.addObserver(
-            forName: nfcTagReadNotification, object: nil, queue: .main
-        ) { [weak self] note in
-            let uid = note.userInfo?["uid"] as? String ?? "?"
-            let text = note.userInfo?["text"] as? String
-            let bytes = note.userInfo?["bytes"] as? Int ?? 0
-            Task { @MainActor in
-                guard AppConfig.notifyEnabled else { return }
-                self?.post(
-                    title: text.map { "NFC tag read: “\($0)”" } ?? "NFC tag read",
-                    body: "UID \(uid) · \(bytes) bytes"
-                          + (text == nil ? " (no NDEF text record)" : ""))
-            }
-        }
+
     }
 
     private func diff(_ controllers: [ControllerStatus]) {

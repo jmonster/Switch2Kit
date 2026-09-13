@@ -117,11 +117,16 @@ private final class ResponseDelegate: ControllerSessionDelegate {
             precondition(!s.isRetired && delegate.failures == 0 && calls == 1)
             s.handleCommandResponse(frame(9, 7)); precondition(calls == 2)
         }
-        test("raw-experiment-status") { s, _, _ in
+        test("typed-command-status") { s, _, _ in
             var result: Data?
-            s.experimentalCommand(1, 5, payload: Data()) { result = $0 }
+            s.sendCommand(1, 5, Data()) { response in
+                guard case .failure(.rejected(let rejected)) = response else {
+                    preconditionFailure("Status must not be accepted as command success")
+                }
+                result = rejected.payload
+            }
             s.handleCommandResponse(frame(1, 5, kind: 2, payload: Data([7, 0x41])))
-            precondition(result == Data([7, 0x41]), "NFC polling must retain raw status payloads")
+            precondition(result == Data([7, 0x41]), "Rejected command status must retain its payload")
         }
     }
 }

@@ -117,11 +117,6 @@ struct DashboardView: View {
             live: player >= 0 ? engine.liveStates[player] : nil,
             findRSSI: engine.findingSerial == serial ? engine.findRSSI : nil,
             onTestRumble: { engine.testRumble(serial: serial) },
-            onNFCProbe: { engine.nfcProbe(serial: serial) },
-            onAudioCapture: { engine.audioCapture(serial: serial) },
-            onAudioTone: { engine.audioToneTest(serial: serial) },
-            onAudioPlayTone: { engine.audioPlayTone(serial: serial) },
-            onHapticMelody: { engine.hapticMelody(serial: serial) },
             onDisconnect: { engine.disconnect(serial: serial) },
             onForget: { engine.forget(serial: serial) },
             onFind: { engine.findController(serial: serial) },
@@ -191,11 +186,6 @@ struct ControllerCard: View {
     var live: ControllerState?
     var findRSSI: Int?
     var onTestRumble: () -> Void = {}
-    var onNFCProbe: () -> Void = {}
-    var onAudioCapture: () -> Void = {}
-    var onAudioTone: () -> Void = {}
-    var onAudioPlayTone: () -> Void = {}
-    var onHapticMelody: () -> Void = {}
     var onDisconnect: () -> Void = {}
     var onForget: () -> Void = {}
     var onFind: () -> Void = {}
@@ -608,30 +598,7 @@ struct ControllerCard: View {
                                 .font(.caption)
                                 .padding(.top, 6)
                             }
-                            if AppInfo.showPreReleaseFeatures,
-                               status.model == .proController2, !status.isJoyConPair {
-                                DisclosureGroup("Experiments") {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Frontier features — results appear in the Logs "
-                                             + "section below.")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        HStack(spacing: 10) {
-                                            Button("Read NFC tag") { onNFCProbe() }
-                                                .help("Detects an amiibo or NTAG on the touchpoint and dumps it; NDEF text is decoded")
-                                            Button("Capture audio 30 s") { onAudioCapture() }
-                                                .help("Records the headset-audio lane to ~/Documents. Plug in a headset WITH A mic and speak to capture real codec data. Buttons freeze during capture.")
-                                            Button("Play tone (real-time)") { onAudioPlayTone() }
-                                                .help("4 s of 440 Hz at the full configured PCM rate with backpressure — the honest test of the output format")
-                                            Button("Format probe (4 phases)") { onAudioTone() }
-                                                .help("Raw PCM, legacy rate, idle-frame mimic, then a frequency sweep — run once bare and once with headphones plugged in")
-                                            Button("Haptic melody") { onHapticMelody() }
-                                                .help("Experimental actuator tune on the rumble lane; not a guarantee of hardware or game compatibility")
-                                        }
-                                    }
-                                    .padding(.top, 6)
-                                }
-                            }
+
                         }
                         .padding(.top, 6)
                     }
