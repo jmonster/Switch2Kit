@@ -28,16 +28,6 @@ struct Switch2KitApp: App {
         }
         .defaultSize(width: 680, height: 620)
 
-        Window("Reaction Draft", id: "reaction-game") {
-            ReactionGameView(game: appDelegate.game, engine: appDelegate.engine)
-        }
-        .defaultSize(width: 480, height: 460)
-
-        Window("Sensor Challenges", id: "challenges") {
-            ChallengeView(coordinator: appDelegate.challenges, engine: appDelegate.engine)
-        }
-        .defaultSize(width: 500, height: 480)
-
         Window("Air Gestures", id: "gestures") {
             GesturesView(engine: appDelegate.engine)
         }
@@ -87,8 +77,6 @@ struct MenuBarIcon: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let engine: BridgeEngine
-    let game = ReactionGame()
-    let challenges = ChallengeCoordinator()
     let updater = Updater()
 
     override init() {
@@ -200,13 +188,7 @@ struct MenuContent: View {
         Button("Browser Bridge Settings…") { show("browser-bridge") }
         Button("Controller Discovery…") { show("discovery") }
 
-        // Hidden for the beta (AppInfo.showPreReleaseFeatures documents
-        // the defaults key that brings them back).
         if AppInfo.showPreReleaseFeatures {
-            Button("Reaction Draft (party game)") { show("reaction-game") }
-
-            Button("Sensor Challenges") { show("challenges") }
-
             Button("Air Gestures") { show("gestures") }
         }
 
