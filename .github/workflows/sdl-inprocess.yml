@@ -41,3 +41,13 @@ jobs:
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
         run: bash tests/sdl-inprocess/verify.sh
+      - name: Verify renamed SDK checkout and paths containing spaces
+        env:
+          S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+        run: |
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          mkdir "$work/Native SDK-checkout"
+          git archive HEAD | tar -x -C "$work/Native SDK-checkout"
+          bash "$work/Native SDK-checkout/tests/c-consumer/run.sh"
+          bash "$work/Native SDK-checkout/tests/sdl-inprocess/verify.sh"

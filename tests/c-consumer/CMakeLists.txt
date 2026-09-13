@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(Switch2KitCConsumer LANGUAGES C CXX)
 enable_testing()
+find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../Integrations/CMake" switch2kit)
 get_filename_component(_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(_fixture "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}S2KFixture${CMAKE_SHARED_LIBRARY_SUFFIX}")
@@ -20,14 +21,16 @@ if(APPLE)
   list(APPEND _fixture_args -sdk "${_sdk}" -target "${_arch}-apple-macosx15.0")
 endif()
 add_custom_command(OUTPUT "${_fixture}"
-  COMMAND "${SWITCH2KIT_SWIFTC}" -swift-version 6 -warnings-as-errors -emit-library
-    -package-name switch2kit -module-name S2KFixture ${_fixture_args}
+  COMMAND "${Python3_EXECUTABLE}" "${_root}/tests/support/compile-fixture.py"
+    --description "${SWITCH2KIT_C_BINARY_DIR}/description.json"
+    --compiler "${SWITCH2KIT_SWIFTC}" -- -swift-version 6 -warnings-as-errors -emit-library
+    -module-name S2KFixture ${_fixture_args}
     -I "${SWITCH2KIT_C_BINARY_DIR}/Modules" -I "${_root}/Sources/Switch2KitCABI/include"
     -L "${SWITCH2KIT_C_BINARY_DIR}" -lSwitch2KitC
     -Xlinker -rpath -Xlinker "${SWITCH2KIT_C_BINARY_DIR}"
     "${_root}/Tests/Switch2KitCTests/TestSource.swift" "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift"
     -o "${_fixture}"
-  DEPENDS Switch2KitCBuild "${_root}/Tests/Switch2KitCTests/TestSource.swift" "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift"
+  DEPENDS Switch2KitCBuild "${_root}/tests/support/compile-fixture.py" "${_root}/Tests/Switch2KitCTests/TestSource.swift" "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift"
   VERBATIM)
 add_custom_target(S2KFixtureBuild DEPENDS "${_fixture}")
 add_library(S2KFixture SHARED IMPORTED)
