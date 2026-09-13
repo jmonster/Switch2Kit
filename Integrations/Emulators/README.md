@@ -16,7 +16,8 @@ python3 Integrations/Emulators/apply.py dolphin /path/to/dolphin
 bash scripts/build-switch2kit-emulator.sh dolphin /path/to/dolphin /path/to/dolphin-build
 ```
 
-For Cemu:
+For Cemu, install MoltenVK (`brew install molten-vk`) and leave the Vulkan renderer enabled.
+
 
 ```sh
 git clone --recursive https://github.com/cemu-project/Cemu.git /path/to/cemu
@@ -29,7 +30,7 @@ bash scripts/build-switch2kit-emulator.sh cemu /path/to/cemu /path/to/cemu-build
 
 `apply.py --check` validates without changing files. It refuses a different revision, modified files or untracked files. It never resets a checkout. `--verify` checks the applied source. The patches and file digests are in this directory. Extra arguments to the build script are ordinary CMake options for that emulator.
 
-The host links its existing SDL3 target and the source-built C facade. `switch2kit_embed` places the native library and required Swift runtime libraries in the application's Frameworks directory. The emulator retains responsibility for signing the completed bundle. Each patched application supplies its own Bluetooth usage description; no signing identity or permission bypass is added.
+The host links its existing SDL3 target and the source-built C facade. `switch2kit_embed` places the native library and required Swift runtime libraries in the application's Frameworks directory. The emulator retains responsibility for signing the completed bundle. Each patched application supplies its own Bluetooth usage description; the embedding helper resolves that template fragment before CMake generates the bundle plist; no signing identity or permission bypass is added.
 
 ## Connect and configure
 

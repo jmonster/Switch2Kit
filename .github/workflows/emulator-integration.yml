@@ -60,7 +60,7 @@ jobs:
           EMULATOR: ${{ matrix.emulator }}
         run: |
           brew install cmake ninja nasm automake libtool
-          if [ "$EMULATOR" = dolphin ]; then brew install qt@6; fi
+          if [ "$EMULATOR" = dolphin ]; then brew install qt@6; else brew install molten-vk; fi
           mkdir -p build/vcpkg-cache
           if [ "$EMULATOR" = cemu ]; then bash build/emulator-source/dependencies/vcpkg/bootstrap-vcpkg.sh; fi
       - name: Apply the pinned integration
@@ -72,9 +72,11 @@ jobs:
           EMULATOR: ${{ matrix.emulator }}
         run: |
           set -o pipefail
-          extra=(-DENABLE_VULKAN=OFF)
+          extra=()
           if [ "$EMULATOR" = dolphin ]; then
-            extra+=(-DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)" -DENABLE_TESTS=OFF -DPOSTPROCESS_BUNDLE=ON)
+            extra+=(-DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)" -DENABLE_VULKAN=OFF -DENABLE_TESTS=OFF -DPOSTPROCESS_BUNDLE=ON)
+          else
+            extra+=(-DENABLE_VULKAN=ON)
           fi
           bash scripts/build-switch2kit-emulator.sh "$EMULATOR" \
             "$PWD/build/emulator-source" "$PWD/build/emulator-build" \
@@ -94,6 +96,8 @@ jobs:
             build/emulator-build/compile_commands.json
             build/emulator-build/CMakeFiles/CMakeConfigureLog.yaml
             build/emulator-build/vcpkg-manifest-install.log
+            build/emulator-build/**/Info.plist
+            build/emulator-source/bin/**/Info.plist
           retention-days: 7
       - name: Preserve the built emulator
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
