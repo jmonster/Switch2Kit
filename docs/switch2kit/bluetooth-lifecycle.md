@@ -10,9 +10,9 @@ Own one `Switch2ControllerManager` in your host, attach an observation, call `st
 
 A Sync advertisement causes the retained application-level bond sequence. This is distinct from Bluetooth SMP pairing and from a normal device entry in Bluetooth Settings. The library does not initiate SMP pairing. Do not add an encrypted-characteristic/SMP pairing flow to try to make a Settings entry appear; that is not the protocol implemented here.
 
-The protocol bond stores host material on the controller for subsequent button-wake advertising. The retained implementation queries the host Bluetooth address through IOBluetooth. When that address is unavailable it skips the bond operation rather than inventing an address; the current link can still work, but later button-wake behavior is not guaranteed. Use Sync again if needed. Default diagnostics state whether the bond was completed or skipped without printing its address/key material.
+The protocol bond stores host material on the controller for subsequent button-wake advertising. The retained implementation queries the host Bluetooth address through IOBluetooth. When that address is unavailable it skips the bond operation rather than inventing an address; the current link can still work, but later button-wake behavior is not guaranteed. Use Sync again if needed. A successful bond command sequence emits a diagnostic without printing its address/key material. Skipping the sequence does not emit a separate bond-status event; absence of a completion log is not proof of failure, and connection readiness alone is not proof that a new bond was written.
 
-No Settings entry is required as proof of this in-process connection. Conversely, a Settings entry does not prove that a host owns a live Switch2Kit session. Only one process should try to own the controller at a time.
+No Settings entry is required as proof of this in-process connection. Converselyely, a Settings entry does not prove that a host owns a live Switch2Kit session. Only one process should try to own the controller at a time.
 
 ## Reconnect and discovery modes
 
