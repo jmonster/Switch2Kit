@@ -46,7 +46,7 @@ The host provides `NSBluetoothAlwaysUsageDescription` and, when sandboxed, `com.
 | Joy-Con 2, left or right | Buttons, stick, motion, optical sensor, battery | Single HD motor per unit |
 | NSO GameCube | Buttons, two sticks, analog trigger travel and digital clicks, motion, battery | Soft/strong firmware clips |
 
-[Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md)
+[Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
 
 ## C/C++ integration
 
