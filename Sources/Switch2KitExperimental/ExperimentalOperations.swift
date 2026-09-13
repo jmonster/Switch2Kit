@@ -394,7 +394,7 @@ final class ExperimentalOperations: @unchecked Sendable {
     /// record timestamped notifications, decoding the report layout live.
     /// Writes two files to ~/Documents (names carry a run timestamp):
     /// the full packets, and just the 50-byte audio-region frames for
-    /// offline codec work. File format: "FTCWAUD2" magic, then records of
+    /// offline codec work. File format: "S2KAUD02" magic, then records of
     /// [f64 LE seconds since start][u32 LE length][bytes].
 
 

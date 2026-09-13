@@ -22,7 +22,7 @@ function fixture() {
   };
   vm.runInNewContext(fs.readFileSync(process.env.BACKGROUND_SOURCE || path.join(__dirname, '../../browser/extension/background.js'), 'utf8'), context);
   function port() {
-    const p = {name: 'ftcw', received: [], postMessage(text) {this.received.push(JSON.parse(text));},
+    const p = {name: 'switch2kit', received: [], postMessage(text) {this.received.push(JSON.parse(text));},
       onMessage: {addListener(fn) {p.send = fn;}},
       onDisconnect: {addListener(fn) {p.close = fn;}},
     };

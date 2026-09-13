@@ -55,8 +55,8 @@ def verify_app(app, team, revision, run):
     with (app / "Contents/Info.plist").open("rb") as stream:
         info = plistlib.load(stream)
     if not isinstance(info, dict) or info.get("CFBundleIdentifier") != BUNDLE_ID:
-        raise ReleaseError("Bundle identity is not this fork")
-    if info.get("FTCWSourceRevision") != revision or info.get("FTCWSourceDirty") is not False:
+        raise ReleaseError("Bundle identity is not this application")
+    if info.get("Switch2KitSourceRevision") != revision or info.get("Switch2KitSourceDirty") is not False:
         raise ReleaseError("Bundle must identify the exact clean source revision")
     executable = info.get("CFBundleExecutable", "")
     if not isinstance(executable, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", executable):
@@ -93,7 +93,7 @@ def package(app, output, team, profile, run=command):
     output.parent.mkdir(parents=True, exist_ok=True)
     # A failed operation leaves no distribution directory. Private same-volume
     # staging keeps the source untouched and final promotion is a rename.
-    stage = Path(tempfile.mkdtemp(prefix=".switch2mac-notary-", dir=output.parent))
+    stage = Path(tempfile.mkdtemp(prefix=".switch2kit-notary-", dir=output.parent))
     try:
         staged_app = stage / app.name
         run(["ditto", "--rsrc", "--extattr", str(app), str(staged_app)])
@@ -115,7 +115,7 @@ def package(app, output, team, profile, run=command):
         run(["spctl", "--assess", "--type", "execute", "--verbose=2", str(staged_app)])
         # Staple the app, then recreate the ZIP; the submitted ZIP has no ticket.
         archive.unlink()
-        final_zip = stage / "switch2mac-notarized.zip"
+        final_zip = stage / "switch2kit-notarized.zip"
         run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(staged_app), str(final_zip)])
         checksum = hashlib.sha256()
         with final_zip.open("rb") as stream:
@@ -126,7 +126,7 @@ def package(app, output, team, profile, run=command):
         # reviewed before sharing; no credentials/profile name are included.
         (stage / "notary-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
         (stage / "notary-log.json").write_text(json.dumps(log, indent=2) + "\n")
-        (stage / "provenance.json").write_text(json.dumps({
+        (stage / "build-info.json").write_text(json.dumps({
             "schema": 1, "bundle_id": BUNDLE_ID, "source_revision": revision,
             "source_dirty": False, "signing_team": team, "architectures": arches,
             "declared_minimum_macos": info.get("LSMinimumSystemVersion"),

@@ -5,7 +5,7 @@ import re
 
 root = Path(__file__).resolve().parents[2]
 kit = root / 'Sources/Switch2Kit'
-forbidden = re.compile(r'\b(CoreHID|CGEvent|AXIsProcessTrusted|AXIsProcessTrustedWithOptions|UserDefaults|SDL|UDPHub|WebSocketHub|KeyboardMapper|MouseController|DashboardView|FTCWApp|FinallyTheControllerWorks)\b|wabisabi\.ware\.gamecubed|SWITCH2MAC_|browser|WebSocket', re.I)
+forbidden = re.compile(r'\b(CoreHID|CGEvent|AXIsProcessTrusted|AXIsProcessTrustedWithOptions|UserDefaults|SDL|UDPHub|WebSocketHub|KeyboardMapper|MouseController|DashboardView|Switch2KitApp|Switch2KitApp)\b|wabisabi\.ware\.gamecubed|SWITCH2KIT_|browser|WebSocket', re.I)
 files = sorted(kit.rglob('*.swift'))
 assert files, 'No library sources found'
 for path in files:
@@ -14,7 +14,7 @@ for path in files:
 for filename in ['Switch2Protocol.swift', 'ControllerSession.swift', 'ControllerTransport.swift']:
     matches = list((root / 'Sources').rglob(filename))
     assert len(matches) == 1 and matches[0].is_relative_to(kit), f'Duplicate/wrong owner: {filename}: {matches}'
-app = root / 'Sources/FinallyTheControllerWorks'
+app = root / 'Sources/Switch2KitApp'
 assert not (app / 'Bluetooth/ControllerSession.swift').exists()
 assert not (app / 'Protocol/Switch2Protocol.swift').exists()
 bridge = (app / 'Bluetooth/BridgeEngine.swift').read_text()

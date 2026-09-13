@@ -25,9 +25,9 @@ Quit every running bridge copy. After building the application, explicitly
 launch the bundled executable from Terminal for the desired test:
 
 ```sh
-SWITCH2MAC_ACKNOWLEDGE_UNQUALIFIED_POWER=1 \
-SWITCH2MAC_EXPERIMENTAL_SENSORS=gamepad \
-'build/GameCubed.app/Contents/MacOS/GameCubed'
+SWITCH2KIT_ACKNOWLEDGE_UNQUALIFIED_POWER=1 \
+SWITCH2KIT_EXPERIMENTAL_SENSORS=gamepad \
+'build/Switch2Kit.app/Contents/MacOS/Switch2Kit'
 ```
 
 Both environment variables are required. No preferences, firmware or bonding

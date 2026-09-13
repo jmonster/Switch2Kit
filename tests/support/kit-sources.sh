@@ -8,7 +8,7 @@ kit_sources=(
   Sources/Switch2Kit/Protocol/Switch2Protocol.swift
   Sources/Switch2Kit/Protocol/AdvertisementRecognition.swift
   Sources/Switch2Kit/Protocol/DecodedState.swift
-  Sources/FinallyTheControllerWorks/Runtime/DirectRumbleCapability.swift
+  Sources/Switch2KitApp/Runtime/DirectRumbleCapability.swift
 )
 prepare_session_sources() {
   local destination="$1"

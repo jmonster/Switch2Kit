@@ -21,7 +21,7 @@
   let timer = null;
 
   const toPage = (text) =>
-    document.dispatchEvent(new CustomEvent('ftcw-bridge', { detail: text }));
+    document.dispatchEvent(new CustomEvent('switch2kit-bridge', { detail: text }));
 
   function connectDirect() {
     let opened = false;
@@ -46,7 +46,7 @@
 
   function connectRelay() {
     try {
-      port = chrome.runtime.connect({ name: 'ftcw' });
+      port = chrome.runtime.connect({ name: 'switch2kit' });
     } catch {
       toPage('{"t":"bridge","up":false}');   // extension reloaded: orphaned script
       return;
@@ -63,7 +63,7 @@
 
   function schedule(fn) { setTimeout(fn, RETRY_MS); }
 
-  document.addEventListener('ftcw-up', (ev) => {
+  document.addEventListener('switch2kit-up', (ev) => {
     if (typeof ev.detail !== 'string') return;
     if (socket && socket.readyState === WebSocket.OPEN) { socket.send(ev.detail); return; }
     if (port) { try { port.postMessage(ev.detail); } catch {} }

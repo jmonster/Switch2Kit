@@ -35,7 +35,7 @@ def verify(bundle: Path) -> Path:
     if set(run("lipo", "-archs", str(binary)).split()) != {"arm64", "x86_64"}:
         raise ValueError("The actual Mach-O architectures differ from the advertised architectures")
     linked = run("otool", "-L", str(binary))
-    if "CoreHID" in linked or "FinallyTheControllerWorks" in linked:
+    if "CoreHID" in linked or "Switch2KitApp" in linked:
         raise ValueError("The controller library links application-only code")
     run("plutil", "-lint", str(framework / "Resources/Info.plist"))
     with (framework / "Resources/Info.plist").open("rb") as handle:
@@ -53,7 +53,7 @@ def verify(bundle: Path) -> Path:
         text = interface.read_text()
         if not re.search(r"(?:final\s+)?public\s+(?:final\s+)?class\s+Switch2ControllerManager\b", text):
             raise ValueError("Missing public manager in the emitted Swift interface")
-        if re.search(r"\b(CoreHID|CBPeripheral|FinallyTheControllerWorks|UserDefaults)\b", text):
+        if re.search(r"\b(CoreHID|CBPeripheral|Switch2KitApp|UserDefaults)\b", text):
             raise ValueError("Application/transport implementation leaked into the public interface")
         print(f"Verified Swift interface: {interface.name}")
     uuids = set(re.findall(r"UUID: ([A-Fa-f0-9-]+) \(([^)]+)\)", run("dwarfdump", "--uuid", str(binary))))

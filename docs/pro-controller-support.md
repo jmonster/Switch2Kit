@@ -1,6 +1,6 @@
 # Switch 2 Pro Controller support
 
-GameCubed recognizes Nintendo VID `057e`, PID `2069`. This document describes
+Switch2Kit recognizes Nintendo VID `057e`, PID `2069`. This document describes
 implemented paths and their limits; it is **not** a physical-controller
 acceptance certificate. Tests use synthetic reports, fake Apple radio
 boundaries, and real loopback sockets. Record the commit, macOS version,
@@ -61,11 +61,7 @@ required; no audio/NFC claim follows from the USB gamepad path.
 
 ## SDL motion and rebuilding
 
-The historical tracked `sdl/libSDL3.0.dylib` does **not** contain these changes.
-Build the corrected library using `bash sdl/build-sdl.sh /path/to/SDL-checkout`,
-then recreate any game wrapper using it. The builder pins SDL commit
-`147a8ee32dbf9ac02f3794964490687b6bbda1bc` and applies the original bridge,
-input-edge, USB-identity and Pro-controller patches in that order.
+Build the SDL library with `bash sdl/build-sdl.sh` before using SDL output.
 
 The existing 44-byte S2B1 wire format is unchanged. Its signed gyro and accel
 fields now reach SDL. Games must enable sensors explicitly. Only newly received
@@ -81,7 +77,7 @@ does not reproduce SDL's firmware-dependent sensitivity detection or bias
 calibration. Non-Pro controller orientation and per-unit motion accuracy must
 not be inferred from these Pro tests. See the pinned
 [SDL driver](https://github.com/libsdl-org/SDL/blob/147a8ee32dbf9ac02f3794964490687b6bbda1bc/src/joystick/hidapi/SDL_hidapi_switch2.c)
-and the repository's [protocol notes](../research/PROTOCOL.md).
+and the repository's [protocol notes](protocol.md).
 
 ## Validation
 

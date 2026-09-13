@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ "$(uname -s)" = Darwin ] || { echo 'Packaged runtime check requires macOS' >&2; exit 2; }
-app=${1:-"build/Finally the Controller Works (jmonster).app"}
+app=${1:-"build/Switch2Kit.app"}
 output=${2:-build/runtime-qualification.json}
 codesign --verify --deep --strict "$app"
 python3 - "$app" "$output" <<'PY'
@@ -33,13 +33,13 @@ assert minimums and all(version(s) == version(probe['declaredMinimum']) for s in
 # The actual packaged binary must describe the selected masks and exit, not
 # enter its normal application/radio loop. All launches have a bounded timeout.
 env = dict(os.environ)
-for key in ('SWITCH2MAC_EXPERIMENTAL_SENSORS', 'SWITCH2MAC_ACKNOWLEDGE_UNQUALIFIED_POWER'):
+for key in ('SWITCH2KIT_EXPERIMENTAL_SENSORS', 'SWITCH2KIT_ACKNOWLEDGE_UNQUALIFIED_POWER'):
     env.pop(key, None)
 profiles = []
 for profile in ('compatibility', 'gamepad', 'motion', 'pointer'):
     trial = dict(env)
     if profile != 'compatibility':
-        trial.update(SWITCH2MAC_EXPERIMENTAL_SENSORS=profile, SWITCH2MAC_ACKNOWLEDGE_UNQUALIFIED_POWER='1')
+        trial.update(SWITCH2KIT_EXPERIMENTAL_SENSORS=profile, SWITCH2KIT_ACKNOWLEDGE_UNQUALIFIED_POWER='1')
     result = subprocess.run([str(exe), '--sensor-profile'], env=trial, check=True,
                             capture_output=True, text=True, timeout=20)
     description = json.loads(result.stdout)

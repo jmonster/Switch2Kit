@@ -11,7 +11,7 @@ function fixture() {
   const navigator = new Navigator();
   const document = {hidden:false,
     addEventListener(type, fn) {listeners.set(type,fn);},
-    dispatchEvent(ev) {if(ev.type==='ftcw-up') commands.push(JSON.parse(ev.detail)); else listeners.get(ev.type)?.(ev);},
+    dispatchEvent(ev) {if(ev.type==='switch2kit-up') commands.push(JSON.parse(ev.detail)); else listeners.get(ev.type)?.(ev);},
   };
   const context = {navigator, Navigator, document, window:{dispatchEvent(event){events.push(event);}}, Event, CustomEvent:Event,
     localStorage:{getItem(){return null;}}, location:{host:'hardwaretester.com'}, performance:{now:()=>now},
@@ -21,7 +21,7 @@ function fixture() {
     clearInterval(id){timers.delete(id);},
   };
   vm.runInNewContext(fs.readFileSync(process.env.SHIM_SOURCE || path.join(__dirname,'../../browser/extension/shim.js'),'utf8'),context);
-  const emit = m => document.dispatchEvent(new Event('ftcw-bridge',{detail:JSON.stringify(m)}));
+  const emit = m => document.dispatchEvent(new Event('switch2kit-bridge',{detail:JSON.stringify(m)}));
   function advance(ms) {
     const end = now+ms;
     for(let i=0;i<10000;i++) {
@@ -90,8 +90,8 @@ test('native hotplug cannot hide a bridged pad or move unrelated virtual indices
   f.nativePads[0]={id:'native',index:0,connected:true};
   const pads=f.navigator.getGamepads();
   assert.equal(pads[0].id,'native');
-  assert.equal(pads[1].__ftcwSlot,1);
-  assert.equal(pads[2]?.__ftcwSlot,0,'Native hotplug hid the bridged controller');
+  assert.equal(pads[1].__switch2kitSlot,1);
+  assert.equal(pads[2]?.__switch2kitSlot,0,'Native hotplug hid the bridged controller');
   assert.equal(pads[2].buttons[0].pressed,true);
   assert.equal(old.index,0,'Existing snapshots must not be mutated');
   const removal=f.events.findLast(e=>e.type==='gamepaddisconnected');

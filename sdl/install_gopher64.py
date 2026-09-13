@@ -95,7 +95,7 @@ def install(source: Path, destination: Path, library: Path, runner: Callable = r
     installed = False
     preserve = False
     try:
-        transaction = Path(tempfile.mkdtemp(prefix=".switch2mac-install-", dir=destination.parent))
+        transaction = Path(tempfile.mkdtemp(prefix=".switch2kit-install-", dir=destination.parent))
         staged = transaction / destination.name
         backup = transaction / "previous.app"
         (transaction / "recovery.json").write_text(json.dumps({
@@ -114,7 +114,7 @@ def install(source: Path, destination: Path, library: Path, runner: Callable = r
         info["LSEnvironment"] = {"SDL3_DYNAMIC_API": RUNTIME_DYLIB}
         with (staged / "Contents/Info.plist").open("wb") as stream:
             plistlib.dump(info, stream)
-        (staged / "Contents/Resources/switch2mac-install.json").write_text(json.dumps({
+        (staged / "Contents/Resources/switch2kit-install.json").write_text(json.dumps({
             "schema": 1, "architecture_checked": arch, "sdl_sha256": digest(library),
             "gopher64_source_sha256": digest(source / "Contents/MacOS/gopher64"),
             "cli_source_sha256": digest(source / "Contents/MacOS/gopher64-cli"),

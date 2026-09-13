@@ -12,7 +12,7 @@ PY
 swiftc "${kit_flags[@]}" -swift-version 6 -warnings-as-errors \
   "${kit_sources[@]}" \
   "$work/State.swift" \
-  Sources/FinallyTheControllerWorks/Runtime/ControllerConfiguration.swift \
-  Sources/FinallyTheControllerWorks/Runtime/SettingsArchive.swift \
+  Sources/Switch2KitApp/Runtime/ControllerConfiguration.swift \
+  Sources/Switch2KitApp/Runtime/SettingsArchive.swift \
   tests/settings-archive/SettingsArchiveTests.swift -o "$work/settings-tests"
 "$work/settings-tests"

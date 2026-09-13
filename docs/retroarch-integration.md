@@ -1,16 +1,16 @@
 # RetroArch integration
 
-GameCubed can send controller input to RetroArch's network gamepad receiver.
+Switch2Kit can send controller input to RetroArch's network gamepad receiver.
 The output is disabled by default and does not require a custom SDL library.
 
 ## Setup
 
 In RetroArch, enable **Settings → Network → Network Gamepad** and the desired
-**Network Gamepad Users**, then restart RetroArch. In GameCubed's Dashboard,
+**Network Gamepad Users**, then restart RetroArch. In Switch2Kit's Dashboard,
 enable **Configuration → Network gamepad output (RetroArch)**. Both base ports
 must match: the default is 55400, with one port per player.
 
-GameCubed sends only to `127.0.0.1`. RetroArch's unauthenticated receiver may
+Switch2Kit sends only to `127.0.0.1`. RetroArch's unauthenticated receiver may
 listen on other interfaces; enable it only on a trusted network.
 
 ## Delivery behavior

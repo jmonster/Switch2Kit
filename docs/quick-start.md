@@ -1,14 +1,14 @@
 # From installation to input in a game
 
-There are two separate checks: **GameCubed receives the controller**, and
-**the intended game receives GameCubed's output**. Passing the first does not
-prove the second. GameCubed is not a universal macOS controller driver.
+There are two separate checks: **Switch2Kit receives the controller**, and
+**the intended game receives Switch2Kit's output**. Passing the first does not
+prove the second. Switch2Kit is not a universal macOS controller driver.
 
 ## 1. Install and launch
 
 Follow the [build instructions](../README.md#build), or use the development-app
 artifact from a successful macOS build check for the revision you intend to
-test. Extract the ZIP and move `GameCubed.app` into Applications before loading
+test. Extract the ZIP and move `Switch2Kit.app` into Applications before loading
 its bundled extension. The About window shows the source revision.
 
 Development bundles are ad-hoc signed; normal macOS security policy still
@@ -18,7 +18,7 @@ ports.
 
 ## 2. Connect and verify the controller
 
-Launch GameCubed and allow Bluetooth access when requested. For initial setup,
+Launch Switch2Kit and allow Bluetooth access when requested. For initial setup,
 hold the controller's Sync button beside USB-C until its player LEDs sweep.
 For a previously bonded controller, try a normal button press first. Open
 **Dashboard** and verify button presses **and releases**, both sticks where
@@ -72,7 +72,7 @@ experimental sensor/NFC/audio data may be sensitive.
 
 ## Turn it off or remove it
 
-Use **Stop All Controller Output** to stop sessions, or quit GameCubed. Disable
+Use **Stop All Controller Output** to stop sessions, or quit Switch2Kit. Disable
 unused optional outputs. Disable Launch at Login before removing the app, and
 remove the unpacked browser extension when no longer needed.
 
