@@ -31,6 +31,16 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/verify-switch2kit-consumer.sh 2>&1 | tee build/Switch2Kit-consumers.log
+      - name: Build universal C ABI and independent C++ consumers
+        run: bash scripts/build-switch2kit-c.sh
+      - name: Preserve the C ABI distribution
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Switch2Kit-C-ABI
+          path: |
+            build/Switch2KitC.xcframework.zip
+            build/Switch2KitC.xcframework.zip.sha256
+          retention-days: 14
       - name: Preserve inspected development framework and checksums
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
