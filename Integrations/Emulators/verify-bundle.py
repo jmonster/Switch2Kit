@@ -16,22 +16,23 @@ assert plist.get("NSBluetoothAlwaysUsageDescription"), "Missing host Bluetooth d
 assert float(plist.get("LSMinimumSystemVersion", "0")) >= 15, "Incorrect enabled-backend minimum"
 exe = app / "Contents/MacOS" / plist["CFBundleExecutable"]
 lib = app / "Contents/Frameworks/libSwitch2KitC.dylib"
-# Preserve load commands and symbol bindings even when an inspection fails.
+# Resolve Mach-O inspection through the selected Xcode toolchain, not PATH.
+# Preserve load commands and symbol bindings even when a check fails.
 diag = build / "integration-native-diagnostics.txt"
 with diag.open("w") as report:
     for path in (exe, lib):
-        for arguments in (["otool", "-L", str(path)], ["otool", "-l", str(path)],
-                          ["nm", "-m", str(path)]):
+        for arguments in (["xcrun", "otool", "-L", str(path)], ["xcrun", "otool", "-l", str(path)],
+                          ["xcrun", "nm", "-m", str(path)]):
             result = subprocess.run(arguments, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             report.write("$ " + " ".join(arguments) + "\n" + result.stdout + "\n")
             report.flush()
 for path in (exe, lib):
     subprocess.run(["file", str(path)], check=True)
     subprocess.run(["xcrun", "lipo", "-verify_arch", subprocess.check_output(["uname", "-m"], text=True).strip(), str(path)], check=True)
-links = subprocess.check_output(["otool", "-L", str(exe)], text=True)
+links = subprocess.check_output(["xcrun", "otool", "-L", str(exe)], text=True)
 print(links, flush=True)
 assert "libSwitch2KitC.dylib" in links, "App is not linked to the C facade"
-assert "CoreHID" not in subprocess.check_output(["otool", "-L", str(lib)], text=True)
+assert "CoreHID" not in subprocess.check_output(["xcrun", "otool", "-L", str(lib)], text=True)
 subprocess.run(["plutil", "-lint", str(app / "Contents/Info.plist")], check=True)
 commands = json.loads((build / "compile_commands.json").read_text())
 required = ("SDL.cpp", "SDLGamepad.cpp", "ControllersPane.cpp") if emulator == "dolphin" else ("SDLControllerProvider.cpp", "SDLController.cpp", "ControllerFactory.cpp", "InputAPIAddWindow.cpp")
