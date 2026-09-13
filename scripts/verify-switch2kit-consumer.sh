@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fresh consumers have no dependency on the dashboard.
+# Build a fresh source consumer with no dependency on the dashboard.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
 [ "$(uname -s)" = Darwin ] || { echo 'Consumer verification requires macOS and Xcode.' >&2; exit 2; }
@@ -19,6 +19,29 @@ PY
 cat > "$WORK/source/Sources/Consumer/main.swift" <<'SWIFT'
 import Foundation
 import Switch2Kit
+
+// Compile against public declarations only; no testable import or example helper.
+enum AppCommand: Hashable, Sendable { case confirm, cancel }
+func checkActionAPI() throws {
+    var router = try Switch2ActionRouter(actions: [AppCommand.confirm, .cancel], bindings: [
+        .init(.confirm, from: .buttons(.a)), .init(.cancel, from: .buttons(.b))])
+    _ = router.setActive(true)
+    _ = router.receive(Switch2ControllerState(), from: .keyboard, at: 0)
+    let events: [Switch2ActionEvent<AppCommand>] = router.receive([.confirm], from: .keyboard, at: 1)
+    for event in events { _ = (event.action, event.phase) }
+    _ = router.tick(at: 3)
+    _ = try router.replaceBindings([.init(.confirm, from: .axis(.primaryX, positive: true))])
+    _ = router.remove(.keyboard)
+    _ = router.reset()
+    var navigation = Switch2ActionRouter<Switch2NavigationAction>.navigation()
+    _ = navigation.setActive(false)
+}
+
+func checkActionEventAPI(_ event: Switch2ControllerEvent) {
+    var router = Switch2ActionRouter<Switch2NavigationAction>.navigation()
+    _ = router.setActive(true)
+    _ = router.receive(event, at: 0)
+}
 
 @MainActor
 func checkConsumerAPI() throws {
@@ -43,27 +66,8 @@ func checkConsumerAPI() throws {
 SWIFT
 swift package --package-path "$WORK/source" describe
 swift build --package-path "$WORK/source" -Xswiftc -warnings-as-errors
-FRAMEWORK=$(python3 - "$ROOT/build/Switch2Kit.xcframework" <<'PY'
-import pathlib, plistlib, sys
-root = pathlib.Path(sys.argv[1])
-with (root / 'Info.plist').open('rb') as f: entry = plistlib.load(f)['AvailableLibraries'][0]
-print(root / entry['LibraryIdentifier'] / entry['LibraryPath'])
-PY
-)
-mkdir -p "$WORK/binary"
-ditto "$FRAMEWORK" "$WORK/binary/Switch2Kit.framework"
-# Force .swiftinterface consumption instead of same-toolchain compiled modules.
-find "$WORK/binary/Switch2Kit.framework" -type f -name '*.swiftmodule' -delete
-SDK=$(xcrun --sdk macosx --show-sdk-path)
-for arch in arm64 x86_64; do
-  xcrun --sdk macosx swiftc -swift-version 6 -warnings-as-errors -target "$arch-apple-macosx15.0" \
-    -sdk "$SDK" -F "$WORK/binary" -framework Switch2Kit \
-    "$WORK/source/Sources/Consumer/main.swift" -o "$WORK/Consumer-$arch" \
-    -Xlinker -rpath -Xlinker "$WORK/binary"
-  file "$WORK/Consumer-$arch"
-  lipo "$WORK/Consumer-$arch" -verify_arch "$arch"
-  if otool -L "$WORK/Consumer-$arch" | grep -q CoreHID; then
-    echo 'Independent consumer unexpectedly links CoreHID.' >&2; exit 1
-  fi
-done
-echo 'PASS fresh SwiftPM source consumer and both binary interface/link consumers (no radio opened)'
+BIN=$(swift build --package-path "$WORK/source" --show-bin-path)
+if otool -L "$BIN/Consumer" | grep -q CoreHID; then
+    echo 'Independent source consumer unexpectedly links CoreHID.' >&2; exit 1
+fi
+echo 'PASS fresh SwiftPM source consumer (no radio opened)'

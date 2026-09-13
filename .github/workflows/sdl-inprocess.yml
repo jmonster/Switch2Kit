@@ -1,0 +1,43 @@
+name: In-process SDL3 native consumers
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sdl-inprocess-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-26-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: libsdl-org/SDL
+          ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
+          path: build/SDL
+          persist-credentials: false
+      - name: Record exact input dependency
+        if: matrix.os == 'macos-26'
+        run: git -C build/SDL archive HEAD -o "$RUNNER_TEMP/sdl-source.zip"
+      - name: Preserve pinned SDL source for reproductions
+        if: matrix.os == 'macos-26'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdl-inprocess-source
+          path: ${{ runner.temp }}/sdl-source.zip
+          retention-days: 3
+      - name: Exercise the Swift engine, C ABI and real SDL3 together
+        env:
+          S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+        run: bash tests/sdl-inprocess/verify.sh

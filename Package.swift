@@ -10,9 +10,7 @@ var targets: [Target] = [
     .testTarget(name: "Switch2KitCTests", dependencies: ["Switch2Kit", "Switch2KitC", "Switch2KitCABI"],
                 swiftSettings: [.swiftLanguageMode(.v6)]),
     .target(name: "Switch2Kit", path: "Sources/Switch2Kit", swiftSettings: [.swiftLanguageMode(.v6)]),
-    .target(name: "Switch2KitNavigationExample", dependencies: ["Switch2Kit"], path: "Examples/NavigationSupport",
-            swiftSettings: [.swiftLanguageMode(.v6)]),
-    .testTarget(name: "Switch2KitTests", dependencies: ["Switch2Kit", "Switch2KitNavigationExample"], path: "Tests/Switch2KitTests",
+    .testTarget(name: "Switch2KitTests", dependencies: ["Switch2Kit"], path: "Tests/Switch2KitTests",
                 swiftSettings: [.swiftLanguageMode(.v6)])
 ]
 #if os(macOS)
@@ -23,7 +21,7 @@ products += [
 targets += [
     .executableTarget(name: "Switch2KitApp", dependencies: ["Switch2Kit"],
                       path: "Sources/Switch2KitApp", swiftSettings: [.swiftLanguageMode(.v6)]),
-    .executableTarget(name: "Switch2KitDemo", dependencies: ["Switch2Kit", "Switch2KitNavigationExample"], path: "Examples/Switch2KitDemo",
+    .executableTarget(name: "Switch2KitDemo", dependencies: ["Switch2Kit"], path: "Examples/Switch2KitDemo",
                       swiftSettings: [.swiftLanguageMode(.v6)])
 ]
 #endif

@@ -27,13 +27,11 @@ jobs:
         run: |
           swift package describe
           swift build
-      - name: Test the Swift package with Swift 6 concurrency checking
-        run: swift test -Xswiftc -warnings-as-errors
       - name: Build the independent example and its Bluetooth host bundle
         run: |
           swift build --product Switch2KitDemo
           bash scripts/build-switch2kit-demo.sh
-      - name: Run controller protocol and output regressions (no radio required)
+      - name: Run Swift 6 package and output regressions (no radio required)
         run: bash tests/run.sh
       - name: Build the actual app bundle (ad-hoc signing only)
         run: |

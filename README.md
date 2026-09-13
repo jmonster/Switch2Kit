@@ -46,7 +46,7 @@ The host provides `NSBluetoothAlwaysUsageDescription` and, when sandboxed, `com.
 | Joy-Con 2, left or right | Buttons, stick, motion, optical sensor, battery | Single HD motor per unit |
 | NSO GameCube | Buttons, two sticks, analog trigger travel and digital clicks, motion, battery | Soft/strong firmware clips |
 
-[Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md)
+[Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
 
 ## C/C++ integration
 
@@ -70,10 +70,9 @@ swift build
 swift test
 bash tests/run.sh
 bash scripts/build-switch2kit-demo.sh
-bash scripts/build-switch2kit-xcframework.sh
 bash scripts/verify-switch2kit-consumer.sh
 ```
 
-The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. The [XCFramework guide](docs/switch2kit/xcframework.md) covers universal arm64/x86_64 builds and Xcode integration. SwiftPM source integration is the default.
+The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. Swift consumers use SwiftPM source integration; the independent consumer check needs no prebuilt framework. The [distribution note](docs/switch2kit/xcframework.md) covers migration from the standalone Swift XCFramework. The optional C/C++ integration retains its native library build and validation.
 
 [Architecture](docs/switch2kit/architecture.md) · [Protocol](docs/protocol.md) · [Contributors](CREDITS.md)
