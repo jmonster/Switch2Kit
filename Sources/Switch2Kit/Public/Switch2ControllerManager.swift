@@ -103,6 +103,19 @@ public final class Switch2ControllerManager: ObservableObject {
     /// controller-stored bond is deleted. The host owns any persistent settings removal.
     public nonisolated func forget(_ id: Switch2ControllerID) { transport.disconnect(id, forget: true) }
 
+    /// Plays one short feedback action on any supported controller. Intensity is finite 0...1;
+    /// zero is mute. Pro/Joy-Con play a 400 ms HD pulse. GameCube selects its soft firmware
+    /// clip below 0.5 or strong clip from 0.5; the device controls clip duration and completion.
+    /// A submitted GameCube clip cannot be cancelled or given an arbitrary duration.
+    /// At most one action per controller is admitted each 500 ms. Busy commands/radio report
+    /// `operationBusy`; missing sessions and protocol failures arrive through observation.
+    /// Requests coalesce in the bounded rumble inbox and expire after 500 ms, so stalled
+    /// consumers cannot produce delayed feedback or affect a replacement connection.
+    public nonisolated func playRumble(for id: Switch2ControllerID, intensity: Double = 0.5) throws {
+        guard intensity.isFinite, (0...1).contains(intensity) else { throw Switch2KitError.invalidParameter }
+        transport.submitRumble(id, strong: intensity, weak: 0, duration: nil, feedback: true)
+    }
+
     /// Sets normalized HD-rumble intent: each channel is 0...1. Pro uses strong=left, weak=right;
     /// a Joy-Con mixes the channels into its single actuator. GameCube is rejected with a typed event.
     /// Zero stops rumble. A 500 ms failsafe stops an intent unless renewed; this protects stalled hosts.

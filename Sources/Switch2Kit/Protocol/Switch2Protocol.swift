@@ -71,9 +71,9 @@ package enum Switch2 {
 
         package var payload: Data { Data([rawValue, 0, 0, 0]) }
 
-        /// The 50% split is our test UI policy, not a continuous motor gain.
+        /// Feedback intensity selects one of two device-timed clips, not continuous gain.
         /// Zero/non-finite intensity is silent; no undocumented stop preset.
-        package static func forTest(intensity: Double) -> Self? {
+        package static func forIntensity(intensity: Double) -> Self? {
             guard intensity.isFinite, intensity > 0 else { return nil }
             return intensity < 0.5 ? .soft : .strong
         }

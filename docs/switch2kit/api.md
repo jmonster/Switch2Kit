@@ -12,7 +12,7 @@ The source's `///` comments document every public declaration, including field u
 | Lifecycle | `Switch2BluetoothState`, `Switch2DiscoveryState`, `Switch2DiscoveryMode`, `Switch2ConnectionState`, `Switch2DisconnectionReason`, `Switch2ControllerEvent`, `Switch2KitError` |
 | Diagnostics | `Switch2LogLevel`, `Switch2LogCategory`, `Switch2LogRecord`, `Switch2LogHandler` |
 
-The manager provides `start`, both async and callback `stop`, `discover(for:)`, `configureDiscovery`, `useOnlyConnectedControllersForDiscovery`, `observe`, `disconnect`, `forget`, `setRumble`, `pulseRumble`, `setPlayerNumber`, `setPlayerLEDPattern` and `requestSignalStrength`. It exposes the main-actor presentation snapshot and an immediate thread-safe snapshot. There is no singleton requirement.
+The manager provides `start`, both async and callback `stop`, `discover(for:)`, `configureDiscovery`, `useOnlyConnectedControllersForDiscovery`, `observe`, `disconnect`, `forget`, `playRumble`, `setRumble`, `pulseRumble`, `setPlayerNumber`, `setPlayerLEDPattern` and `requestSignalStrength`. It exposes the main-actor presentation snapshot and an immediate thread-safe snapshot. There is no singleton requirement.
 
 ## Input values
 
@@ -34,7 +34,7 @@ Joy-Con optical telemetry exposes UInt16 absolute x/y counters wrapping modulo 6
 
 `Switch2ControllerID` wraps CoreBluetooth's locally scoped UUID, supports Codable restoration, and is potentially identifying data. It is not a serial, player slot or authentication proof. `connectionID` is a new transient token for each connection; do not persist it. Names are safe verified model labels; host custom names remain host state. Optional body/button colors contain eight-bit sRGB components, without alpha.
 
-Serial numbers are nil by default. A legacy host can explicitly opt in through configuration to preserve existing serial-keyed mappings; the library still does not log them. `capabilities` describes understood physical-controller functions, not whether a game, browser or output adapter supports them. GameCube has analog triggers but no stable rumble capability. A paired Joy-Con grip is a host abstraction over two capability sets.
+Serial numbers are nil by default. A legacy host can explicitly opt in through configuration to preserve existing serial-keyed mappings; the library still does not log them. `capabilities` describes understood physical-controller functions, not whether a game, browser or output adapter supports them. All models provide `.rumble` through `playRumble`. Pro/Joy-Con also provide `.continuousRumble`; GameCube provides `.rumblePresets`. A paired Joy-Con grip is a host abstraction over two capability sets.
 
 ## Failure semantics
 

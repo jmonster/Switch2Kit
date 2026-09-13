@@ -80,7 +80,7 @@ struct OutputCapabilities: Sendable {
     let model: Switch2.Model
     let backend: OutputBackend
     var gameRumble: Bool { model.hasHDRumble && (backend == .sdl || backend == .browser) }
-    var directRumble: Bool { model.hasDirectRumbleTest }
+    var directRumble: Bool { model.capabilities.contains(.rumble) }
     var analogTravel: Bool { model.hasAnalogTriggers && backend != .retroarch }
     /// The browser combines digital clicks with trigger values; CoreHID's
     /// current descriptor omits the separate ZL/ZR click bits. Only the SDL

@@ -559,10 +559,40 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         maintainTick()
     }
 
-    /// Direct diagnostic, independent of player assignment or game output.
-    /// GameCube clips finish in firmware: they are not duration-controlled
-    /// effects and must not be advertised as general game-rumble support.
+    private var lastRumbleFeedbackAt: TimeInterval = -.infinity
 
+    package func playRumble(intensity: Double) {
+        queue.async { [weak self] in self?.applyRumbleFeedback(intensity: intensity) }
+    }
+
+    /// Runs on the session queue. Feedback is admitted now or rejected, never parked
+    /// behind commands or radio backpressure. Firmware presets finish on the device.
+    package func applyRumbleFeedback(intensity: Double,
+                                     completion: ((Switch2KitError?) -> Void)? = nil) {
+        guard !ended, isReady else { completion?(.controllerNotReady); return }
+        let level = intensity.isFinite ? max(0, min(1, intensity)) : 0
+        guard level > 0 else { completion?(nil); return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastRumbleFeedbackAt >= 0.5 else { completion?(.operationBusy); return }
+        if model.hasHDRumble {
+            lastRumbleFeedbackAt = now
+            applyRumblePulse(strong: level, weak: model == .proController2 ? level : 0, duration: 0.4)
+            completion?(nil)
+        } else if let preset = Switch2.GameCubeRumblePreset.forIntensity(intensity: level) {
+            guard isCommandIdle, peripheral.canSendWriteWithoutResponse else {
+                completion?(.operationBusy); return
+            }
+            lastRumbleFeedbackAt = now
+            sendCommand(Switch2.Command.vibration, Switch2.Subcommand.vibrationPlayPreset,
+                        preset.payload) { [weak self] result in
+                guard let self, !self.ended else { return }
+                switch result {
+                case .success: completion?(nil)
+                case .failure: completion?(.protocolFailure)
+                }
+            }
+        }
+    }
 
     package func pulseRumble(strong: Double, weak: Double = 0, duration: Double) {
         queue.async { [weak self] in

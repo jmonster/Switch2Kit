@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fresh consumers have no dependency on the dashboard or experimental product.
+# Fresh consumers have no dependency on the dashboard.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
 [ "$(uname -s)" = Darwin ] || { echo 'Consumer verification requires macOS and Xcode.' >&2; exit 2; }
@@ -35,7 +35,8 @@ func checkConsumerAPI() throws {
     let start: () -> Void = manager.start
     let discover: (TimeInterval) throws -> Void = { try manager.discover(for: $0) }
     let rumble: (Switch2ControllerID) throws -> Void = { try manager.pulseRumble(for: $0, strong: 0.2, duration: 0.12) }
-    _ = (snapshot, observation, start, discover, rumble)
+    let feedback: (Switch2ControllerID) throws -> Void = { try manager.playRumble(for: $0, intensity: 0.3) }
+    _ = (snapshot, observation, start, discover, rumble, feedback)
     observation.cancel()
 }
 // Build/link only. No controller-support method is executed in this consumer.

@@ -16,7 +16,7 @@ A controller becomes ready only after its handshake and first valid input report
 
 `Sources/Switch2KitApp` consumes the library through `Switch2KitAdapter` and `Switch2KitStateAdapter`. `BridgeEngine` assigns logical players, merges Joy-Con pairs, applies mappings, and routes output. It does not parse advertisements, decode reports, or own Bluetooth sessions.
 
-The app owns its four-player policy, preferences, visualizers, optional outputs, permissions UI, and lifecycle. Library users do not inherit those dependencies or limits.
+The app owns its four-player policy, preferences, visualizers, optional outputs, permissions UI, and lifecycle. Library users do not inherit those dependencies or limits. NFC/audio tools live in `Sources/Switch2KitApp/Tools` and share package-scoped session hooks; the source library has no second companion product.
 
 ## Tests
 

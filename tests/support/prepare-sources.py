@@ -37,8 +37,8 @@ if __name__ == "__main__":
     if mode == "session":
         src = Path(os.environ.get("SESSION_SOURCE", "Sources/Switch2Kit/Bluetooth/ControllerSession.swift"))
         (out / "ControllerSession.swift").write_text(fixture(src.read_text()))
-        src = Path("Sources/Switch2KitExperimental/ExperimentalControllerSession.swift")
-        (out / "ExperimentalControllerSession.swift").write_text(fixture(src.read_text()))
+        src = Path("Sources/Switch2KitApp/Tools/ControllerToolSession.swift")
+        (out / "ControllerToolSession.swift").write_text(fixture(src.read_text()))
     elif mode == "transport":
         for name in ["ControllerTransport", "DiscoveryPolicy"]:
             src = Path(f"Sources/Switch2Kit/Bluetooth/{name}.swift")
@@ -53,6 +53,7 @@ if __name__ == "__main__":
         body = extract(src, "private struct Logical") + "\n" + extract(src, "func testRumble(serial:")
         header = """import Foundation
 typealias ApplicationController = ControllerSession
+extension ControllerSession { func testRumble(intensity: Double) { playRumble(intensity: intensity) } }
 final class RumbleTestEngine: @unchecked Sendable {
     let btQueue: DispatchQueue
     var sessions: [Int: ControllerSession] = [:]

@@ -62,7 +62,7 @@ private struct ControllerPanel: View {
                     Text("Battery: \(controller.state.battery.millivolts.map { String($0) + " mV" } ?? "unavailable")")
                     HStack {
                         Button("Short Rumble") {
-                            do { try manager.pulseRumble(for: controller.id, strong: 0.4, weak: 0.4, duration: 0.15) }
+                            do { try manager.playRumble(for: controller.id, intensity: 0.4) }
                             catch { model.errorMessage = String(describing: error) }
                         }.disabled(!controller.capabilities.contains(.rumble))
                         Button("Disconnect") { manager.disconnect(controller.id) }

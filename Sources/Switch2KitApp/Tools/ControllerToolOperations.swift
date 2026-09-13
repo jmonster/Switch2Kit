@@ -4,15 +4,15 @@ import Switch2Kit
 
 // Queue-confined orchestration extracted from the dashboard. Neither UI policy nor
 // NotificationCenter names nor default directories are part of these research operations.
-final class ExperimentalOperations: @unchecked Sendable {
-    let session: ExperimentalControllerSession
+final class ControllerToolOperations: @unchecked Sendable {
+    let session: ControllerToolSession
     let id: Switch2ControllerID
-    let events: ExperimentalEventPipe
+    let events: ControllerToolEvents
     var melodyTimer: DispatchSourceTimer?
     var captureDeadline: DispatchWorkItem?
-    var capture: ExperimentalCaptureWriter?
+    var capture: ControllerCaptureWriter?
     var btQueue: DispatchQueue { session.queue }
-    init(session: ExperimentalControllerSession, events: ExperimentalEventPipe) {
+    init(session: ControllerToolSession, events: ControllerToolEvents) {
         self.session = session; self.id = .init(rawValue: session.base.peripheral.identifier); self.events = events
     }
     var researchLog: @Sendable (Switch2LogLevel, String, String) -> Void {
@@ -49,7 +49,7 @@ final class ExperimentalOperations: @unchecked Sendable {
         }
     }
 
-    private func nfcPollStatus(session: ExperimentalControllerSession, attempt: Int) {
+    private func nfcPollStatus(session: ControllerToolSession, attempt: Int) {
         guard !session.ended else { return }
         let bridgeLog = researchLog
 
@@ -127,7 +127,7 @@ final class ExperimentalOperations: @unchecked Sendable {
         let readTries: Int
     }
 
-    private func nfcReadTag(session: ExperimentalControllerSession, uid: Data) {
+    private func nfcReadTag(session: ControllerToolSession, uid: Data) {
         guard !session.ended else { return }
         let bridgeLog = researchLog
 
@@ -157,7 +157,7 @@ final class ExperimentalOperations: @unchecked Sendable {
         nfcRunStage(session: session, uid: uid, stages: stages, index: 0)
     }
 
-    private func nfcRunStage(session: ExperimentalControllerSession, uid: Data,
+    private func nfcRunStage(session: ControllerToolSession, uid: Data,
                              stages: [NFCStage], index: Int) {
         guard !session.ended else { return }
         let bridgeLog = researchLog
@@ -189,7 +189,7 @@ final class ExperimentalOperations: @unchecked Sendable {
 
     /// Send a stage's commands strictly in order (each waits for the
     /// previous response), logging every reply, then call `done`.
-    private func nfcSendSequence(session: ExperimentalControllerSession,
+    private func nfcSendSequence(session: ControllerToolSession,
                                  _ sequence: [(subcommand: UInt8, payload: Data)],
                                  at index: Int, done: @escaping () -> Void) {
         guard !session.ended else { return }
@@ -217,7 +217,7 @@ final class ExperimentalOperations: @unchecked Sendable {
     /// not-ready replies at the current cursor — the RF read may still be
     /// filling the buffer, so an error only ends the dump once we have data
     /// or patience runs out.
-    private func nfcReadBuffer(session: ExperimentalControllerSession,
+    private func nfcReadBuffer(session: ControllerToolSession,
                                assembled: Data, chunks: Int, retries: Int,
                                maxRetries: Int = 6, uid: Data,
                                onNoData: (@Sendable () -> Void)? = nil) {
@@ -272,7 +272,7 @@ final class ExperimentalOperations: @unchecked Sendable {
 
     /// Dump the assembled tag image, decode any NDEF text, notify the user,
     /// and end discovery so the NFC radio doesn't stay on.
-    private func nfcFinish(session: ExperimentalControllerSession, assembled: Data, uid: Data) {
+    private func nfcFinish(session: ControllerToolSession, assembled: Data, uid: Data) {
         guard !session.ended else { return }
         let bridgeLog = researchLog
 
@@ -293,13 +293,13 @@ final class ExperimentalOperations: @unchecked Sendable {
         if let text {
             bridgeLog(.info, "nfc", "📖 decoded text record: \"\(text)\"")
         }
-        events.submit(.nfcTagRead(id, Switch2ExperimentalTag(uid: uidString,
+        events.submit(.nfcTagRead(id, ControllerTag(uid: uidString,
             text: text, byteCount: assembled.count)))
     }
 
     /// End discovery (0x01/0x04 per the sniffed console traffic — sent with
     /// an empty payload once the console is done with the tag).
-    private func nfcStopDiscovery(session: ExperimentalControllerSession) {
+    private func nfcStopDiscovery(session: ControllerToolSession) {
         guard !session.ended else { return }
         let bridgeLog = researchLog
 
@@ -396,7 +396,6 @@ final class ExperimentalOperations: @unchecked Sendable {
     /// the full packets, and just the 50-byte audio-region frames for
     /// offline codec work. File format: "S2KAUD02" magic, then records of
     /// [f64 LE seconds since start][u32 LE length][bytes].
-
 
     /// Build one PCM sine frame: `samples` × s16 LE mono, advancing the
     /// caller's phase for a true `freq` Hz tone at `sampleRate`.
@@ -620,7 +619,6 @@ final class ExperimentalOperations: @unchecked Sendable {
             timer.resume()
         }
     }
-
 
     private static func hex(_ data: Data) -> String {
         data.prefix(48).map { String(format: "%02x", $0) }.joined(separator: " ")

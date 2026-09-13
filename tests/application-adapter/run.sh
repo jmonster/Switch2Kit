@@ -21,7 +21,7 @@ body = support.fixture(body).removeprefix('import CoreFoundation\n')
 (out/'Engine.swift').write_text(Path('tests/application-adapter/Boundary.swift').read_text()+body+'\n}\n')
 for name in ['Switch2KitAdapter', 'Switch2KitStateAdapter']:
     source = (root/f'Runtime/{name}.swift').read_text()
-    source = re.sub(r'^import (Switch2Kit|Switch2KitExperimental)$', '', source, flags=re.M)
+    source = re.sub(r'^import Switch2Kit$', '', source, flags=re.M)
     source = re.sub(r'^typealias (Switch2|ControllerState) = .*$', '', source, flags=re.M)
     (out/f'{name}.swift').write_text(source)
 PY

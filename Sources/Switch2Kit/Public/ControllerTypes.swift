@@ -33,12 +33,12 @@ public enum Switch2ControllerModel: UInt16, CaseIterable, Codable, Sendable {
     }
     /// Controller-level support. Host application outputs may support fewer features.
     public var capabilities: Switch2ControllerCapabilities {
-        var result: Switch2ControllerCapabilities = [.buttons, .battery, .motion, .playerLEDs]
+        var result: Switch2ControllerCapabilities = [.buttons, .battery, .motion, .playerLEDs, .rumble]
         switch self {
-        case .joyCon2Left: result.formUnion([.leftStick, .opticalSensor, .rumble])
-        case .joyCon2Right: result.formUnion([.rightStick, .opticalSensor, .rumble])
-        case .proController2: result.formUnion([.leftStick, .rightStick, .rumble])
-        case .nsoGameCube: result.formUnion([.leftStick, .rightStick, .analogTriggers])
+        case .joyCon2Left: result.formUnion([.leftStick, .opticalSensor, .continuousRumble])
+        case .joyCon2Right: result.formUnion([.rightStick, .opticalSensor, .continuousRumble])
+        case .proController2: result.formUnion([.leftStick, .rightStick, .continuousRumble])
+        case .nsoGameCube: result.formUnion([.leftStick, .rightStick, .analogTriggers, .rumblePresets])
         }
         return result
     }
@@ -67,10 +67,14 @@ public struct Switch2ControllerCapabilities: OptionSet, Hashable, Sendable {
     public static let motion = Self(rawValue: 1 << 5)
     /// Raw Joy-Con optical counters and surface telemetry.
     public static let opticalSensor = Self(rawValue: 1 << 6)
-    /// Established HD rumble. GameCube preset research is intentionally excluded.
+    /// Model-appropriate short feedback through `playRumble(for:intensity:)`.
     public static let rumble = Self(rawValue: 1 << 7)
     /// Four player indicator lights; this does not assign a logical player.
     public static let playerLEDs = Self(rawValue: 1 << 8)
+    /// Amplitude-controlled HD effects through `setRumble` and duration-controlled `pulseRumble`.
+    public static let continuousRumble = Self(rawValue: 1 << 9)
+    /// Device-timed soft/strong firmware clips, selected by `playRumble` intensity.
+    public static let rumblePresets = Self(rawValue: 1 << 10)
 }
 
 /// Simultaneous digital controls. Opposing D-pad directions can both be present.

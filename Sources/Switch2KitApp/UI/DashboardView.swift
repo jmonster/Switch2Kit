@@ -389,7 +389,7 @@ struct ControllerCard: View {
                             .frame(width: 44, alignment: .trailing)
                             .foregroundStyle(.secondary)
                         Button(status.model == .nsoGameCube ? "Test preset" : "Test") { onTestRumble() }
-                            .disabled(!status.model.hasDirectRumbleTest)
+                            .disabled(!status.model.capabilities.contains(.rumble))
                             .help("Test this controller directly, even without a player slot. Check Logs if it stays silent.")
                     }
                     if settings.rumbleIntensity(forSerial: status.serial) <= 0 {

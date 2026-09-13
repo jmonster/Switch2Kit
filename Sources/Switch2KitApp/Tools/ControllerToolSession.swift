@@ -1,11 +1,11 @@
-// Unsupported research companion. The stable target has no NFC/audio implementation.
+// Application-owned NFC and audio tools sharing the controller session executor.
 import Foundation
 import CoreBluetooth
 import Switch2Kit
 
 // Same serial executor as its base session. No unchecked mutable state crosses that queue.
-package final class ExperimentalControllerSession: ControllerSessionCompanion, @unchecked Sendable {
-    var operations: ExperimentalOperations?
+final class ControllerToolSession: ControllerSessionCompanion, @unchecked Sendable {
+    var operations: ControllerToolOperations?
     let base: ControllerSession
     init(base: ControllerSession) { self.base = base }
     var queue: DispatchQueue { base.queue }
@@ -33,14 +33,13 @@ package final class ExperimentalControllerSession: ControllerSessionCompanion, @
         base.applyRumblePulse(strong: strong, weak: weak, duration: duration)
     }
     @discardableResult func writeMotor(_ vibration: Switch2.Vibration) -> Bool { base.writeMotor(vibration) }
-    private var lastRumbleTestAt: TimeInterval = -.infinity
-    package var isExperimentActive: Bool { audioExperimentName != nil }
-    package func didRetire() {
+    var isExperimentActive: Bool { audioExperimentName != nil }
+    func didRetire() {
         finishAudioStream(); onAudioPacket = nil; audioExperimentName = nil
         operations?.cancel(); operations = nil
     }
-    package func writeCapacityAvailable() { drainAudioStream() }
-    package func receivedAuxiliaryValue(uuid: UUID?, data: Data) {
+    func writeCapacityAvailable() { drainAudioStream() }
+    func receivedAuxiliaryValue(uuid: UUID?, data: Data) {
         if uuid == Self.audioInputUUID { onAudioPacket?(data) }
         else if promiscuousNotify { log(.debug, "Received experimental characteristic data (contents omitted)") }
     }
@@ -261,45 +260,4 @@ package final class ExperimentalControllerSession: ControllerSessionCompanion, @
         completion(true)
     }
 
-
-    func testRumble(intensity: Double) {
-        queue.async { [weak self] in
-            guard let self, !self.ended, self.isReady else { return }
-            let level = intensity.isFinite ? max(0, min(1, intensity)) : 0
-            guard level > 0 else {
-                self.log(.info, "rumble test muted: raise Rumble above 0%")
-                return
-            }
-            let now = ProcessInfo.processInfo.systemUptime
-            guard now - self.lastRumbleTestAt >= 0.5 else { return }
-            if self.model.hasHDRumble {
-                self.lastRumbleTestAt = now
-                // Pro has independent left/strong and right/weak actuators.
-                // A test must exercise BOTH, unlike a single-motor effect.
-                self.applyRumblePulse(strong: level, weak: self.model == .proController2 ? level : 0,
-                                      duration: 0.4)
-                self.log(.info, "direct rumble test requested: verify vibration by touch")
-            } else if self.model == .nsoGameCube,
-                      let preset = Switch2.GameCubeRumblePreset.forTest(intensity: level) {
-                // A preset cannot be cancelled after submission. Never let a
-                // test accumulate behind commands or radio backpressure and
-                // buzz unexpectedly later. Retry is an explicit user action.
-                guard self.isCommandIdle,
-                      self.peripheral.canSendWriteWithoutResponse else {
-                    self.log(.warning, "rumble test not sent: Bluetooth is busy; press Test again")
-                    return
-                }
-                self.lastRumbleTestAt = now
-                self.sendCommand(Switch2.Command.vibration, Switch2.Subcommand.vibrationPlayPreset,
-                                 preset.payload) { [weak self] result in
-                    switch result {
-                    case .success:
-                        self?.log(.info, "GameCube rumble preset acknowledged: verify vibration by touch")
-                    case .failure:
-                        self?.log(.warning, "GameCube rumble preset was not acknowledged")
-                    }
-                }
-            }
-        }
-    }
 }

@@ -17,7 +17,7 @@ enum OutputSetupPath: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .sdl:
-            return "Use the rebuilt, corrected SDL library for a compatible game. The tracked historical dylib does not include later fixes. Keep the original game unchanged."
+            return "Use the rebuilt, corrected SDL library for a compatible game. Keep the original game unchanged."
         case .retroarch:
             return "Enable network gamepad input in RetroArch and output in the Dashboard with matching ports. No SDL replacement is needed. This path has no rumble or analog GameCube trigger travel; use a trusted network."
         case .browser:

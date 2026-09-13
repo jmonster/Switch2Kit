@@ -4,7 +4,7 @@ import Switch2Kit
 
 // Inbox is mutex-protected; file handles and counters are confined to writerQueue.
 // Initialization runs on a utility queue BEFORE publication to the Bluetooth executor.
-final class ExperimentalCaptureWriter: @unchecked Sendable {
+final class ControllerCaptureWriter: @unchecked Sendable {
     private struct Inbox: Sendable {
         var packets: [(TimeInterval, Data)] = []
         var dropped = 0
@@ -12,17 +12,17 @@ final class ExperimentalCaptureWriter: @unchecked Sendable {
         var finishing = false
     }
     private let inbox = Mutex(Inbox())
-    private let writerQueue = DispatchQueue(label: "Switch2KitExperimental.capture", qos: .utility)
+    private let writerQueue = DispatchQueue(label: "Switch2Kit.capture", qos: .utility)
     private let fullFile: FileHandle
     private let regionFile: FileHandle
     private let fullURL: URL
     private let regionURL: URL
     private let start = ProcessInfo.processInfo.systemUptime
-    private let completion: @Sendable (Switch2ExperimentalCapture) -> Void
+    private let completion: @Sendable (ControllerCapture) -> Void
     private var packetCount = 0
     private var closed = false
 
-    init(directory: URL, completion: @escaping @Sendable (Switch2ExperimentalCapture) -> Void) throws {
+    init(directory: URL, completion: @escaping @Sendable (ControllerCapture) -> Void) throws {
         let run = UUID().uuidString
         fullURL = directory.appendingPathComponent("Switch2Kit-audio-\(run).bin")
         regionURL = directory.appendingPathComponent("Switch2Kit-audio-\(run)-frames.bin")
@@ -100,7 +100,7 @@ final class ExperimentalCaptureWriter: @unchecked Sendable {
     }
 }
 
-extension ExperimentalOperations {
+extension ControllerToolOperations {
     func captureAudio(directory: URL, seconds: TimeInterval) {
         guard !session.ended else { return }
         guard session.beginAudioExperiment("capture") else { events.submit(.failure(id, .busy)); return }
@@ -108,7 +108,7 @@ extension ExperimentalOperations {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             let result = Result {
-                try ExperimentalCaptureWriter(directory: directory) { result in
+                try ControllerCaptureWriter(directory: directory) { result in
                     events.submit(.audioCaptureFinished(id, result))
                 }
             }
