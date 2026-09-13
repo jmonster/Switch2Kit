@@ -48,6 +48,19 @@ private final class IngressCounters: Sendable {
         engine.withSession(id) { _ in counters.executed.withLock { $0 += 1 } }
         engine.btQueue.sync {}
         precondition(counters.executed.withLock { $0 } == 129)
+        engine.btQueue.sync {
+            let current = engine.sessions[0]!, oldConnection = UUID()
+            engine.submitRumble(id, strong: 0.3, weak: 0, duration: nil, expectedConnection: current.lifetime.id)
+            engine.submitRumble(id, strong: 1, weak: 0, duration: nil, expectedConnection: oldConnection)
+            precondition(engine.rumbleInbox.withLock { $0.pending[id]?.strong } == 0.3,
+                         "An old caller must not overwrite a current connection's pending effect")
+            engine.withSession(id, expectedConnection: oldConnection) { _ in counters.executed.withLock { $0 += 1 } }
+            engine.disconnect(id, forget: true, expectedConnection: oldConnection)
+        }
+        engine.btQueue.sync {}
+        precondition(counters.executed.withLock { $0 } == 129)
+        engine.btQueue.sync { precondition(engine.sessions[0] != nil) }
+        print("PASS caller-supplied connection tokens fence controls, disconnect and rumble coalescing")
         engine.stop(); engine.btQueue.sync {}
         engine.withSession(id) { _ in counters.executed.withLock { $0 += 1 } }
         engine.btQueue.sync {}

@@ -48,6 +48,10 @@ The host provides `NSBluetoothAlwaysUsageDescription` and, when sandboxed, `com.
 
 [Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md)
 
+## C/C++ integration
+
+Use the optional [C ABI and CMake integration](docs/switch2kit/cpp.md) for in-process emulator backends. It shares the Swift controller engine and does not require the dashboard.
+
 ## Dashboard
 
 ```sh
