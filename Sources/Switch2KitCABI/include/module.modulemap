@@ -1,0 +1,4 @@
+module Switch2KitCABI {
+    header "Switch2KitC.h"
+    export *
+}

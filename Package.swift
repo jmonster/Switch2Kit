@@ -2,7 +2,13 @@
 import PackageDescription
 
 var products: [Product] = [.library(name: "Switch2Kit", targets: ["Switch2Kit"])]
+products.append(.library(name: "Switch2KitC", type: .dynamic, targets: ["Switch2KitC"]))
 var targets: [Target] = [
+    .target(name: "Switch2KitCABI"),
+    .target(name: "Switch2KitC", dependencies: ["Switch2Kit", "Switch2KitCABI"],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
+    .testTarget(name: "Switch2KitCTests", dependencies: ["Switch2Kit", "Switch2KitC", "Switch2KitCABI"],
+                swiftSettings: [.swiftLanguageMode(.v6)]),
     .target(name: "Switch2Kit", path: "Sources/Switch2Kit", swiftSettings: [.swiftLanguageMode(.v6)]),
     .target(name: "Switch2KitNavigationExample", dependencies: ["Switch2Kit"], path: "Examples/NavigationSupport",
             swiftSettings: [.swiftLanguageMode(.v6)]),
