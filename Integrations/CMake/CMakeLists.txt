@@ -76,6 +76,9 @@ if(APPLE)
   # Generated imported libraries do not exist when CMake first configures.
   # State the install name so runtime paths do not depend on configure-time inspection.
   set_target_properties(Switch2Kit::C PROPERTIES IMPORTED_SONAME "@rpath/libSwitch2KitC.dylib")
+else()
+  # SwiftPM emits ELF libraries without DT_SONAME; use -l, not a relative DT_NEEDED path.
+  set_target_properties(Switch2Kit::C PROPERTIES IMPORTED_NO_SONAME TRUE)
 endif()
 add_dependencies(Switch2Kit::C Switch2KitCBuild)
 set(SWITCH2KIT_C_BINARY_DIR "${_s2k_bin}" CACHE INTERNAL "Built C facade directory")

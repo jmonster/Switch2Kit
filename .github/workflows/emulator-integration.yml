@@ -1,0 +1,104 @@
+name: Emulator integration
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+concurrency:
+  group: emulator-integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  host:
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: libsdl-org/SDL
+          ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
+          path: build/SDL
+          persist-credentials: false
+      - name: Exercise application lifecycle and concurrent enumeration
+        env:
+          S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+        run: bash tests/emulator-host/verify.sh
+  native:
+    runs-on: macos-15
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - emulator: dolphin
+            repository: dolphin-emu/dolphin
+            revision: c185d27ede09771fe93a3b520c576f646f937ed9
+          - emulator: cemu
+            repository: cemu-project/Cemu
+            revision: 3310f3b8b184d64a62b89fd59088c799432badf5
+    env:
+      VCPKG_MAX_CONCURRENCY: 3
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/vcpkg-cache,readwrite
+      S2K_BUILD_JOBS: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.revision }}
+          path: build/emulator-source
+          submodules: recursive
+          persist-credentials: false
+      - name: Install native build tools
+        env:
+          EMULATOR: ${{ matrix.emulator }}
+        run: |
+          brew install cmake ninja nasm automake libtool
+          if [ "$EMULATOR" = dolphin ]; then brew install qt@6; fi
+          mkdir -p build/vcpkg-cache
+          if [ "$EMULATOR" = cemu ]; then bash build/emulator-source/dependencies/vcpkg/bootstrap-vcpkg.sh; fi
+      - name: Apply the pinned integration
+        env:
+          EMULATOR: ${{ matrix.emulator }}
+        run: python3 Integrations/Emulators/apply.py "$EMULATOR" build/emulator-source
+      - name: Build the complete emulator application
+        env:
+          EMULATOR: ${{ matrix.emulator }}
+        run: |
+          set -o pipefail
+          extra=(-DENABLE_VULKAN=OFF)
+          if [ "$EMULATOR" = dolphin ]; then
+            extra+=(-DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)" -DENABLE_TESTS=OFF -DPOSTPROCESS_BUNDLE=ON)
+          fi
+          bash scripts/build-switch2kit-emulator.sh "$EMULATOR" \
+            "$PWD/build/emulator-source" "$PWD/build/emulator-build" \
+            "${extra[@]}" 2>&1 | tee build/emulator-build.log
+      - name: Inspect the app and embedded controller library
+        env:
+          EMULATOR: ${{ matrix.emulator }}
+        run: python3 Integrations/Emulators/verify-bundle.py "$EMULATOR" build/emulator-source build/emulator-build
+      - name: Preserve native build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.emulator }}-integration-diagnostics
+          path: |
+            build/emulator-build.log
+            build/emulator-build/CMakeCache.txt
+            build/emulator-build/compile_commands.json
+            build/emulator-build/CMakeFiles/CMakeConfigureLog.yaml
+            build/emulator-build/vcpkg-manifest-install.log
+          retention-days: 7
+      - name: Preserve the built emulator
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.emulator }}-switch2kit-app
+          path: build/emulator-build/integration-app.zip
+          if-no-files-found: error
+          retention-days: 7
