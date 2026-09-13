@@ -115,10 +115,36 @@ package final class ControllerEventHub: Sendable {
         var lifetimes: [Switch2ControllerID: SessionLifetime] = [:]
     }
     private let state = Mutex(State())
-    package var snapshot: Switch2ManagerSnapshot { state.withLock { $0.snapshot } }
+
+    // Session teardown retires its token before the transport publishes removal.
+    // Project through those tokens so reads and resynchronization cannot expose
+    // retired controllers during that interval. The hub mutex guards the map;
+    // each token independently guards its terminal state. No host work runs here.
+    private static func snapshotForDelivery(_ value: State)
+        -> (snapshot: Switch2ManagerSnapshot, lifetimes: [SessionLifetime]) {
+        var controllers: [Switch2Controller] = []
+        var lifetimes: [SessionLifetime] = []
+        for controller in value.snapshot.controllers {
+            guard let lifetime = value.lifetimes[controller.id],
+                  lifetime.id == controller.sessionGeneration, lifetime.isActive else { continue }
+            controllers.append(controller)
+            lifetimes.append(lifetime)
+        }
+        let snapshot = Switch2ManagerSnapshot(isRunning: value.snapshot.isRunning,
+            bluetooth: value.snapshot.bluetooth, discovery: value.snapshot.discovery,
+            controllers: controllers, rememberedControllers: value.snapshot.rememberedControllers)
+        return (snapshot, lifetimes)
+    }
+
+    package var snapshot: Switch2ManagerSnapshot {
+        state.withLock { Self.snapshotForDelivery($0).snapshot }
+    }
     package func current() -> EventEnvelope {
-        state.withLock { EventEnvelope(sequence: $0.sequence, event: .snapshot($0.snapshot), lifetime: nil,
-                                         snapshotLifetimes: Array($0.lifetimes.values)) }
+        state.withLock { value in
+            let current = Self.snapshotForDelivery(value)
+            return EventEnvelope(sequence: value.sequence, event: .snapshot(current.snapshot), lifetime: nil,
+                                 snapshotLifetimes: current.lifetimes)
+        }
     }
     package func observe(queue: DispatchQueue, capacity: Int, interval: TimeInterval = 0,
                          handler: @escaping @Sendable (Switch2ControllerEvent) -> Void) throws -> Switch2ControllerObservation {
@@ -130,8 +156,9 @@ package final class ControllerEventHub: Sendable {
             guard value.observers.count < 32 else { throw Switch2KitError.observerLimitReached }
             value.nextObserver &+= 1
             let id = value.nextObserver; value.observers[id] = mailbox
-            mailbox.enqueue(EventEnvelope(sequence: value.sequence, event: .snapshot(value.snapshot), lifetime: nil,
-                                          snapshotLifetimes: Array(value.lifetimes.values)))
+            let current = Self.snapshotForDelivery(value)
+            mailbox.enqueue(EventEnvelope(sequence: value.sequence, event: .snapshot(current.snapshot), lifetime: nil,
+                                          snapshotLifetimes: current.lifetimes))
             return id
         }
         return Switch2ControllerObservation(mailbox: mailbox) { [weak self] in
