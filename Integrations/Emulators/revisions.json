@@ -1,0 +1,90 @@
+{
+  "dolphin": {
+    "repository": "dolphin-emu/dolphin",
+    "revision": "c185d27ede09771fe93a3b520c576f646f937ed9",
+    "files": {
+      "Source/Core/DolphinQt/CMakeLists.txt": {
+        "before": "985f7079bf624890175f47f976d67f8430970dc0997a047bb7fd58486250c3b3",
+        "after": "a3717638092147dbc1a9682673587380c31093f163ff58ff808f129772b1e0fb"
+      },
+      "Source/Core/DolphinQt/Config/ControllersPane.cpp": {
+        "before": "e35e32abdf46b7bf078209fc4c54a0b2a2270999018b9585da3bbd8a19fa893a",
+        "after": "30f764dd4ae1422ce3567b872140b10ffcdb24e2d86d8a2f6c5ef151797d0bc6"
+      },
+      "Source/Core/DolphinQt/Info.plist.in": {
+        "before": "466b08800117b4ed3ca020b84adbc3300f6463ea6380bb44a4e1e1823852b93a",
+        "after": "36e1f25d65d617fb727b523ec61251c1ed05195a6f73b8e872cae82dc27d601f"
+      },
+      "Source/Core/InputCommon/CMakeLists.txt": {
+        "before": "8e8da07ea6b72a30eaad0d64261d3c01804b09dff1ce562c794f8e85f16f2a64",
+        "after": "81abc2cb81a5033f2ad6d842d3b9ca13cc57a97daa0d97e89a5427d6c8bcb0cf"
+      },
+      "Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp": {
+        "before": "3a3fa5ae3b1249d21e2292d79a03c9387cf71dc39d60616983106a5866a88730",
+        "after": "fb042a761f3b0d5547084a71288c7e625b0b63369c26bdd4144363539c42db20"
+      },
+      "Source/Core/InputCommon/ControllerInterface/SDL/SDL.h": {
+        "before": "2fdfe907be5d670aba19f0a580fcc0a2b55c598b53c0bb5c82581ef0f10b40a3",
+        "after": "cc25fa0fc0632e0b45464f09d888dd34f54f951439c2652c5d417775417d04ae"
+      },
+      "Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp": {
+        "before": "53071f46498156098beb629e28d00c2901a546c1afab532bc39350ce7b1ac76f",
+        "after": "a22196f35cf07b5de1c28716b297a5af971f6d16bb80cdca3dbda2f15eeeb31d"
+      },
+      "Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h": {
+        "before": "98b7141880f53a040febd2b5cb27196277f897662705d5c192396842c6b9cc11",
+        "after": "f43580a29df51395322ac81be89f908885203e26c7876b8ca54266d8807a923d"
+      }
+    }
+  },
+  "cemu": {
+    "repository": "cemu-project/Cemu",
+    "revision": "3310f3b8b184d64a62b89fd59088c799432badf5",
+    "files": {
+      "CMakeLists.txt": {
+        "before": "919e665f6870584b28842c464fa9b109f8ee73d76d38462d81c98c89c0f466b6",
+        "after": "9464bc067dfe13959c65b23929b6c73954577e1ec3915a144b9229d5a0d2ee3c"
+      },
+      "src/CMakeLists.txt": {
+        "before": "20c43274c1b987d5da11e895ba8138735ed90f5cacf609344f98a2a476bd834f",
+        "after": "1aa3c56267acc58b1f7c526fdf07f0d1a419a19381f3e7642b6896ce3c436b32"
+      },
+      "src/gui/wxgui/input/InputAPIAddWindow.cpp": {
+        "before": "c98f0656708f2b17623724dca7b6aeb04efb77dc014fcc4793fa61a159ede8d1",
+        "after": "029f880224b19404731070390ea4ccb7bcace63b0fbfaec7ca8ab3951e093998"
+      },
+      "src/gui/wxgui/input/InputAPIAddWindow.h": {
+        "before": "7d40ac2867b8c62d13099c7f279659feb04e0ddf0b90cf1407cfb727e971283f",
+        "after": "f230951ab1691f2fd4bdf3f0b79eb871ae69c8fed958e0e849ec60015f9f604e"
+      },
+      "src/input/CMakeLists.txt": {
+        "before": "c68ca5d0354f775b3caa85047b813773ea576a263334545c61bfe45c282c9d80",
+        "after": "451f1019c50fa6c741ff3d0240e6bd82738db6b9b22dfd6e563cab169926cb41"
+      },
+      "src/input/ControllerFactory.cpp": {
+        "before": "85783154e54f407fab6292c86255db0813204420246d617c09e04ed1b9ca705c",
+        "after": "dab31f397a0cfa3df295a865dfd8184e284db2d160364431f71fb342abc48d2c"
+      },
+      "src/input/api/SDL/SDLController.cpp": {
+        "before": "ce8eebc74fcf23252338d4ae4a72dfd293da32016b5328d544b243c79febb760",
+        "after": "6bd2239fb97672d61f5a41bbcf6fe4e47b037a2545956481e59f3936f4a0a1a2"
+      },
+      "src/input/api/SDL/SDLController.h": {
+        "before": "6c2476fcd7fb372d5887dc66484572d80ce97fa507603e2c9d0d6c48f201b320",
+        "after": "0efa0ec6c36eea243eb0b17cfbaea1ff5e4f45b34426e3a7386e1fc47b3e45d3"
+      },
+      "src/input/api/SDL/SDLControllerProvider.cpp": {
+        "before": "65c299f965e976ead5c1364639e8e460275b89d6f33344fbf26452f647fcdf3f",
+        "after": "c07ce8592b94cf1baa5184a6a3a8810e49023667d7b76a097c6c47e0dcc4a7ea"
+      },
+      "src/input/api/SDL/SDLControllerProvider.h": {
+        "before": "51bba178d1a454c66dc049c41aa3243ca4238c88db6f1c4aa4e5ea8c48f916e9",
+        "after": "af8cfa5093491cd1c599b41c67734b7804cd00ca25ed74ebff40e5663398a0d9"
+      },
+      "src/resource/MacOSXBundleInfo.plist.in": {
+        "before": "72c342af8246b92139dcb652df402261845688401fe4c90026e1cdda935ea350",
+        "after": "2c3c01882ead71e6767bb79149a0ec408d66d06bc208514cdda2ba58c717e9e6"
+      }
+    }
+  }
+}

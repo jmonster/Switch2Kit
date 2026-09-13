@@ -1,0 +1,309 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,6 +1,8 @@
+ cmake_minimum_required(VERSION 3.21.1)
+ 
+ option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
++option(ENABLE_SWITCH2KIT "Use in-process Switch2Kit controllers on macOS 15+" OFF)
++set(SWITCH2KIT_SOURCE_DIR "" CACHE PATH "Switch2Kit source checkout")
+ option(MACOS_BUNDLE "The executable when built on macOS will be created as an application bundle" OFF)
+ option(ALLOW_PORTABLE "Allow Cemu to be run in portable mode" ON)
+ 
+@@ -99,7 +101,9 @@
+ 
+ if (APPLE)
+     enable_language(OBJC OBJCXX)
+-    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
++    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
++        set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
++    endif()
+ endif()
+ 
+ if (UNIX AND NOT APPLE)
+@@ -168,6 +172,19 @@
+ 	add_compile_definitions(HAS_SDL)
+ endif()
+ 
++if(ENABLE_SWITCH2KIT)
++    if(NOT APPLE OR NOT ENABLE_SDL OR NOT MACOS_BUNDLE)
++        message(FATAL_ERROR "Switch2Kit requires macOS, ENABLE_SDL and MACOS_BUNDLE")
++    endif()
++    if(NOT EXISTS "${SWITCH2KIT_SOURCE_DIR}/Integrations/SDL3/CMakeLists.txt")
++        message(FATAL_ERROR "Set SWITCH2KIT_SOURCE_DIR to the SDK source checkout")
++    endif()
++    add_subdirectory("${SWITCH2KIT_SOURCE_DIR}/Integrations/SDL3" "${CMAKE_BINARY_DIR}/switch2kit")
++    add_compile_definitions(HAVE_SWITCH2KIT)
++    include_directories("${SWITCH2KIT_SOURCE_DIR}/Integrations/Emulators")
++    set(SWITCH2KIT_BLUETOOTH_USAGE "<key>NSBluetoothAlwaysUsageDescription</key><string>Cemu uses Bluetooth to connect to the controllers you select.</string>")
++endif()
++
+ # glslang versions older than 11.11.0 define targets without a namespace
+ if (NOT TARGET glslang::SPIRV AND TARGET SPIRV)
+ 	add_library(glslang::SPIRV ALIAS SPIRV)
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -110,13 +110,17 @@
+ 	set(MACOSX_BUNDLE_COPYRIGHT "Copyright © ${CURRENT_YEAR} Cemu Project")
+ 
+ 	set(MACOSX_BUNDLE_CATEGORY "public.app-category.games")
+- 	set(MACOSX_MINIMUM_SYSTEM_VERSION "13.4")
++ 	set(MACOSX_MINIMUM_SYSTEM_VERSION "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+   	set(MACOSX_BUNDLE_TYPE_EXTENSION "wua")
+ 
+ 	set_target_properties(CemuBin PROPERTIES
+ 		MACOSX_BUNDLE true
+ 		RESOURCE "${RESOURCE_FILES}"
+ 	)
++
++    if(ENABLE_SWITCH2KIT)
++        switch2kit_embed(CemuBin)
++    endif()
+ 
+ 	set(FOLDERS gameProfiles resources)
+ 	foreach(folder ${FOLDERS})
+--- a/src/gui/wxgui/input/InputAPIAddWindow.cpp
++++ b/src/gui/wxgui/input/InputAPIAddWindow.cpp
+@@ -15,6 +15,9 @@
+ #include <wx/wupdlock.h>
+ 
+ #include "input/ControllerFactory.h"
++#ifdef HAVE_SWITCH2KIT
++#include "input/api/SDL/SDLControllerProvider.h"
++#endif
+ 
+ wxDEFINE_EVENT(wxControllersRefreshed, wxCommandEvent);
+ 
+@@ -107,6 +110,28 @@
+ 		sizer->Add(m_settings_panel, 1, wxEXPAND);
+ 	}
+ 
++#ifdef HAVE_SWITCH2KIT
++    auto* find = new wxButton(this, wxID_ANY, _("Find Switch 2 Controllers"));
++    auto* status = new wxStaticText(this, wxID_ANY, _("Select Find, then hold Sync."));
++    sizer->Add(find, 0, wxALL | wxEXPAND, 5);
++    sizer->Add(status, 0, wxALL | wxEXPAND, 5);
++    find->Bind(wxEVT_BUTTON, [this, status](wxCommandEvent&) {
++        const auto result = SDLControllerProvider::FindSwitch2Controllers();
++        if (result == 0)
++        {
++            m_input_api->SetStringSelection(wxString::FromUTF8(to_string(InputAPI::SDLController)));
++            wxCommandEvent selection;
++            on_api_selected(selection);
++        }
++        status->SetLabel(result == 0 ? _("Hold Sync, then open the Controller list to refresh.") :
++                                      wxString::Format(_("Controller discovery could not start (%d)."), result));
++    });
++    m_switch2kit_timer = std::make_unique<wxTimer>(this);
++    Bind(wxEVT_TIMER, [status](wxTimerEvent&) {
++        status->SetLabel(wxString::FromUTF8(SDLControllerProvider::Switch2ControllerStatus()));
++    }, m_switch2kit_timer->GetId());
++    m_switch2kit_timer->Start(500);
++#endif
+ 	this->SetSizer(sizer);
+ 	this->Layout();
+ 	sizer->Fit(this);
+--- a/src/gui/wxgui/input/InputAPIAddWindow.h
++++ b/src/gui/wxgui/input/InputAPIAddWindow.h
+@@ -5,6 +5,9 @@
+ #include <optional>
+ #include <wx/dialog.h>
+ #include <wx/panel.h>
++#ifdef HAVE_SWITCH2KIT
++#include <wx/timer.h>
++#endif
+ 
+ #include "wxgui/helpers/wxCustomData.h"
+ #include "input/api/Controller.h"
+@@ -41,6 +44,9 @@
+ 
+ 	void discard_thread_result();
+ 
++#ifdef HAVE_SWITCH2KIT
++    std::unique_ptr<wxTimer> m_switch2kit_timer;
++#endif
+ 	wxChoice* m_input_api;
+ 	wxComboBox* m_controller_list;
+ 	wxButton* m_ok_button;
+--- a/src/input/CMakeLists.txt
++++ b/src/input/CMakeLists.txt
+@@ -108,3 +108,7 @@
+ if (ENABLE_BLUEZ)
+ 	target_link_libraries(CemuInput PRIVATE bluez::bluez)
+ endif ()
++
++if(ENABLE_SWITCH2KIT)
++    target_link_libraries(CemuInput PRIVATE Switch2Kit::SDL3)
++endif()
+--- a/src/input/ControllerFactory.cpp
++++ b/src/input/ControllerFactory.cpp
+@@ -65,6 +65,10 @@
+ #ifdef HAS_SDL
+ 	case InputAPI::SDLController:
+ 		{
++#ifdef HAVE_SWITCH2KIT
++            if (uuid.starts_with("s2k:"))
++                return std::make_shared<SDLController>(uuid, display_name);
++#endif
+ 			// diid_guid
+ 			const auto index = uuid.find_first_of('_');
+ 			if (index == std::string_view::npos)
+--- a/src/input/api/SDL/SDLController.cpp
++++ b/src/input/api/SDL/SDLController.cpp
+@@ -18,6 +18,18 @@
+ 	SDL_GUIDToString(m_guid, tmp, std::size(tmp));
+ 	m_uuid += tmp;
+ }
++
++#ifdef HAVE_SWITCH2KIT
++SDLController::SDLController(std::string_view physical_key, std::string_view display_name)
++    : base_type(std::string(physical_key), display_name.empty() ? "Switch2Kit controller" : display_name),
++      m_guid_index(0), m_guid{}, m_physical_key(physical_key)
++{
++    if (physical_key.size() != 36 || physical_key.substr(0, 4) != "s2k:" ||
++        !std::all_of(physical_key.begin() + 4, physical_key.end(), [](char c) {
++            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
++        })) throw std::invalid_argument("Invalid Switch2Kit controller identity");
++}
++#endif
+ 
+ SDLController::~SDLController()
+ {
+@@ -52,13 +64,25 @@
+ 		return true;
+ 
+ 	m_has_rumble = false;
+-	const auto index = m_provider->get_index(m_guid_index, m_guid);
++    auto index = m_provider->get_index(m_guid_index, m_guid);
++#ifdef HAVE_SWITCH2KIT
++    const auto native_instance = m_physical_key.empty() ? 0 : SDLControllerProvider::FindSwitch2Device(m_physical_key);
++    if (!m_physical_key.empty() && !native_instance) return false;
++#endif
+ 	std::scoped_lock lock(m_controller_mutex);
+ 
+ 	int gamepad_count = 0;
+ 
+ 	SDL_JoystickID *gamepad_ids = SDL_GetGamepads(&gamepad_count);
+ 
++#ifdef HAVE_SWITCH2KIT
++    if (native_instance)
++    {
++        index = -1;
++        for (int i = 0; gamepad_ids && i < gamepad_count; ++i)
++            if (gamepad_ids[i] == native_instance) { index = i; break; }
++    }
++#endif
+ 	if (!gamepad_ids || index < 0 || index >= gamepad_count)
+ 	{
+ 		SDL_free(gamepad_ids);
+--- a/src/input/api/SDL/SDLController.h
++++ b/src/input/api/SDL/SDLController.h
+@@ -11,6 +11,9 @@
+ 	SDLController(const SDL_GUID& guid, size_t guid_index);
+ 	SDLController(const SDL_GUID& guid, size_t guid_index, std::string_view display_name);
+ 	
++#ifdef HAVE_SWITCH2KIT
++    SDLController(std::string_view physical_key, std::string_view display_name);
++#endif
+ 	~SDLController() override;
+ 	
+ 	std::string_view api_name() const override
+@@ -46,6 +49,9 @@
+ 
+ 	size_t m_guid_index;
+ 	SDL_GUID m_guid;
++#ifdef HAVE_SWITCH2KIT
++    std::string m_physical_key;
++#endif
+ 	std::recursive_mutex m_controller_mutex;
+ 	SDL_Gamepad* m_controller = nullptr;
+ 	SDL_JoystickID m_diid = -1;
+--- a/src/input/api/SDL/SDLControllerProvider.cpp
++++ b/src/input/api/SDL/SDLControllerProvider.cpp
+@@ -5,6 +5,29 @@
+ 
+ #include <SDL3/SDL.h>
+ #include <boost/functional/hash.hpp>
++#ifdef HAVE_SWITCH2KIT
++#include "SDLHost.hpp"
++static Switch2Kit::SDLHost& nativeControllers()
++{
++    static Switch2Kit::SDLHost host;
++    return host;
++}
++int SDLControllerProvider::FindSwitch2Controllers() { return nativeControllers().discover(); }
++std::string SDLControllerProvider::Switch2ControllerStatus()
++{
++    const auto state = nativeControllers().snapshot();
++    if (!state.running) return "Select Find, then hold the controller Sync button.";
++    if (state.bluetooth == S2K_BT_UNAUTHORIZED) return "Allow Cemu Bluetooth access in System Settings.";
++    if (state.bluetooth == S2K_BT_OFF) return "Turn on Bluetooth in System Settings.";
++    if (state.bluetooth == S2K_BT_UNSUPPORTED) return "Bluetooth is unavailable on this Mac.";
++    return std::to_string(state.count) + " connected; " +
++        (state.discovery == S2K_DISCOVERY_SCANNING ? "searching" : "discovery idle");
++}
++SDL_JoystickID SDLControllerProvider::FindSwitch2Device(std::string_view key)
++{
++    return nativeControllers().instance(std::string(key));
++}
++#endif
+ 
+ struct SDL_JoystickGUIDHash
+ {
+@@ -68,6 +91,15 @@
+ 	{
+ 		for (size_t i = 0; i < gamepad_count; ++i)
+ 		{
++#ifdef HAVE_SWITCH2KIT
++            const auto native_key = nativeControllers().identity(gamepad_ids[i]);
++            if (!native_key.empty())
++            {
++                const char* name = SDL_GetGamepadNameForID(gamepad_ids[i]);
++                result.emplace_back(std::make_shared<SDLController>(native_key, name ? name : "Switch2Kit controller"));
++                continue;
++            }
++#endif
+ 			const auto guid = SDL_GetGamepadGUIDForID(gamepad_ids[i]);
+ 			const auto it = guid_counter.try_emplace(guid, 0);
+ 			if (const char* name = SDL_GetGamepadNameForID(gamepad_ids[i]))
+@@ -141,12 +173,18 @@
+ 
+ void SDLControllerProvider::ShutdownSDL()
+ {
++#ifdef HAVE_SWITCH2KIT
++    nativeControllers().shutdown();
++#endif
+ 	SDL_QuitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC);
+ }
+ 
+ #if BOOST_OS_MACOS
+ void SDLControllerProvider::PumpSDLEvents()
+ {
++#ifdef HAVE_SWITCH2KIT
++    nativeControllers().pump();
++#endif
+ 	SDL_Event event;
+ 	while (SDL_PollEvent(&event))
+ 		HandleSDLEvent(event);
+--- a/src/input/api/SDL/SDLControllerProvider.h
++++ b/src/input/api/SDL/SDLControllerProvider.h
+@@ -23,6 +23,11 @@
+ 	int get_index(size_t guid_index, const SDL_GUID& guid) const;
+ 
+ 	MotionSample motion_sample(SDL_JoystickID diid);
++#ifdef HAVE_SWITCH2KIT
++    static int FindSwitch2Controllers();
++    static std::string Switch2ControllerStatus();
++    static SDL_JoystickID FindSwitch2Device(std::string_view key);
++#endif
+ 
+ 	// exposed for manual event handling on macOS
+ #if BOOST_OS_MACOS
+--- a/src/resource/MacOSXBundleInfo.plist.in
++++ b/src/resource/MacOSXBundleInfo.plist.in
+@@ -65,5 +65,6 @@
+ 			<string>Viewer</string>
+ 		</dict>
+ 	</array>
++    ${SWITCH2KIT_BLUETOOTH_USAGE}
+ </dict>
+ </plist>
