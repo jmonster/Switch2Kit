@@ -3,7 +3,7 @@
 // One connected Switch 2 controller: GATT handshake, command serialization,
 // input decoding, keep-alive, and rumble.
 //
-// Invariants carried over from the proven Python bridge:
+// Transport invariants:
 //  * No SMP pairing is ever initiated (the controller drops such links);
 //    CoreBluetooth only pairs on encrypted characteristics, which these are
 //    not, so plain connects are safe.
@@ -14,14 +14,11 @@
 //    writes count as keep-alives too.
 //
 // All CoreBluetooth callbacks and every mutable field are confined to `queue`.
-// Package-only subclass hooks share that executor. Only Sendable value snapshots
+// Package-only application tool hooks share that executor. Only Sendable value snapshots
 // leave through ControllerEventHub; no host callbacks execute on this queue.
 
 import Foundation
 import CoreBluetooth
-
-/// Decoded, calibrated controller state pushed to output sinks per report.
-
 
 /// Called on the Bluetooth queue.
 package protocol ControllerSessionDelegate: AnyObject {
@@ -30,7 +27,7 @@ package protocol ControllerSessionDelegate: AnyObject {
     func sessionDidUpdateState(_ session: ControllerSession)
 }
 
-// Only a separately linked package companion may implement these queue-confined hooks.
+// Application tools implement these queue-confined hooks without owning another session.
 package protocol ControllerSessionCompanion: AnyObject, Sendable {
     var isExperimentActive: Bool { get }
     func didRetire()
@@ -126,6 +123,9 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     private var rumbleSetAt: TimeInterval = 0
     private var rumbleActive = false
     private var rumbleGeneration: UInt64 = 0
+    private var rumbleStopTimer: DispatchSourceTimer?
+    private var rumbleStopDeadline: TimeInterval?
+    private var rumbleStopGeneration: UInt64?
 
     /// Latest decoded state. All reads and writes belong to the Bluetooth
     /// queue; consumers receive a Sendable value snapshot, never this storage.
@@ -194,6 +194,10 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         onRSSI = nil
         keepAliveTimer?.cancel()
         keepAliveTimer = nil
+        rumbleStopTimer?.cancel()
+        rumbleStopTimer = nil
+        rumbleStopDeadline = nil
+        rumbleStopGeneration = nil
         commandTimeout?.cancel()
         commandTimeout = nil
         writeStallTimeout?.cancel()
@@ -553,6 +557,9 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     package func applyRumble(strong: Double, weak: Double) {
         guard !ended else { return }
         rumbleGeneration &+= 1
+        rumbleStopDeadline = nil
+        rumbleStopGeneration = nil
+        rumbleStopTimer?.schedule(deadline: .distantFuture)
         rumbleTarget = (strong.isFinite ? max(0, min(1, strong)) : 0,
                         weak.isFinite ? max(0, min(1, weak)) : 0)
         rumbleSetAt = ProcessInfo.processInfo.systemUptime
@@ -574,13 +581,26 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         guard level > 0 else { completion?(nil); return }
         let now = ProcessInfo.processInfo.systemUptime
         guard now - lastRumbleFeedbackAt >= 0.5 else { completion?(.operationBusy); return }
+        guard isCommandIdle, peripheral.canSendWriteWithoutResponse else {
+            completion?(.operationBusy); return
+        }
         if model.hasHDRumble {
+            let motors = Switch2.MotorVibration.waveform(strong: level,
+                weak: model == .proController2 ? level : 0, model: model)
+            guard chars[Switch2.GATT.vibration(for: model)] != nil,
+                  Switch2.motorPacket(motors, packetID: 0, model: model).count
+                    <= peripheral.maximumWriteValueLength(for: .withoutResponse) else {
+                completion?(.protocolFailure); return
+            }
             lastRumbleFeedbackAt = now
             applyRumblePulse(strong: level, weak: model == .proController2 ? level : 0, duration: 0.4)
             completion?(nil)
         } else if let preset = Switch2.GameCubeRumblePreset.forIntensity(intensity: level) {
-            guard isCommandIdle, peripheral.canSendWriteWithoutResponse else {
-                completion?(.operationBusy); return
+            guard chars[Switch2.GATT.commandWrite] != nil,
+                  Switch2.buildCommand(Switch2.Command.vibration, Switch2.Subcommand.vibrationPlayPreset,
+                                       data: preset.payload).count
+                    <= peripheral.maximumWriteValueLength(for: .withoutResponse) else {
+                completion?(.protocolFailure); return
             }
             lastRumbleFeedbackAt = now
             sendCommand(Switch2.Command.vibration, Switch2.Subcommand.vibrationPlayPreset,
@@ -605,11 +625,32 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     package func applyRumblePulse(strong: Double, weak: Double, duration: Double) {
         guard !ended, duration.isFinite else { return }
         applyRumble(strong: strong, weak: weak)
-        let generation = rumbleGeneration
-        queue.asyncAfter(deadline: .now() + max(0, min(5, duration))) { [weak self] in
-            guard let self, !self.ended, self.rumbleGeneration == generation else { return }
-            self.applyRumble(strong: 0, weak: 0)
+        guard model.hasHDRumble, rumbleTarget.strong > 0.001 || rumbleTarget.weak > 0.001 else { return }
+        let delay = max(0, min(5, duration))
+        rumbleStopDeadline = ProcessInfo.processInfo.systemUptime + delay
+        rumbleStopGeneration = rumbleGeneration
+        if rumbleStopTimer == nil {
+            let timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.setEventHandler { [weak self] in self?.finishRumblePulse() }
+            timer.schedule(deadline: .now() + delay)
+            timer.resume()
+            rumbleStopTimer = timer
+        } else {
+            rumbleStopTimer?.schedule(deadline: .now() + delay)
         }
+    }
+
+    /// One timer per session. Recheck the current deadline as a prior timer event
+    /// may already be queued when a newer pulse rearms the source.
+    private func finishRumblePulse() {
+        guard !ended, rumbleStopGeneration == rumbleGeneration,
+              let deadline = rumbleStopDeadline else { return }
+        let remaining = deadline - ProcessInfo.processInfo.systemUptime
+        guard remaining <= 0 else {
+            rumbleStopTimer?.schedule(deadline: .now() + remaining)
+            return
+        }
+        applyRumble(strong: 0, weak: 0)
     }
 
     private func startKeepAlive() {

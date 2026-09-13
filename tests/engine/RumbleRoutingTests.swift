@@ -75,6 +75,27 @@ private final class RumbleErrors: Sendable {
         engine.btQueue.sync { precondition(gc.peripheral.writes.count == 1) }
         print("PASS 10,000 feedback requests coalesce to one frame with typed rate backpressure")
 
+        errors.values.withLock { $0.removeAll() }
+        engine.btQueue.sync {
+            gc.lastRumbleFeedbackAt = -.infinity; gc.peripheral.writes.removeAll()
+            engine.submitRumble(id, strong: 0.8, weak: 0, duration: nil, feedback: true)
+            for _ in 0..<10_000 {
+                engine.submitRumble(.init(rawValue: UUID()), strong: 1, weak: 0, duration: nil)
+                precondition(engine.rumbleInbox.withLock { $0.pending.count } <= 64)
+            }
+            engine.submitRumble(id, strong: 0.2, weak: 0, duration: nil, feedback: true)
+            precondition(engine.rumbleInbox.withLock { $0.pending[id]?.strong } == 0.2)
+            precondition(engine.rumbleInbox.withLock { $0.overflowed })
+        }
+        drain()
+        precondition(errors.values.withLock { $0.filter { $0 == .operationQueueFull }.count } == 1)
+        engine.btQueue.sync {
+            precondition(engine.rumbleInbox.withLock { $0.pending.isEmpty && !$0.overflowed })
+            precondition(gc.peripheral.writes.count == 1)
+            precondition(gc.peripheral.writes[0].0.suffix(4) == Data([3, 0, 0, 0])); ack(gc)
+        }
+        print("PASS 10,000 distinct identities stay bounded and report one overflow while existing feedback coalesces")
+
         engine.btQueue.sync {
             gc.lastRumbleFeedbackAt = -.infinity; gc.peripheral.writes.removeAll()
             engine.submitRumble(id, strong: 1, weak: 0, duration: nil, feedback: true)
