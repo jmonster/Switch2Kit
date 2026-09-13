@@ -1,4 +1,5 @@
 module Switch2KitCABI {
     header "Switch2KitC.h"
+    header "Switch2KitMotion.h"
     export *
 }
