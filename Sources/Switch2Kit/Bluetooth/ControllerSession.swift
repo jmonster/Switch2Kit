@@ -14,8 +14,8 @@
 //    writes count as keep-alives too.
 //
 // All CoreBluetooth callbacks and every mutable field are confined to `queue`.
-// Package-only application tool hooks share that executor. Only Sendable value snapshots
-// leave through ControllerEventHub; no host callbacks execute on this queue.
+// Only Sendable value snapshots leave through ControllerEventHub; no host
+// callbacks execute on this queue.
 
 import Foundation
 import CoreBluetooth
@@ -27,27 +27,14 @@ package protocol ControllerSessionDelegate: AnyObject {
     func sessionDidUpdateState(_ session: ControllerSession)
 }
 
-// Application tools implement these queue-confined hooks without owning another session.
-package protocol ControllerSessionCompanion: AnyObject, Sendable {
-    var isExperimentActive: Bool { get }
-    func didRetire()
-    func writeCapacityAvailable()
-    func receivedAuxiliaryValue(uuid: UUID?, data: Data)
-}
-
 package final class ControllerSession: NSObject, @unchecked Sendable {
 
     package let lifetime = SessionLifetime()
     package let diagnostics: Switch2Diagnostics
     package let sensorProfile: Switch2.Feature.SensorProfile
     package var customLEDPattern: UInt8?
-    package var companion: (any ControllerSessionCompanion)?
-    package var isExperimentActive: Bool { companion?.isExperimentActive ?? false }
     package var isReady: Bool { readyReported && !ended }
-    package var isCommandIdle: Bool { pendingCommand == nil && queuedCommands.isEmpty }
-    package func didRetire() { companion?.didRetire(); companion = nil }
-    package func receivedAuxiliaryValue(uuid: UUID?, data: Data) { companion?.receivedAuxiliaryValue(uuid: uuid, data: data) }
-    package func writeCapacityAvailable() { companion?.writeCapacityAvailable() }
+    private var isCommandIdle: Bool { pendingCommand == nil && queuedCommands.isEmpty }
 
     // MARK: Configuration
 
@@ -64,7 +51,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     private var leftCal: Switch2.StickCalibration?
     private var rightCal: Switch2.StickCalibration?
 
-    package var chars: [UUID: CBCharacteristic] = [:]
+    private var chars: [UUID: CBCharacteristic] = [:]
     private var handshakeStarted = false
     package private(set) var ended = false
     private var handshakeComplete = false
@@ -117,7 +104,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     /// logical players shuffle (e.g. Joy-Cons link into a grip).
     package private(set) var playerNumber: Int
     private var keepAliveTimer: DispatchSourceTimer?
-    package var lastWriteAt: TimeInterval = 0
+    private var lastWriteAt: TimeInterval = 0
     private var vibrationPacketID: UInt8 = 0
     private var rumbleTarget: (strong: Double, weak: Double) = (0, 0)
     private var rumbleSetAt: TimeInterval = 0
@@ -209,7 +196,6 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         queuedCommands.removeAll()
         // Complete external command waiters after making retirement terminal.
         for request in cancelled { request.completion(.failure(.retired)) }
-        didRetire()
     }
 
     private func fail(_ reason: String) {
@@ -870,10 +856,9 @@ extension ControllerSession: CBPeripheralDelegate {
         if !ended, error == nil { onRSSI?(RSSI.intValue) }
     }
 
-    /// Outbound buffer has space again; resume bounded protocol and optional companion writes.
+    /// Outbound buffer has space again; resume bounded protocol writes.
     package func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
         pumpWrites()
-        writeCapacityAvailable()
     }
 
     package func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
@@ -892,8 +877,6 @@ extension ControllerSession: CBPeripheralDelegate {
             handleInputReport(data)
         } else if uuid == Switch2.GATT.commandResponse {
             handleCommandResponse(data)
-        } else {
-            receivedAuxiliaryValue(uuid: uuid, data: data)
         }
     }
 }

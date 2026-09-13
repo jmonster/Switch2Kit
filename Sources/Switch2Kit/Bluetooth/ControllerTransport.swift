@@ -64,8 +64,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     private lazy var discovery = ControllerDiscoveryPolicy(queue: btQueue,
         mode: configuration.discoveryMode, remembered: configuration.rememberedControllers.map(\.rawValue),
         capacity: sessionLimit) { [weak self] in self?.updateScanning() }
-    // Package-only extension point, installed before start. No stable API exposes a session.
-    package var attachCompanion: (@Sendable (ControllerSession) -> Void)?
+    // Package-only sensor configuration; no stable API exposes a session.
     package var sensorProfile: Switch2.Feature.SensorProfile = .compatibility
 
     package init(configuration: Switch2ControllerConfiguration, hub: ControllerEventHub, diagnostics: Switch2Diagnostics) {
@@ -114,12 +113,6 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             if let duration = intent.duration {
                 session.applyRumblePulse(strong: intent.strong, weak: intent.weak, duration: duration)
             } else { session.applyRumble(strong: intent.strong, weak: intent.weak) }
-        }
-    }
-    package func installCompanion(_ attach: @escaping @Sendable (ControllerSession) -> Void) {
-        btQueue.async { [weak self] in
-            guard let self, !self.running, self.attachCompanion == nil else { return }
-            self.attachCompanion = attach
         }
     }
     package func setSensorProfile(_ profile: Switch2.Feature.SensorProfile) {
@@ -197,9 +190,9 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             else { self.publishManagerStatus() }
         }
     }
-    // Bounded ingress for LEDs/RSSI/companions. The generation is captured at
+    // Bounded ingress for LEDs/RSSI. The generation is captured at
     // submission, so a delayed control request cannot act on a replacement link.
-    // Operations are library/companion code, never arbitrary public host handlers.
+    // Operations are library code, never arbitrary public host handlers.
     package func withSession(_ id: Switch2ControllerID, expectedConnection: UUID? = nil, operation: @escaping @Sendable (ControllerSession) -> Void) {
         let generation = expectedConnection ?? hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
         let schedule = controlInbox.withLock { inbox in
@@ -311,7 +304,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         let id = session.peripheral.identifier
         deadlines.removeValue(forKey: id)?.cancel()
         let work = DispatchWorkItem { [weak self, weak session] in
-            guard let self, let session, self.connecting[id]?.session === session else { return }
+            guard let self, let session, self.connecting[session.peripheral.identifier]?.session === session else { return }
             self.bridgeLog(.warning, "engine", "connection phase timed out; retiring attempt")
             self.noteConnectionFailure(id)
             self.failure(.init(rawValue: id), .timedOut)
@@ -389,7 +382,6 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         cancelRetryWake()
         let session = ControllerSession(peripheral: peripheral, slot: slot,
                                         wasPairingMode: wasPairingMode, queue: btQueue, delegate: self, diagnostics: diagnostics, sensorProfile: sensorProfile)
-        attachCompanion?(session)
         connecting[id] = (session, slot)
         central.stopScan()
         publishState(.connecting)
@@ -460,7 +452,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         guard running, !suspended else { return }
         let now = ProcessInfo.processInfo.systemUptime
         for session in Array(sessions.values) {
-            if !session.isExperimentActive && now - session.lastReportAt > 5 {
+            if now - session.lastReportAt > 5 {
                 diagnostics.emit(.warning, .session, "Input stream stopped; retiring stale session")
                 failure(.init(rawValue: session.peripheral.identifier), .timedOut)
                 retire(session, cancel: true, reason: .timeout)

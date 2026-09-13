@@ -60,7 +60,6 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
     private var running = true
     private var suspended = false
     private let controllerManager: Switch2ControllerManager
-    private var controllerTools: ControllerTools!
     private var controllerObservation: Switch2ControllerObservation?
     private var lastDiscoveryPreference: (quiet: Bool, ids: [Switch2ControllerID])?
     private var lastControllerPublication: TimeInterval = 0
@@ -125,10 +124,7 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
             bridgeLog(level, "Switch2Kit/" + record.category.rawValue, record.message)
         }
         super.init()
-        controllerTools = ControllerTools(manager: controllerManager, on: btQueue) { [weak self] event in
-            self?.receiveToolEvent(event)
-        }
-        controllerTools.setSensorProfile(.init(rawValue: ApplicationSensorPolicy.selectedProfile.rawValue) ?? .compatibility)
+        controllerManager.transport.setSensorProfile(ApplicationSensorPolicy.selectedProfile)
         controllerObservation = try? controllerManager.observe(on: btQueue, bufferingNewest: 256) { [weak self] event in
             self?.receiveController(event)
         }
@@ -323,29 +319,6 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
         btQueue.async { [weak self] in
             guard let self, let session = self.sessions.values.first(where: { $0.serialNumber == serial }) else { return }
             session.pulseRumble(strong: 1, duration: 0.3)
-        }
-    }
-
-    // MARK: - Experiments (NFC + audio; results go to the log)
-
-    /// NFC discovery probe per ndeadly's sniffed console traffic: start
-    /// discovery (0x01/0x03), then poll status (0x01/0x05) for a tag UID.
-    func nfcProbe(serial: String) { performTool(.nfcProbe, serial: serial) }
-    func audioPlayTone(serial: String) { performTool(.audioTone, serial: serial) }
-    func audioToneTest(serial: String) { performTool(.audioFormatProbe, serial: serial) }
-    func hapticMelody(serial: String) { performTool(.hapticMelody, serial: serial) }
-    private func performTool(_ action: ControllerToolAction, serial: String) {
-        btQueue.async { [weak self] in
-            guard let self, let session = self.sessions.values.first(where: { $0.serialNumber == serial }) else { return }
-            try? self.controllerTools.perform(action, on: session.id)
-        }
-    }
-    func audioCapture(serial: String, seconds: Double = 30) {
-        // The dashboard, not Switch2Kit, explicitly chooses its legacy Documents destination.
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        btQueue.async { [weak self] in
-            guard let self, let session = self.sessions.values.first(where: { $0.serialNumber == serial }) else { return }
-            try? self.controllerTools.captureAudio(on: session.id, directory: directory, seconds: seconds)
         }
     }
 
@@ -846,19 +819,6 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
     }
     func requestDiscoveryWindow() { try? controllerManager.discover(for: 60) }
     func useConnectedForDiscovery() { controllerManager.useOnlyConnectedControllersForDiscovery() }
-
-    private func receiveToolEvent(_ event: ControllerToolEvent) {
-        switch event {
-        case .nfcTagRead(_, let tag):
-            // UI owns this notification contract; tag contents are not sent to the log pipeline.
-            NotificationCenter.default.post(name: nfcTagReadNotification, object: nil,
-                userInfo: ["uid": tag.uid, "text": tag.text as Any, "bytes": tag.byteCount])
-        case .audioCaptureFinished(_, let capture):
-            bridgeLog(.info, "audio", "capture finished: \(capture.packetCount) packets, \(capture.droppedPacketCount) dropped; files saved in the selected Documents directory")
-        case .failure(_, let error):
-            bridgeLog(.warning, "experimental", "research operation failed: \(error)")
-        }
-    }
 
     // MARK: - Publishing to the UI
 

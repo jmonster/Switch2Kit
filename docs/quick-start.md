@@ -68,7 +68,7 @@ problem.
 Include the About source revision, macOS version, controller model and firmware,
 Bluetooth/USB transport, output path, game/browser version, and the failing
 step in a problem report. Review logs before sharing: serial numbers and
-experimental sensor/NFC/audio data may be sensitive.
+sensor data and historical research captures may be sensitive.
 
 ## Turn it off or remove it
 

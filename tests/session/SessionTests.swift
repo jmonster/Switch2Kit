@@ -47,7 +47,7 @@ enum SessionTests {
             s.onState = { _, _ in states.increment() }
             s.teardown()
             s.handleInputReport(Data(repeating: 0, count: 63))
-            s.experimentalCommand(9, 7, payload: Data()) { _ in }
+            s.sendCommand(9, 7, Data()) { _ in }
             q.sync {}
             precondition(states.value == 0 && p.writes.isEmpty, "Retired input/commands must not reach outputs")
         }
@@ -108,7 +108,7 @@ enum SessionTests {
                     precondition(p.writes.contains { $0.0.first == Switch2.Command.leds }, "Unsupported rumble must not suppress keep-alive")
                     let count = p.writes.count
                     s.writeMotor(.tone(freqHz: 200, amp: 1))
-                    precondition(p.writes.count == count, "Direct/experimental motor calls must obey capability")
+                    precondition(p.writes.count == count, "Direct motor calls must obey capability")
                 }
             }
         }
