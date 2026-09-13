@@ -2,12 +2,12 @@ import Foundation
 
 // Only the optional orchestration boundary is a fake. Commands, status handling,
 // audio serialization and finite rumble execute the real experimental companion.
-final class ExperimentalOperations { func cancel() {} }
+final class ControllerToolOperations { func cancel() {} }
 
 extension ControllerSession {
-    var experimentalFixture: ExperimentalControllerSession {
-        if let value = companion as? ExperimentalControllerSession { return value }
-        let value = ExperimentalControllerSession(base: self)
+    var experimentalFixture: ControllerToolSession {
+        if let value = companion as? ControllerToolSession { return value }
+        let value = ControllerToolSession(base: self)
         companion = value
         return value
     }
@@ -19,9 +19,5 @@ extension ControllerSession {
                                    flag: UInt8 = 0x01, completion: @escaping (CommandResult) -> Void) {
         experimentalFixture.experimentalCommandResult(command, subcommand, payload: payload, flag: flag, completion: completion)
     }
-    func testRumble(intensity: Double) { experimentalFixture.testRumble(intensity: intensity) }
-    var lastRumbleTestAt: TimeInterval {
-        get { experimentalFixture.lastRumbleTestAt }
-        set { experimentalFixture.lastRumbleTestAt = newValue }
-    }
+
 }

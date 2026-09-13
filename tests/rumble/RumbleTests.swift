@@ -36,7 +36,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
         radio.writes.filter { $0.1.uuid.uuidString == Switch2.GATT.vibration(for: model).uuidString }.map { $0.0 }
     }
     private static func resetTest(_ session: ControllerSession, _ radio: CBPeripheral) {
-        session.lastRumbleTestAt = -.infinity
+        session.lastRumbleFeedbackAt = -.infinity
         radio.writes.removeAll()
     }
     private static func settings(_ serial: String, intensity: Double) {
@@ -52,12 +52,12 @@ private final class RumbleDelegate: ControllerSessionDelegate {
         func test(_ name: String, _ body: () -> Void) { body(); print("PASS direct rumble \(name)") }
 
         test("known preset wire bytes, discrete policy and invalid intensity") {
-            precondition(Switch2.GameCubeRumblePreset.forTest(intensity: 0.05) == .soft)
-            precondition(Switch2.GameCubeRumblePreset.forTest(intensity: 0.49) == .soft)
-            precondition(Switch2.GameCubeRumblePreset.forTest(intensity: 0.5) == .strong)
-            precondition(Switch2.GameCubeRumblePreset.forTest(intensity: 100) == .strong)
+            precondition(Switch2.GameCubeRumblePreset.forIntensity(intensity: 0.05) == .soft)
+            precondition(Switch2.GameCubeRumblePreset.forIntensity(intensity: 0.49) == .soft)
+            precondition(Switch2.GameCubeRumblePreset.forIntensity(intensity: 0.5) == .strong)
+            precondition(Switch2.GameCubeRumblePreset.forIntensity(intensity: 100) == .strong)
             for intensity in [0, -1, Double.nan, .infinity, -.infinity] {
-                precondition(Switch2.GameCubeRumblePreset.forTest(intensity: intensity) == nil)
+                precondition(Switch2.GameCubeRumblePreset.forIntensity(intensity: intensity) == nil)
             }
             precondition(Switch2.buildCommand(0x0a, 2, data: Switch2.GameCubeRumblePreset.soft.payload)
                          == Data([0x0a, 0x91, 1, 2, 0, 4, 0, 0, 3, 0, 0, 0]))
@@ -68,7 +68,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
             defer { q.sync { s.teardown() }; _ = d }
             for (level, preset): (Double, UInt8) in [(0.25, 3), (1, 2)] {
                 q.sync { resetTest(s, p) }
-                s.testRumble(intensity: level); drain(q)
+                s.playRumble(intensity: level); drain(q)
                 q.sync {
                     precondition(p.writes.count == 1)
                     precondition(p.writes[0].1.uuid.uuidString == Switch2.GATT.commandWrite.uuidString)
@@ -86,20 +86,20 @@ private final class RumbleDelegate: ControllerSessionDelegate {
             let q = DispatchQueue(label: "rumble-gc-limits")
             let (s, p, d) = fixture(.nsoGameCube, queue: q)
             defer { q.sync { s.teardown() }; _ = d }
-            for level in [0, -1, Double.nan, .infinity] { s.testRumble(intensity: level) }
+            for level in [0, -1, Double.nan, .infinity] { s.playRumble(intensity: level) }
             drain(q); q.sync { precondition(p.writes.isEmpty) }
-            s.testRumble(intensity: 1); drain(q)
+            s.playRumble(intensity: 1); drain(q)
             q.sync {
                 reply(s, success: false)
                 precondition(!s.ended && d.failures == 0)
             }
-            for _ in 0..<100 { s.testRumble(intensity: 1) }
+            for _ in 0..<100 { s.playRumble(intensity: 1) }
             drain(q)
             q.sync {
                 precondition(p.writes.count == 1 && s.queuedCommands.isEmpty)
-                s.lastRumbleTestAt -= 1 // advance the test admission deadline, no wall-clock wait
+                s.lastRumbleFeedbackAt -= 1 // advance the test admission deadline, no wall-clock wait
             }
-            s.testRumble(intensity: 0.1); drain(q)
+            s.playRumble(intensity: 0.1); drain(q)
             q.sync { precondition(p.writes.count == 2); reply(s) }
         }
         test("busy command and blocked radio never defer a GameCube buzz") {
@@ -107,7 +107,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
             let (s, p, d) = fixture(.nsoGameCube, queue: q)
             defer { q.sync { s.teardown() }; _ = d }
             q.sync { p.canSendWriteWithoutResponse = false }
-            s.testRumble(intensity: 1); drain(q)
+            s.playRumble(intensity: 1); drain(q)
             q.sync {
                 precondition(p.writes.isEmpty && s.pendingCommand == nil && s.queuedCommands.isEmpty)
                 p.canSendWriteWithoutResponse = true
@@ -115,7 +115,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
                 precondition(p.writes.isEmpty)
                 s.setPlayerLEDs()
             }
-            for _ in 0..<20 { s.testRumble(intensity: 1) }
+            for _ in 0..<20 { s.playRumble(intensity: 1) }
             drain(q)
             q.sync {
                 precondition(p.writes.count == 1 && p.writes[0].0[0] == Switch2.Command.leds)
@@ -124,7 +124,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
                 precondition(p.writes.count == 1)
             }
             // An explicit retry after capacity returns is accepted.
-            s.testRumble(intensity: 1); drain(q)
+            s.playRumble(intensity: 1); drain(q)
             q.sync { precondition(p.writes.count == 2); reply(s) }
         }
         test("missing command characteristic or short MTU fails without a motor fallback") {
@@ -136,7 +136,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
                     if missingCharacteristic { s.chars.removeValue(forKey: Switch2.GATT.commandWrite) }
                     else { p.writeLimit = 11 }
                 }
-                s.testRumble(intensity: 1); drain(q)
+                s.playRumble(intensity: 1); drain(q)
                 q.sync { precondition(p.writes.isEmpty && s.pendingCommand == nil && !s.ended) }
             }
         }
@@ -145,7 +145,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
                 let q = DispatchQueue(label: "rumble-hd")
                 let (s, p, d) = fixture(model, queue: q)
                 defer { q.sync { s.teardown() }; _ = d }
-                s.testRumble(intensity: 0.4); drain(q)
+                s.playRumble(intensity: 0.4); drain(q)
                 q.sync {
                     let expected = Switch2.MotorVibration.waveform(strong: 0.4,
                         weak: model == .proController2 ? 0.4 : 0, model: model)
@@ -161,7 +161,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
                 let q = DispatchQueue(label: "rumble-hd-stop")
                 let (s, p, d) = fixture(.proController2, queue: q)
                 defer { q.sync { s.teardown() }; _ = d }
-                s.testRumble(intensity: 1); drain(q)
+                s.playRumble(intensity: 1); drain(q)
                 if superseded { s.setRumble(strong: 0.2, weak: 0.3); drain(q) }
                 let done = DispatchSemaphore(value: 0)
                 q.asyncAfter(deadline: .now() + 0.45) { done.signal() }
@@ -182,7 +182,7 @@ private final class RumbleDelegate: ControllerSessionDelegate {
             // Enqueue both while the queue is occupied to expose an extra
             // async hop from testRumble to pulseRumble deterministically.
             q.sync {
-                s.testRumble(intensity: 1)
+                s.playRumble(intensity: 1)
                 s.setRumble(strong: 0.2, weak: 0.3)
             }
             drain(q)
@@ -199,9 +199,9 @@ private final class RumbleDelegate: ControllerSessionDelegate {
                 let (s, p, d) = fixture(model, queue: q)
                 defer { _ = d }
                 q.sync { s.readyReported = false }
-                s.testRumble(intensity: 1); drain(q)
+                s.playRumble(intensity: 1); drain(q)
                 q.sync { precondition(p.writes.isEmpty); s.readyReported = true; s.teardown() }
-                s.testRumble(intensity: 1); drain(q)
+                s.playRumble(intensity: 1); drain(q)
                 q.sync { precondition(p.writes.isEmpty) }
             }
         }

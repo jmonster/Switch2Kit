@@ -36,7 +36,7 @@ If input stalls, stop support, clear the host's held actions, await teardown, th
 
 ## Rumble and sensors
 
-Check `.rumble` before sending a pulse. Stable rumble is HD-rumble support for Pro/Joy-Con; GameCube presets are explicitly unsupported research, retained only for the dashboard's finite diagnostic. Short pulses are capped at 500 ms, and continuous intent must be renewed before the failsafe. Old queued commands cannot operate on a replacement connection.
+Use `playRumble` for short feedback on any model. GameCube plays device-timed soft/strong clips rather than duration-controlled HD effects. Check `.continuousRumble` before using `pulseRumble` or `setRumble`. A busy radio, occupied command lane or repeated feedback within 500 ms produces `.operationBusy`; retry only after the current action finishes. Old queued commands cannot operate on a replacement connection.
 
 Raw motion/current/optical values are not calibrated SI quantities. Zero is not proof of a sensor being enabled. Analog trigger travel and digital clicks must be checked separately. Report model and firmware along with the failing field; do not label synthetic decoder tests as hardware validation.
 

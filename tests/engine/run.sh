@@ -6,7 +6,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 prepare_session_sources "$work"
 python3 tests/support/prepare-sources.py transport "$work"
-for suite in tests/engine/EngineTests.swift tests/discovery/EngineTests.swift tests/engine/RetryRegression.swift tests/engine/RetryTests.swift tests/engine/ControlIngressTests.swift; do
+for suite in tests/engine/EngineTests.swift tests/discovery/EngineTests.swift tests/engine/RetryRegression.swift tests/engine/RetryTests.swift tests/engine/ControlIngressTests.swift tests/engine/RumbleRoutingTests.swift; do
   swiftc -swift-version 5 "${kit_flags[@]}" "${kit_session_sources[@]}" \
     "$work/ControllerTransport.swift" "$work/DiscoveryPolicy.swift" tests/engine/Boundary.swift \
     "$suite" -o "$work/test"

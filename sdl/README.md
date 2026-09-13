@@ -5,7 +5,7 @@ system-wide controller driver, and a successful bridge connection does not
 establish compatibility with every game. RetroArch and Chromium have
 [separate setup paths](../docs/quick-start.md).
 
-## Choose the corrected library, not the historical binary
+## Build the SDL library
 
 Build SDL from the pinned source before using this integration.
 
@@ -30,7 +30,7 @@ artifact. Neither path implies physical-controller or real-game acceptance.
 ## Gopher64: keep the original app
 
 The helper expects `/Applications/Gopher64.app` and defaults to the newly
-built library, not the historical one:
+built library:
 
 ```sh
 bash sdl/make-gopher64-both.sh

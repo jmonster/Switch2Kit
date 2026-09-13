@@ -1,22 +1,16 @@
 import Foundation
 import Switch2Kit
-import Switch2KitExperimental
 
 // Module-local compatibility names, not copied parsers, calibration or protocol implementations.
-// Only this application and the unsupported companion use package-scoped legacy value helpers.
+// Application adapters use package-scoped value helpers.
 typealias Switch2 = Switch2Kit.Switch2
 typealias ControllerState = Switch2Kit.ControllerState
-
-/// The dashboard's value adapter. It performs no decoding, calibration, Bluetooth or output IO.
-/// Missing physical controls remain neutral in existing logical-player/output wire formats.
-
 
 /// Application-queue-confined record of a physical snapshot and its dashboard slot.
 /// This is NOT a Bluetooth session: it owns no peripheral, handshake, retry, or decoder.
 final class ApplicationController: @unchecked Sendable {
     let slot: Int
     private let manager: Switch2ControllerManager
-    private let experimental: Switch2ExperimentalControllerSupport
     private(set) var snapshot: Switch2Controller
     private(set) var state: ControllerState
     private(set) var isRetired = false
@@ -34,9 +28,8 @@ final class ApplicationController: @unchecked Sendable {
             bodyColor: (snapshot.bodyColor?.red ?? 128, snapshot.bodyColor?.green ?? 128, snapshot.bodyColor?.blue ?? 128),
             buttonColor: (snapshot.buttonColor?.red ?? 128, snapshot.buttonColor?.green ?? 128, snapshot.buttonColor?.blue ?? 128))
     }
-    init(snapshot: Switch2Controller, slot: Int, manager: Switch2ControllerManager,
-         experimental: Switch2ExperimentalControllerSupport) {
-        self.snapshot = snapshot; self.slot = slot; self.manager = manager; self.experimental = experimental
+    init(snapshot: Switch2Controller, slot: Int, manager: Switch2ControllerManager) {
+        self.snapshot = snapshot; self.slot = slot; self.manager = manager
         self.state = Switch2KitStateAdapter.outputState(snapshot.state)
     }
     func update(_ value: Switch2Controller) {
@@ -56,7 +49,7 @@ final class ApplicationController: @unchecked Sendable {
     }
     func testRumble(intensity: Double) {
         guard !isRetired else { return }
-        try? experimental.perform(.rumbleDiagnostic(intensity: intensity), on: id)
+        try? manager.playRumble(for: id, intensity: intensity)
     }
     func setPlayerNumber(_ value: Int) {
         guard !isRetired else { return }

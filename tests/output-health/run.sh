@@ -14,7 +14,7 @@ from pathlib import Path
 app=Path('Sources/Switch2KitApp/Switch2KitApp.swift').read_text()
 view=Path('Sources/Switch2KitApp/UI/OutputStatusView.swift').read_text()
 dashboard=Path('Sources/Switch2KitApp/UI/DashboardView.swift').read_text()
-assert '.disabled(!status.model.hasDirectRumbleTest)' in dashboard
+assert '.disabled(!status.model.capabilities.contains(.rumble))' in dashboard
 assert 'engine.testRumble(serial: serial)' in dashboard
 assert 'engine.testRumble(serial: controller.serial)' in view
 assert 'engine.testRumble(player:' not in dashboard + view

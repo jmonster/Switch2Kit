@@ -11,14 +11,11 @@ var targets: [Target] = [
 ]
 #if os(macOS)
 products += [
-    .library(name: "Switch2KitExperimental", targets: ["Switch2KitExperimental"]),
     .executable(name: "Switch2KitApp", targets: ["Switch2KitApp"]),
     .executable(name: "Switch2KitDemo", targets: ["Switch2KitDemo"])
 ]
 targets += [
-    .target(name: "Switch2KitExperimental", dependencies: ["Switch2Kit"], path: "Sources/Switch2KitExperimental",
-            swiftSettings: [.swiftLanguageMode(.v6)]),
-    .executableTarget(name: "Switch2KitApp", dependencies: ["Switch2Kit", "Switch2KitExperimental"],
+    .executableTarget(name: "Switch2KitApp", dependencies: ["Switch2Kit"],
                       path: "Sources/Switch2KitApp", swiftSettings: [.swiftLanguageMode(.v6)]),
     .executableTarget(name: "Switch2KitDemo", dependencies: ["Switch2Kit", "Switch2KitNavigationExample"], path: "Examples/Switch2KitDemo",
                       swiftSettings: [.swiftLanguageMode(.v6)])

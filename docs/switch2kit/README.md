@@ -5,12 +5,12 @@ A source Swift package for **in-process Nintendo Switch 2 controller input on ma
 
 ## Supported models and platforms
 
-| Physical model | Sticks | Triggers | Stable rumble | Additional data |
+| Physical model | Sticks | Triggers | Rumble | Additional data |
 | --- | --- | --- | --- | --- |
 | Switch 2 Pro Controller (`0x2069`) | Left and right | Digital | HD rumble, two channels | Battery and raw motion |
 | Joy-Con 2 left (`0x2067`) | Left | Digital | Single actuator | Battery, raw motion and optical counters |
 | Joy-Con 2 right (`0x2066`) | Right | Digital | Single actuator | Battery, raw motion and optical counters |
-| NSO GameCube (`0x2073`) | Left and right | Independent analog travel and digital clicks | **Not in the stable API** | Battery and raw motion |
+| NSO GameCube (`0x2073`) | Left and right | Independent analog travel and digital clicks | Soft/strong firmware clips | Battery and raw motion |
 
 Switch 1 controllers and arbitrary HID devices are not admitted. Nintendo company ID, vendor ID and supported product ID must all validate; names alone never authorize a connection. Joy-Con pairs remain two physical controllers.
 
@@ -115,11 +115,13 @@ Use a ready controller's ID and capabilities, not an application player index:
 ```swift
 func acknowledge(_ controller: Switch2Controller, using manager: Switch2ControllerManager) throws {
     guard controller.capabilities.contains(.rumble) else { return }
-    try manager.pulseRumble(for: controller.id, strong: 0.4, weak: 0.2, duration: 0.15)
+    try manager.playRumble(for: controller.id, intensity: 0.4)
 }
 ```
 
-Intensity is normalized `0...1`. Pro strong/weak channels address left/right actuators; Joy-Con mixes them for its one actuator. A pulse lasts `0.01...0.5` seconds. `setRumble` can be renewed for longer effects, with a 500 ms failsafe if the host stalls; zero stops it. Invalid numbers throw immediately. Missing/replaced sessions and unsupported operations report typed events asynchronously. GameCube firmware presets are isolated research, not stable duration-controlled rumble.
+`playRumble` works on every supported model. Pro/Joy-Con play a 400 ms HD pulse; GameCube plays its soft firmware clip below intensity 0.5 or strong clip at 0.5 and above. Zero is mute. The device controls GameCube clip duration; a submitted clip cannot be cancelled.
+
+For amplitude-controlled effects, check `.continuousRumble` and use `setRumble` or `pulseRumble`. Pro strong/weak channels address left/right actuators; Joy-Con mixes them into one actuator. Pulses accept `0.01...0.5` seconds. Continuous intent expires after 500 ms unless renewed; zero stops it. See [rumble](../rumble.md).
 
 ## Run the independent sample
 

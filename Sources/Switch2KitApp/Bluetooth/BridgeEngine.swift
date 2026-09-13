@@ -10,7 +10,6 @@ import Foundation
 import Synchronization
 import Combine
 import Switch2Kit
-import Switch2KitExperimental
 
 /// UI-facing snapshot of one logical controller (single or Joy-Con pair).
 struct ControllerStatus: Identifiable, Sendable {
@@ -61,7 +60,7 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
     private var running = true
     private var suspended = false
     private let controllerManager: Switch2ControllerManager
-    private var experimentalSupport: Switch2ExperimentalControllerSupport!
+    private var controllerTools: ControllerTools!
     private var controllerObservation: Switch2ControllerObservation?
     private var lastDiscoveryPreference: (quiet: Bool, ids: [Switch2ControllerID])?
     private var lastControllerPublication: TimeInterval = 0
@@ -126,10 +125,10 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
             bridgeLog(level, "Switch2Kit/" + record.category.rawValue, record.message)
         }
         super.init()
-        experimentalSupport = Switch2ExperimentalControllerSupport(manager: controllerManager, on: btQueue) { [weak self] event in
-            self?.receiveExperimental(event)
+        controllerTools = ControllerTools(manager: controllerManager, on: btQueue) { [weak self] event in
+            self?.receiveToolEvent(event)
         }
-        experimentalSupport.setSensorProfile(.init(rawValue: ApplicationSensorPolicy.selectedProfile.rawValue) ?? .compatibility)
+        controllerTools.setSensorProfile(.init(rawValue: ApplicationSensorPolicy.selectedProfile.rawValue) ?? .compatibility)
         controllerObservation = try? controllerManager.observe(on: btQueue, bufferingNewest: 256) { [weak self] event in
             self?.receiveController(event)
         }
@@ -331,14 +330,14 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
 
     /// NFC discovery probe per ndeadly's sniffed console traffic: start
     /// discovery (0x01/0x03), then poll status (0x01/0x05) for a tag UID.
-    func nfcProbe(serial: String) { experimental(.nfcProbe, serial: serial) }
-    func audioPlayTone(serial: String) { experimental(.audioTone, serial: serial) }
-    func audioToneTest(serial: String) { experimental(.audioFormatProbe, serial: serial) }
-    func hapticMelody(serial: String) { experimental(.hapticMelody, serial: serial) }
-    private func experimental(_ action: Switch2ExperimentalAction, serial: String) {
+    func nfcProbe(serial: String) { performTool(.nfcProbe, serial: serial) }
+    func audioPlayTone(serial: String) { performTool(.audioTone, serial: serial) }
+    func audioToneTest(serial: String) { performTool(.audioFormatProbe, serial: serial) }
+    func hapticMelody(serial: String) { performTool(.hapticMelody, serial: serial) }
+    private func performTool(_ action: ControllerToolAction, serial: String) {
         btQueue.async { [weak self] in
             guard let self, let session = self.sessions.values.first(where: { $0.serialNumber == serial }) else { return }
-            try? self.experimentalSupport.perform(action, on: session.id)
+            try? self.controllerTools.perform(action, on: session.id)
         }
     }
     func audioCapture(serial: String, seconds: Double = 30) {
@@ -346,7 +345,7 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
         let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         btQueue.async { [weak self] in
             guard let self, let session = self.sessions.values.first(where: { $0.serialNumber == serial }) else { return }
-            try? self.experimentalSupport.captureAudio(on: session.id, directory: directory, seconds: seconds)
+            try? self.controllerTools.captureAudio(on: session.id, directory: directory, seconds: seconds)
         }
     }
 
@@ -805,8 +804,7 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
             existing.update(controller); record = existing
         } else {
             guard let slot = (0..<Self.maxSessions).first(where: { sessions[$0] == nil }) else { return }
-            record = ApplicationController(snapshot: controller, slot: slot, manager: controllerManager,
-                                           experimental: experimentalSupport)
+            record = ApplicationController(snapshot: controller, slot: slot, manager: controllerManager)
             sessions[slot] = record; connectedAt[slot] = controller.connectedAt
             updateIdleSweep(); recomputeLogical()
         }
@@ -849,7 +847,7 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
     func requestDiscoveryWindow() { try? controllerManager.discover(for: 60) }
     func useConnectedForDiscovery() { controllerManager.useOnlyConnectedControllersForDiscovery() }
 
-    private func receiveExperimental(_ event: Switch2ExperimentalEvent) {
+    private func receiveToolEvent(_ event: ControllerToolEvent) {
         switch event {
         case .nfcTagRead(_, let tag):
             // UI owns this notification contract; tag contents are not sent to the log pipeline.

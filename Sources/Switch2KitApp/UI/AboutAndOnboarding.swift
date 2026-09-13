@@ -45,7 +45,6 @@ enum AppInfo {
         NSWorkspace.shared.open(url)
     }
 
-
 }
 
 struct AboutView: View {

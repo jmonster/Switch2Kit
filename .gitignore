@@ -9,3 +9,6 @@ test.nfc
 *.nfc
 
 sdl/libSDL*.dylib
+
+__pycache__/
+*.pyc

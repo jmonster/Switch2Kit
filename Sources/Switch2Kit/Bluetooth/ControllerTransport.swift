@@ -12,6 +12,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         let strong: Double
         let weak: Double
         let duration: TimeInterval?
+        let feedback: Bool
         let submittedAt: TimeInterval
         let generation: UUID?
     }
@@ -71,10 +72,10 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         self.sessionLimit = min(64, max(1, configuration.maximumControllers))
         super.init()
     }
-    package func submitRumble(_ id: Switch2ControllerID, strong: Double, weak: Double, duration: TimeInterval?) {
+    package func submitRumble(_ id: Switch2ControllerID, strong: Double, weak: Double, duration: TimeInterval?, feedback: Bool = false) {
         let schedule = rumbleInbox.withLock { inbox in
             guard inbox.pending[id] != nil || inbox.pending.count < 64 else { return false }
-            inbox.pending[id] = RumbleIntent(strong: strong, weak: weak, duration: duration,
+            inbox.pending[id] = RumbleIntent(strong: strong, weak: weak, duration: duration, feedback: feedback,
                                             submittedAt: ProcessInfo.processInfo.systemUptime,
                                             generation: hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration)
             guard !inbox.scheduled else { return false }
@@ -91,10 +92,18 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             guard let session = sessions.values.first(where: { $0.peripheral.identifier == id.rawValue }),
                   !session.isRetired else { failure(id, .controllerNotReady); continue }
             guard intent.generation == session.lifetime.id else { continue }
-            guard session.model.hasHDRumble else { failure(id, .unsupportedOperation); continue }
             guard ProcessInfo.processInfo.systemUptime - intent.submittedAt < 0.5 else {
                 session.applyRumble(strong: 0, weak: 0); continue
             }
+            if intent.feedback {
+                session.applyRumbleFeedback(intensity: intent.strong) { [weak self, weak session] error in
+                    guard let self, let session, self.owns(session), !session.isRetired,
+                          let error else { return }
+                    self.failure(id, error)
+                }
+                continue
+            }
+            guard session.model.hasHDRumble else { failure(id, .unsupportedOperation); continue }
             if let duration = intent.duration {
                 session.applyRumblePulse(strong: intent.strong, weak: intent.weak, duration: duration)
             } else { session.applyRumble(strong: intent.strong, weak: intent.weak) }
