@@ -1,0 +1,45 @@
+name: Emulator integration
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: emulator-integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - emulator: dolphin
+            repository: dolphin-emu/dolphin
+            revision: c185d27ede09771fe93a3b520c576f646f937ed9
+          - emulator: cemu
+            repository: cemu-project/Cemu
+            revision: 3310f3b8b184d64a62b89fd59088c799432badf5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.revision }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Archive exact build inputs
+        env:
+          REVISION: ${{ matrix.revision }}
+          EMULATOR: ${{ matrix.emulator }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$REVISION"
+          git submodule status --recursive > "$RUNNER_TEMP/submodules.txt"
+          tar --exclude='.git' -czf "$RUNNER_TEMP/$EMULATOR-source.tar.gz" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.emulator }}-source
+          path: |
+            ${{ runner.temp }}/${{ matrix.emulator }}-source.tar.gz
+            ${{ runner.temp }}/submodules.txt
+          retention-days: 3
+          if-no-files-found: error
