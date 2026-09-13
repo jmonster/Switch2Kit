@@ -51,6 +51,8 @@ The manager publishes `snapshot` on the main actor at approximately 10 Hz. Its c
 
 Use `observe(on:bufferingNewest:handler:)` for input-driven interaction that must see faster press/release edges. Retain its token in your coordinator, use `.main` for UI work, and assert the main actor only inside that explicitly main-queue callback. Avoid launching one `Task` per report: that would recreate an unbounded queue outside the library. A worker consumer can instead choose its own serial queue and pass only immutable, coalesced UI results to the main actor.
 
+For application commands, feed the full observation to the public [action router](actions.md). It owns controller generation/gap recovery and emits semantic presses, releases and optional repeats. The host owns the active view/context and handles the returned actions.
+
 Do not rely on the observable list's sampling rate to detect very short taps. On event overflow, reconcile `.snapshot`; on a controller's connection token or sequence gap, neutralize edge/repeat state before rearming. A slow consumer is not a lossless input recorder.
 
 ## Application lifecycle
