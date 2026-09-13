@@ -64,7 +64,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     private lazy var discovery = ControllerDiscoveryPolicy(queue: btQueue,
         mode: configuration.discoveryMode, remembered: configuration.rememberedControllers.map(\.rawValue),
         capacity: sessionLimit) { [weak self] in self?.updateScanning() }
-    // Package-only extension point, installed before start. No stable API exposes a session.
+    // Package-only sensor configuration; no stable API exposes a session.
     package var sensorProfile: Switch2.Feature.SensorProfile = .compatibility
 
     package init(configuration: Switch2ControllerConfiguration, hub: ControllerEventHub, diagnostics: Switch2Diagnostics) {
@@ -72,12 +72,14 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         self.sessionLimit = min(64, max(1, configuration.maximumControllers))
         super.init()
     }
-    package func submitRumble(_ id: Switch2ControllerID, strong: Double, weak: Double, duration: TimeInterval?, feedback: Bool = false) {
+    package func submitRumble(_ id: Switch2ControllerID, strong: Double, weak: Double, duration: TimeInterval?, feedback: Bool = false, expectedConnection: UUID? = nil) {
         let schedule = rumbleInbox.withLock { inbox in
+            let current = hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
+            guard expectedConnection == nil || current == expectedConnection else { return false }
             if inbox.pending[id] != nil || inbox.pending.count < 64 {
                 inbox.pending[id] = RumbleIntent(strong: strong, weak: weak, duration: duration, feedback: feedback,
                                                 submittedAt: ProcessInfo.processInfo.systemUptime,
-                                                generation: hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration)
+                                                generation: expectedConnection ?? current)
             } else { inbox.overflowed = true }
             guard !inbox.scheduled else { return false }
             inbox.scheduled = true; return true
@@ -169,9 +171,13 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             self.updateScanning()
         }
     }
-    package func disconnect(_ id: Switch2ControllerID, forget: Bool) {
+    package func disconnect(_ id: Switch2ControllerID, forget: Bool, expectedConnection: UUID? = nil) {
         btQueue.async { [weak self] in
             guard let self else { return }
+            if let expectedConnection,
+               self.sessions.values.first(where: { $0.peripheral.identifier == id.rawValue })?.lifetime.id != expectedConnection {
+                return
+            }
             if forget {
                 self.discovery.forget(id.rawValue)
 
@@ -187,8 +193,8 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     // Bounded ingress for LEDs/RSSI. The generation is captured at
     // submission, so a delayed control request cannot act on a replacement link.
     // Operations are library code, never arbitrary public host handlers.
-    package func withSession(_ id: Switch2ControllerID, operation: @escaping @Sendable (ControllerSession) -> Void) {
-        let generation = hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
+    package func withSession(_ id: Switch2ControllerID, expectedConnection: UUID? = nil, operation: @escaping @Sendable (ControllerSession) -> Void) {
+        let generation = expectedConnection ?? hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
         let schedule = controlInbox.withLock { inbox in
             if inbox.pending.count < 128 {
                 inbox.pending.append(ControlIntent(id: id, generation: generation, operation: operation))
@@ -298,7 +304,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         let id = session.peripheral.identifier
         deadlines.removeValue(forKey: id)?.cancel()
         let work = DispatchWorkItem { [weak self, weak session] in
-            guard let self, let session, self.connecting[id]?.session === session else { return }
+            guard let self, let session, self.connecting[session.peripheral.identifier]?.session === session else { return }
             self.bridgeLog(.warning, "engine", "connection phase timed out; retiring attempt")
             self.noteConnectionFailure(id)
             self.failure(.init(rawValue: id), .timedOut)
