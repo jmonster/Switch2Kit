@@ -66,7 +66,7 @@ strong is preset 2. These wire facts are independently implemented here from
 particularly `play_vibration_preset` and `_gc_preset_for_magnitude`.
 The 50% test threshold is this application's UI policy, not a protocol field
 or a claim about linear motor amplitude. The repository's existing
-[protocol notes](../research/PROTOCOL.md#7-rumble-and-leds) also describe the
+[protocol notes](protocol.md#7-rumble-and-leds) also describe the
 separate preset route and the danger of HD-format GameCube writes.
 
 ## Validation and remaining hardware acceptance

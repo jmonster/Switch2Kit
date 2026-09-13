@@ -18,7 +18,7 @@ if [ "$(uname -s)" = Darwin ]; then
   python3 - "$src/Contents/Info.plist" <<'PY'
 import plistlib,sys
 with open(sys.argv[1], 'wb') as stream:
-    plistlib.dump({'CFBundleIdentifier':'io.github.switch2mac.install-fixture',
+    plistlib.dump({'CFBundleIdentifier':'io.github.switch2kit.install-fixture',
                   'CFBundleExecutable':'gopher64','CFBundleName':'Fixture',
                   'CFBundlePackageType':'APPL','CFBundleVersion':'1'}, stream)
 PY

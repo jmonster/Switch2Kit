@@ -49,5 +49,5 @@ macOS CI separately compiles the actual app and runs the packaged runtime checks
 No physical firmware/radio acceptance is inferred from these regressions.
 
 Protocol references:
-- [Project command protocol](../research/PROTOCOL.md#3-command-protocol)
+- [Project command protocol](protocol.md#3-command-protocol)
 - [Observed command headers and responses](https://github.com/ndeadly/switch2_controller_research/blob/master/commands.md)

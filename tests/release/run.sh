@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 # Every Python child, including the macOS-only import below, must leave
-# the checkout clean for build provenance and development packaging.
+# the checkout clean for build build metadata and development packaging.
 export PYTHONDONTWRITEBYTECODE=1
 python3 tests/release/test_release.py
 if [ "$(uname -s)" = Darwin ]; then
@@ -18,7 +18,7 @@ app = Path(sys.argv[1])
 (app/'Contents/Info.plist').write_bytes(plistlib.dumps({
     'CFBundleIdentifier':'wabisabi.ware.gamecubed','CFBundleExecutable':'App',
     'CFBundlePackageType':'APPL','CFBundleVersion':'1',
-    'FTCWSourceRevision':'a'*40,'FTCWSourceDirty':False}))
+    'Switch2KitSourceRevision':'a'*40,'Switch2KitSourceDirty':False}))
 PY
   codesign --force --sign - "$work/Fixture.app"
   python3 - "$work/Fixture.app" <<'PY'

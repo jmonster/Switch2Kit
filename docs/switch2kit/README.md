@@ -1,8 +1,7 @@
 # Switch2Kit
 
-A source Swift package for **in-process Nintendo Switch 2 controller input on macOS**. Import `Switch2Kit` to own discovery and connections, receive calibrated physical-controller snapshots, and request supported rumble and player LEDs. The existing **Finally the Controller Works (jmonster)** dashboard is a consumer, not a dependency.
+A source Swift package for **in-process Nintendo Switch 2 controller input on macOS**. Import `Switch2Kit` to own discovery and connections, receive calibrated physical-controller snapshots, and request supported rumble and player LEDs. The Switch2Kit dashboard uses this library.
 
-> **Redistribution is not cleared.** Neither the extracted application code nor this refactor has an application-wide license grant. Building a package or XCFramework does not grant permission to redistribute it. See [provenance and outstanding permissions](provenance.md). No license has been invented or changed.
 
 ## Supported models and platforms
 
@@ -13,9 +12,9 @@ A source Swift package for **in-process Nintendo Switch 2 controller input on ma
 | Joy-Con 2 right (`0x2066`) | Right | Digital | Single actuator | Battery, raw motion and optical counters |
 | NSO GameCube (`0x2073`) | Left and right | Independent analog travel and digital clicks | **Not in the stable API** | Battery and raw motion |
 
-These are the protocol implementations carried forward from the repository, not a new physical-hardware qualification claim. Switch 1 controllers and arbitrary HID devices are not admitted. Nintendo company ID, vendor ID and supported product ID must all validate; names alone never authorize a connection. Joy-Con pairs remain two physical controllers.
+Switch 1 controllers and arbitrary HID devices are not admitted. Nintendo company ID, vendor ID and supported product ID must all validate; names alone never authorize a connection. Joy-Con pairs remain two physical controllers.
 
-The declared deployment minimum is **macOS 15**. Build source with **Swift 6.2 or newer**; the repository's Apple-SDK builds and framework wrapper use **Xcode 26 or newer**. The app's optional CoreHID output has separate availability/entitlement requirements that do not apply to this library. Build, packaged-loader and fixture checks do not establish controller pairing, latency, sleep/wake or game compatibility. Consult the PR's exact CI revision before relying on a build result.
+The declared deployment minimum is **macOS 15**. Build source with **Swift 6.2 or newer**; the repository's Apple-SDK builds and framework wrapper use **Xcode 26 or newer**. The app's optional CoreHID output has separate availability/entitlement requirements that do not apply to this library.
 
 ## Install the source package
 
@@ -34,14 +33,14 @@ let package = Package(
 )
 ```
 
-For Git integration during review, replace the path dependency with:
+For Git integration, replace the path dependency with:
 
 ```swift
 .package(url: "https://github.com/jmonster/Switch2Kit.git",
-         branch: "refactor/switch2kit-library")
+         branch: "main")
 ```
 
-After the extraction is merged, select `main` or pin a reviewed commit using `revision:`. No release tag or semantic-version stability is implied. In Xcode, use **File → Add Package Dependencies**, enter that URL, choose the intended revision/branch, and add **only the Switch2Kit product** to your host target. Do not depend on the dashboard target. Source integration is the primary distribution mechanism; the manifest is not a binary-only package.
+In Xcode, use **File → Add Package Dependencies**, enter the repository URL, and add the **Switch2Kit** product to your host target. Use `revision:` instead of `branch:` to pin a specific commit.
 
 ## Configure the host application
 
@@ -137,4 +136,5 @@ Switch2Kit does **not** make its devices appear as system `GCController` instanc
 
 ## Guides
 
-[Bluetooth lifecycle](bluetooth-lifecycle.md) · [SwiftUI](swiftui.md) · [AppKit](appkit.md) · [Navigation example](navigation.md) · [Concurrency and diagnostics](concurrency-and-logging.md) · [API reference](api.md) · [Dashboard migration](migration.md) · [Troubleshooting](troubleshooting.md) · [XCFramework](xcframework.md) · [Provenance](provenance.md)
+[SwiftUI](swiftui.md) · [AppKit](appkit.md) · [Bluetooth lifecycle](bluetooth-lifecycle.md) · [Navigation](navigation.md) · [API](api.md) · [Concurrency and logging](concurrency-and-logging.md) · [Troubleshooting](troubleshooting.md) · [XCFramework](xcframework.md) · [Architecture](architecture.md)
+

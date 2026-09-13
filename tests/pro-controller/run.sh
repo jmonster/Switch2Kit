@@ -6,6 +6,6 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 prepare_session_sources "$work"
 swiftc -swift-version 5 "${kit_flags[@]}" "${kit_session_sources[@]}" \
-  Sources/FinallyTheControllerWorks/Runtime/ControllerConfiguration.swift \
+  Sources/Switch2KitApp/Runtime/ControllerConfiguration.swift \
   tests/pro-controller/ProControllerTests.swift -o "$work/pro-tests"
 "$work/pro-tests"

@@ -42,7 +42,7 @@ public enum Switch2ExperimentalError: Error, Sendable {
 
 /// Explicit audio-capture results. Files are never created unless the host chooses a directory.
 public struct Switch2ExperimentalCapture: Sendable {
-    /// File containing timestamped full notifications in the retained FTCWAUD2 research format.
+    /// File containing timestamped full notifications in the retained S2KAUD02 research format.
     public let packetsURL: URL
     /// File containing timestamped extracted audio regions in the same format.
     public let framesURL: URL

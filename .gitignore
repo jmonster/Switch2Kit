@@ -7,3 +7,5 @@ signing/*.cer
 signing/
 test.nfc
 *.nfc
+
+sdl/libSDL*.dylib

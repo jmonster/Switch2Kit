@@ -18,7 +18,7 @@ class ReleaseTests(unittest.TestCase):
         (self.app / 'Contents/MacOS').mkdir(parents=True)
         (self.app / 'Contents/MacOS/App').write_bytes(b'executable')
         self.info = {'CFBundleIdentifier': release.BUNDLE_ID, 'CFBundleExecutable': 'App',
-                     'FTCWSourceRevision': 'a' * 40, 'FTCWSourceDirty': False, 'LSMinimumSystemVersion': '15.0'}
+                     'Switch2KitSourceRevision': 'a' * 40, 'Switch2KitSourceDirty': False, 'LSMinimumSystemVersion': '15.0'}
         self.save_info()
         self.output = self.root / 'output'; self.calls = []; self.failure = None
         self.signature = 'Authority=Developer ID Application: Fixture\nTeamIdentifier=ABCDEFGHIJ\nCodeDirectory v=20500 flags=0x10000(runtime)\nTimestamp=Fixture\n'
@@ -52,16 +52,16 @@ class ReleaseTests(unittest.TestCase):
     def test_success_staples_before_final_archive_and_never_mutates_original(self):
         before = (self.app / 'Contents/Info.plist').read_bytes()
         self.package()
-        manifest = json.loads((self.output / 'provenance.json').read_text())
+        manifest = json.loads((self.output / 'build-info.json').read_text())
         self.assertEqual(manifest['hardware_game_acceptance'], 'not-run')
         self.assertEqual(manifest['architectures'], ['arm64', 'x86_64'])
         self.assertEqual(before, (self.app / 'Contents/Info.plist').read_bytes())
-        final = next(i for i,c in enumerate(self.calls) if c[-1].endswith('switch2mac-notarized.zip'))
+        final = next(i for i,c in enumerate(self.calls) if c[-1].endswith('switch2kit-notarized.zip'))
         assess = next(i for i,c in enumerate(self.calls) if c[0] == 'spctl')
         staple = next(i for i,c in enumerate(self.calls) if c[:3] == ['xcrun', 'stapler', 'staple'])
         self.assertLess(staple, assess); self.assertLess(assess, final)
-        self.assertFalse(list(self.root.glob('.switch2mac-notary-*')))
-        self.assertNotIn('test-profile', (self.output/'provenance.json').read_text())
+        self.assertFalse(list(self.root.glob('.switch2kit-notary-*')))
+        self.assertNotIn('test-profile', (self.output/'build-info.json').read_text())
 
     def test_untrusted_signatures_never_submit(self):
         for signature in [self.signature.replace('Developer ID Application:', 'Apple Development:'),
@@ -73,7 +73,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(self.output.exists())
 
     def test_dirty_wrong_bundle_revision_and_unsafe_entitlements_rejected(self):
-        for key, value in [('FTCWSourceDirty', True), ('CFBundleIdentifier', 'upstream.id'), ('FTCWSourceRevision', 'b'*40)]:
+        for key, value in [('Switch2KitSourceDirty', True), ('CFBundleIdentifier', 'upstream.id'), ('Switch2KitSourceRevision', 'b'*40)]:
             old = self.info[key]; self.info[key] = value; self.save_info()
             with self.assertRaises(release.ReleaseError): self.package()
             self.info[key] = old
@@ -91,7 +91,7 @@ class ReleaseTests(unittest.TestCase):
             self.failure = failure
             with self.assertRaises(subprocess.CalledProcessError): self.package()
             self.assertFalse(self.output.exists())
-            self.assertFalse(list(self.root.glob('.switch2mac-notary-*')))
+            self.assertFalse(list(self.root.glob('.switch2kit-notary-*')))
 
     def test_existing_output_and_invalid_inputs(self):
         self.output.mkdir(); (self.output/'keep').write_text('unchanged')

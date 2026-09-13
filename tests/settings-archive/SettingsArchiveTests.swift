@@ -3,7 +3,7 @@ import Foundation
 @main
 enum SettingsArchiveTests {
     static func defaults() -> UserDefaults {
-        let name = "ftcw-tests-\(UUID().uuidString)"
+        let name = "switch2kit-tests-\(UUID().uuidString)"
         let d = UserDefaults(suiteName: name)!
         d.removePersistentDomain(forName: name)
         return d

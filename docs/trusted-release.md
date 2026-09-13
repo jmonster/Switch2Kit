@@ -20,7 +20,7 @@ Build and test the intended commit with the maintainer's own signing identity:
 SIGN_IDENTITY='Developer ID Application: YOUR IDENTITY' bash scripts/build-app.sh
 bash tests/run.sh
 python3 scripts/notarize-release.py \
-  --app 'build/GameCubed.app' \
+  --app 'build/Switch2Kit.app' \
   --output build/notarized-candidate \
   --team-id YOURTEAMID \
   --keychain-profile YOUR_EXISTING_PROFILE
@@ -33,19 +33,19 @@ runtime with Developer ID signing. A profile-bearing HID build additionally
 requires explicit application-specific entitlements and matching provisioning.
 
 The packager verifies the app signature, expected team, Developer ID Application
-authority, secure timestamp, hardened runtime, clean source provenance and known
+authority, secure timestamp, hardened runtime, clean source metadata and known
 Mach-O architectures. It rejects debugging/library-validation exceptions. It
 stages beside the output, creates a submission ZIP, waits for an Accepted
 response, fetches the notary log, staples/validates the **app**, reassesses it
 with Gatekeeper, and recreates the distributable ZIP after stapling. Any failure
 prevents promotion of the distribution directory. The original app remains
-unchanged. Hard interruption can leave a private `.switch2mac-notary-*` staging
+unchanged. Hard interruption can leave a private `.switch2kit-notary-*` staging
 directory; remove it only after confirming no packager is running.
 
-The output contains a SHA-256 checksum, provenance, the stapled app ZIP and
+The output contains a SHA-256 checksum, build metadata, the stapled app ZIP and
 Apple's receipt/log. Review warnings even after acceptance. Logs can contain
 internal bundle paths; review them before sharing. No credential or Keychain
-profile name is added to provenance. A notary receipt is not hardware/game
+profile name is added to build metadata. A notary receipt is not hardware/game
 acceptance, and a checksum by itself is not a trusted update signature.
 
 ## Distribution and update gates still requiring the maintainer

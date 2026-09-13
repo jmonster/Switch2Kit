@@ -1,7 +1,6 @@
 # Input delivery correction
 
-The tracked libSDL3.0.dylib predates this fix. Editing a source patch
-cannot change that binary. Build the corrected library on macOS:
+Run `bash sdl/build-sdl.sh` after changing an SDL patch.
 
 ```sh
 git clone https://github.com/libsdl-org/SDL /tmp/SDL
@@ -11,7 +10,7 @@ bash sdl/make-gopher64-both.sh
 
 The build script exports exact commit 147a8ee32dbf9ac02f3794964490687b6bbda1bc,
 applies the four patches listed in sdl/build-sdl.sh, and writes
-build/sdl/libSDL3.0.dylib without modifying the checkout or tracked binary.
+build/sdl/libSDL3.0.dylib without modifying the source checkout.
 The Gopher64 wrapper defaults to that rebuilt library and refuses to proceed
 when it is missing. SDL3_LIBRARY may explicitly select another compatible
 library. The corrected-sdl-arm64 CI artifact is a development build, not a

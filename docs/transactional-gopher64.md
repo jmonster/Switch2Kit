@@ -22,7 +22,7 @@ prevents two cooperating installers from racing for the same destination.
 Staging is removed after successful installation or a successful rollback. If
 rollback itself fails, its directory and `recovery.json` are retained and the
 error reports their location. A force kill, power loss, or disk failure cannot
-run Python cleanup: inspect the `.switch2mac-install-*` directory beside the
+run Python cleanup: inspect the `.switch2kit-install-*` directory beside the
 destination, quit the generated app, and restore `previous.app` to the destination
 listed in `recovery.json`. Remove an abandoned `.APPNAME.install-lock` only after
 confirming no installer is running. Do not delete a retained backup before

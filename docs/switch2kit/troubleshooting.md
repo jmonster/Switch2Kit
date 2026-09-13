@@ -18,7 +18,7 @@ Connection and consumption are separate checks. The kit enables input only in th
 
 Verify that the host retains its manager and observation token, starts support, registers the correct queue handler and handles `.input`. SwiftUI presentation is sampled around 10 Hz; use the bounded observation for short button edges. Do not create an unbounded `Task` per input event. Handle `.snapshot` resynchronization and clear held state on disconnect, sequence gaps and new connection tokens. A local navigation router should require neutral controls after focus changes, as the sample does.
 
-For the original dashboard's SDL/browser/RetroArch/keyboard/optional virtual-HID outputs, use their separate setup guides. A working kit connection does not prove that a game has the correct SDL library, extension permissions, network endpoint, mappings or restricted HID entitlement. Do not repeatedly bond a controller to fix an output-only configuration problem.
+For the dashboard's SDL/browser/RetroArch/keyboard/optional virtual-HID outputs, use their separate setup guides. A working kit connection does not prove that a game has the correct SDL library, extension permissions, network endpoint, mappings or restricted HID entitlement. Do not repeatedly bond a controller to fix an output-only configuration problem.
 
 ## Competing owners
 

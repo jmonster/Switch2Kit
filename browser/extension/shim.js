@@ -1,5 +1,5 @@
 // shim.js — runs in the page's main world. Wraps navigator.getGamepads() so
-// controllers streamed by the Finally the Controller Works app appear as
+// controllers streamed by the Switch2Kit app appear as
 // standard-mapping gamepads alongside any real ones, fires
 // gamepadconnected/gamepaddisconnected, and forwards vibrationActuator
 // effects back to the app (rumble).
@@ -10,7 +10,7 @@
 // NINTENDO_LABELS to true to map by label instead (Switch A → standard A).
 
 (() => {
-  if (navigator.__ftcwBridge) return;
+  if (navigator.__switch2kitBridge) return;
 
   const NINTENDO_LABELS = false;
   // How the pad introduces itself. Sites classify controllers by the vendor
@@ -20,11 +20,11 @@
   // services treat on a better-trodden path (GeForce NOW sends an
   // "is Xbox" flag to its servers with every input packet).
   // Per-site override without touching files: in the site's DevTools console
-  //   localStorage.ftcwPersona = 'xbox'   (or 'nintendo'; remove to reset)
+  //   localStorage.switch2kitPersona = 'xbox'   (or 'nintendo'; remove to reset)
   // then reload the page.
   const PERSONA_DEFAULT = 'nintendo';
   const PERSONA = (() => {
-    try { const v = localStorage.getItem('ftcwPersona'); if (v === 'xbox' || v === 'nintendo') return v; } catch {}
+    try { const v = localStorage.getItem('switch2kitPersona'); if (v === 'xbox' || v === 'nintendo') return v; } catch {}
     return PERSONA_DEFAULT;
   })();
   // Expose C / GL / GR as buttons 18-20. Off by default: real Xbox pads stop
@@ -61,7 +61,7 @@
   let bridgeUp = false;
 
   const toApp = (obj) =>
-    document.dispatchEvent(new CustomEvent('ftcw-up', { detail: JSON.stringify(obj) }));
+    document.dispatchEvent(new CustomEvent('switch2kit-up', { detail: JSON.stringify(obj) }));
   const rumbleToApp = (slot, strong, weak, phase) => toApp({ t: 'rumble', slot, strong, weak, phase });
 
   // Delivery telemetry: how state messages actually arrive in this page
@@ -169,7 +169,7 @@
       buttons,
       hapticActuators: [],
       vibrationActuator: makeActuator(slot),
-      __ftcwSlot: slot,
+      __switch2kitSlot: slot,
     };
     if (typeof Gamepad !== 'undefined') Object.setPrototypeOf(pad, Gamepad.prototype);
     return pad;
@@ -218,7 +218,7 @@
     }
   }
 
-  document.addEventListener('ftcw-bridge', (ev) => {
+  document.addEventListener('switch2kit-bridge', (ev) => {
     let m;
     try { m = JSON.parse(ev.detail); } catch { return; }
     switch (m.t) {
@@ -272,7 +272,7 @@
       }),
       hapticActuators: pad.hapticActuators,
       vibrationActuator: pad.vibrationActuator,
-      __ftcwSlot: pad.__ftcwSlot,
+      __switch2kitSlot: pad.__switch2kitSlot,
     };
     if (typeof Gamepad !== 'undefined') Object.setPrototypeOf(copy, Gamepad.prototype);
     return copy;
@@ -300,7 +300,7 @@
     return real;
   };
 
-  Object.defineProperty(navigator, '__ftcwBridge', {
+  Object.defineProperty(navigator, '__switch2kitBridge', {
     value: { get pads() { return [...pads.values()]; }, get up() { return bridgeUp; }, persona: PERSONA },
   });
 })();

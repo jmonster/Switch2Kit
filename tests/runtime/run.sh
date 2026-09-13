@@ -7,7 +7,7 @@ trap 'rm -rf "$work"' EXIT
 python3 - "$work" <<'PY'
 from pathlib import Path
 import sys
-base=Path('Sources/FinallyTheControllerWorks')
+base=Path('Sources/Switch2KitApp')
 Path(sys.argv[1],'State.swift').write_text('// ControllerState is compiled from the production Switch2Kit target.\n')
 s=(base/'Output/KeyboardMapper.swift').read_text().replace('import CoreGraphics','')
 a=s.index('    private static func postKey(')
@@ -17,6 +17,6 @@ Path(sys.argv[1],'Keyboard.swift').write_text(s)
 PY
 swiftc "${kit_flags[@]}" -swift-version 6 \
  "${kit_sources[@]}" "$work/State.swift" \
- Sources/FinallyTheControllerWorks/Runtime/ControllerConfiguration.swift "$work/Keyboard.swift" \
+ Sources/Switch2KitApp/Runtime/ControllerConfiguration.swift "$work/Keyboard.swift" \
  tests/runtime/RuntimeTests.swift -o "$work/tests"
 "$work/tests"

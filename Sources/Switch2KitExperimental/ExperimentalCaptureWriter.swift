@@ -28,9 +28,9 @@ final class ExperimentalCaptureWriter: @unchecked Sendable {
         regionURL = directory.appendingPathComponent("Switch2Kit-audio-\(run)-frames.bin")
         self.completion = completion
         // Never replace existing user files, even if a path unexpectedly already exists.
-        try Data("FTCWAUD2".utf8).write(to: fullURL, options: .withoutOverwriting)
+        try Data("S2KAUD02".utf8).write(to: fullURL, options: .withoutOverwriting)
         do {
-            try Data("FTCWAUD2".utf8).write(to: regionURL, options: .withoutOverwriting)
+            try Data("S2KAUD02".utf8).write(to: regionURL, options: .withoutOverwriting)
             fullFile = try FileHandle(forWritingTo: fullURL)
             regionFile = try FileHandle(forWritingTo: regionURL)
             try fullFile.seekToEnd(); try regionFile.seekToEnd()

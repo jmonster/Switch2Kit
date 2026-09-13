@@ -4,7 +4,7 @@ import Synchronization
 @main
 enum LogPipelineTests {
     static func main() {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ftcw-log-\(UUID().uuidString)")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("switch2kit-log-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let received = Mutex<[LogEntry]>([])
         let entered = DispatchSemaphore(value: 0)
