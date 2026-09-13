@@ -1,7 +1,7 @@
 import Foundation
 
-// Only the optional orchestration boundary is a fake. Commands, status handling,
-// audio serialization and finite rumble execute the real experimental companion.
+// Commands and audio use the production app companion. Rumble uses the library
+// session directly; only the optional tool orchestration boundary is a fake.
 final class ControllerToolOperations { func cancel() {} }
 
 extension ControllerSession {

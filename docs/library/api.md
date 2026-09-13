@@ -1,43 +1,43 @@
-# Public API and value semantics
+# Public API
 
-The source's `///` comments document every public declaration, including field units and delivery behavior. In Xcode, use Quick Help or Jump to Definition. Internal protocol helpers and experimental hooks use `package` or narrower access; they are not an invitation to expose raw sessions to a consumer. The generated framework's public Swift interfaces are inspected for the intended boundary.
+Use Xcode Quick Help for declaration-level documentation. The library exposes immutable `Sendable` values, not CoreBluetooth peripherals or mutable sessions.
 
-## Main surface
+## Types and operations
 
-| Area | Public types |
+| Area | Types |
 | --- | --- |
-| Ownership and observation | `Switch2ControllerManager`, `Switch2ControllerObservation`, `Switch2ControllerConfiguration`, `Switch2ManagerSnapshot` |
-| Physical controllers | `Switch2ControllerID`, `Switch2Controller`, `Switch2ControllerModel`, `Switch2ControllerCapabilities` |
+| Ownership | `Switch2ControllerManager`, `Switch2ControllerObservation`, `Switch2ControllerConfiguration`, `Switch2ManagerSnapshot` |
+| Controllers | `Switch2ControllerID`, `Switch2Controller`, `Switch2ControllerModel`, `Switch2ControllerCapabilities` |
 | Input | `Switch2ControllerState`, `Switch2Buttons`, `Switch2Stick`, `Switch2Trigger`, `Switch2Battery`, `Switch2Motion`, `Switch2RawVector3`, `Switch2OpticalState`, `Switch2Color` |
 | Lifecycle | `Switch2BluetoothState`, `Switch2DiscoveryState`, `Switch2DiscoveryMode`, `Switch2ConnectionState`, `Switch2DisconnectionReason`, `Switch2ControllerEvent`, `Switch2KitError` |
 | Diagnostics | `Switch2LogLevel`, `Switch2LogCategory`, `Switch2LogRecord`, `Switch2LogHandler` |
 
-The manager provides `start`, both async and callback `stop`, `discover(for:)`, `configureDiscovery`, `useOnlyConnectedControllersForDiscovery`, `observe`, `disconnect`, `forget`, `setRumble`, `pulseRumble`, `setPlayerNumber`, `setPlayerLEDPattern` and `requestSignalStrength`. It exposes the main-actor presentation snapshot and an immediate thread-safe snapshot. There is no singleton requirement.
+The manager provides `start`, async/callback `stop`, `discover(for:)`, `configureDiscovery`, `useOnlyConnectedControllersForDiscovery`, `observe`, `disconnect`, `forget`, `setRumble`, `pulseRumble`, `setPlayerNumber`, `setPlayerLEDPattern` and `requestSignalStrength`. It has a main-actor observable presentation and an immediate thread-safe snapshot. Retain one manager and the observations your application uses.
 
 ## Input values
 
-`buttons` is a 32-bit option set containing A/B/X/Y, D-pad, L/R/ZL/ZR, stick clicks, Plus/Minus/Home/Capture/C, GL/GR and handed Joy-Con SL/SR controls. Unknown bits survive value construction. Opposing D-pad bits may coexist; cancellation/remapping is host policy.
+`buttons` is a 32-bit option set. It includes A/B/X/Y, D-pad, L/R/ZL/ZR, stick clicks, Plus/Minus/Home/Capture/C, GL/GR and handed Joy-Con SL/SR controls. Unknown bits survive construction; opposing D-pad bits may coexist.
 
-`leftStick` and `rightStick` are optional named two-dimensional vectors. Absence means no such physical stick, not `(0,0)`. Values are calibrated and normalized/clamped to `-1...1`, with positive x right and positive y up; no application dead zone or Joy-Con grouping rotation is applied. Calibration chooses the retained validated user/factory data and preserves the protocol's handed stick placement. Public constructors clamp finite coordinates and replace non-finite coordinates with zero.
+`leftStick` and `rightStick` are optional two-dimensional vectors. Missing means the physical model has no such stick. Coordinates are calibrated and normalized to `-1...1`: positive x is right and positive y is up. The library applies neither an application dead zone nor Joy-Con grouping rotation. Public constructors clamp finite coordinates and replace non-finite coordinates with zero.
 
-Each `Switch2Trigger` separates `isPressed` (ZL/ZR report bit) from optional analog `travel`. Only GameCube supplies travel; it is the retained raw byte divided by 255, in `0...1`. Travel and click are independent. Do not infer a click from a nonzero travel value, and do not silently turn nil travel into a claim of an analog sensor.
+`Switch2Trigger.isPressed` is the digital ZL/ZR report bit. Optional `travel` is the GameCube analog byte divided by 255, in `0...1`. Travel and digital click are independent; other models have nil travel.
 
-`Switch2Battery.millivolts` is voltage, not percentage; zero/unavailable becomes nil. `estimatedCharge` is a rough clamped `0...1` voltage estimate using 3.30–4.15 V, not calibrated fuel state or battery health. Charge-state bits remain a raw UInt8. Current remains signed Int16 counts; positive indicates charging, but conversion to amperes is not qualified.
+`Switch2Battery.millivolts` is voltage, with unavailable values represented by nil. `estimatedCharge` is a clamped `0...1` estimate over 3.30–4.15 V. Charge-state bits are raw UInt8. Current is signed Int16 sensor counts, positive while charging; no amperes conversion is applied.
 
-`Switch2Motion` exposes named accelerometer/gyroscope/magnetometer `Switch2RawVector3` values in signed 16-bit sensor-native counts. These are **not** calibrated acceleration, angular velocity, gravity-removed motion, world axes or orientation quaternions. Model/physical orientation determines axes. Retained research associates magnetometer counts with 0.15 µT/count, but the API deliberately exposes raw counts. IMU die temperature is the existing `25 + raw/127` Celsius estimate, not ambient temperature. A present all-zero sample does not prove that hardware sensing is active. Motion is nil when the selected configuration does not request it.
+`Switch2Motion` contains signed 16-bit accelerometer, gyroscope and magnetometer counts in named `Switch2RawVector3` values. These are sensor-native coordinates, not calibrated SI units or world-space orientation. Temperature is the IMU die estimate `25 + raw/127` degrees Celsius. Motion is nil when not requested by the sensor configuration.
 
-Joy-Con optical telemetry exposes UInt16 absolute x/y counters wrapping modulo 65536 and raw surface-quality/lift counts. These are not cursor pixels or millimeters. Compute wrap-aware deltas, interpret orientation in the host, and treat gaps/reconnects as a reset rather than a large pointer jump.
+Joy-Con optical x/y counters are UInt16 and wrap modulo 65536. Surface quality and lift distance are raw counts, not cursor pixels or millimeters. Reset host delta tracking on gaps or a new connection.
 
-`receivedAt` is host monotonic seconds since boot, not controller time or a wall clock. `sequence` starts at one per physical connection; synthetic host values may use zero. `connectedAt` is host wall-clock readiness time. Do not compare monotonic times between machines or boots.
+`receivedAt` is host monotonic seconds since boot. `sequence` starts at one per connection; host-constructed values may use zero. `connectedAt` is wall-clock readiness time.
 
-## Identity, metadata and capabilities
+## Identity and capabilities
 
-`Switch2ControllerID` wraps CoreBluetooth's locally scoped UUID, supports Codable restoration, and is potentially identifying data. It is not a serial, player slot or authentication proof. `connectionID` is a new transient token for each connection; do not persist it. Names are safe verified model labels; host custom names remain host state. Optional body/button colors contain eight-bit sRGB components, without alpha.
+`Switch2ControllerID` wraps a locally scoped UUID and supports Codable restoration. `connectionID` changes for each connection. Keep transient state by connection and saved preferences by controller ID. Serial numbers are nil unless explicitly requested in configuration; diagnostics omit them. Body/button colors use eight-bit sRGB components.
 
-Serial numbers are nil by default. A host can explicitly opt in through configuration for serial-keyed mappings; the library still does not log them. `capabilities` describes understood physical-controller functions, not whether a game, browser or output adapter supports them. GameCube has analog triggers but no stable rumble capability. A paired Joy-Con grip is a host abstraction over two capability sets.
+All supported models advertise `.rumble`. Pro and Joy-Con also advertise `.continuousRumble` for controllable-duration, cancellable motor effects. GameCube advertises `.analogTriggers` and uses finite soft/strong firmware rumble clips through the same manager API. A Joy-Con grip remains two physical controllers. See [rumble](../rumble.md) for model-specific timing and channel behavior.
 
-## Failure semantics
+## Delivery and failures
 
-Parameter validation throws `invalidParameter` synchronously. Connection/handshake/timeouts, Bluetooth availability, absent sessions, unsupported operations and operation backpressure are typed events. Separate Bluetooth state from connection state, and distinguish an admitted attempt from first-report readiness. No public error contains raw frames, controller keys or arbitrary system error text.
+Invalid parameters throw `invalidParameter` synchronously. Bluetooth, connection, handshake, timeout, absent-session and operation-capacity failures arrive as typed events. `operationQueueFull` also reports busy or rate-limited GameCube preset requests.
 
-All snapshot fields are immutable and Sendable. Manager presentation is main-actor isolated, commands enqueue transport work, and observations execute serially on a selected host queue. See the [delivery contract](concurrency-and-logging.md) for ordering, overflow and retirement rules; the public API intentionally makes no unbounded lossless-recording promise.
+Manager presentation is main-actor isolated. Commands enqueue transport work; observations execute serially on the selected host queue, away from Bluetooth callbacks. Buffers are bounded. On overflow, reconcile the authoritative `.snapshot`; clear cached input on disconnect or a new connection token. See [event delivery](concurrency-and-logging.md) and [Bluetooth lifecycle](bluetooth-lifecycle.md).
