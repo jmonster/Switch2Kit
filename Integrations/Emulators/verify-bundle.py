@@ -6,6 +6,12 @@ import plistlib
 import subprocess
 import sys
 
+def dependencies(output):
+    """Read only otool's indented load entries, never its filename headers."""
+    return {line.strip().split(" (compatibility version", 1)[0]
+            for line in output.splitlines() if line.startswith(("\t", " "))}
+
+
 emulator, source, build = sys.argv[1], Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve()
 candidates = list((build / "Binaries").glob("*.app")) if emulator == "dolphin" else list((source / "bin").glob("Cemu*.app"))
 apps = [a for a in candidates if (a / "Contents/Frameworks/libSwitch2KitC.dylib").exists()]
@@ -26,13 +32,17 @@ with diag.open("w") as report:
             result = subprocess.run(arguments, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             report.write("$ " + " ".join(arguments) + "\n" + result.stdout + "\n")
             report.flush()
+architecture = subprocess.check_output(["uname", "-m"], text=True).strip()
 for path in (exe, lib):
     subprocess.run(["file", str(path)], check=True)
-    subprocess.run(["xcrun", "lipo", "-verify_arch", subprocess.check_output(["uname", "-m"], text=True).strip(), str(path)], check=True)
+    architectures = subprocess.check_output(["xcrun", "lipo", "-archs", str(path)], text=True).split()
+    assert architecture in architectures, f"{path.name}: missing {architecture}; found {architectures}"
 links = subprocess.check_output(["xcrun", "otool", "-L", str(exe)], text=True)
 print(links, flush=True)
-assert "libSwitch2KitC.dylib" in links, "App is not linked to the C facade"
-assert "CoreHID" not in subprocess.check_output(["xcrun", "otool", "-L", str(lib)], text=True)
+sdk_links = {"@rpath/libSwitch2KitC.dylib", "@executable_path/../Frameworks/libSwitch2KitC.dylib"}
+assert dependencies(links) & sdk_links, "App is not linked to the bundled C facade"
+native_links = dependencies(subprocess.check_output(["xcrun", "otool", "-L", str(lib)], text=True))
+assert not any("CoreHID.framework" in link for link in native_links), "C facade links CoreHID"
 subprocess.run(["plutil", "-lint", str(app / "Contents/Info.plist")], check=True)
 commands = json.loads((build / "compile_commands.json").read_text())
 required = ("SDL.cpp", "SDLGamepad.cpp", "ControllersPane.cpp") if emulator == "dolphin" else ("SDLControllerProvider.cpp", "SDLController.cpp", "ControllerFactory.cpp", "InputAPIAddWindow.cpp")
