@@ -1,10 +1,8 @@
-"""Metadata/signing guards and the production updater's actual feed resolver."""
+"""Application metadata, removed-updater boundary, and fail-closed signing guards."""
 from pathlib import Path
 import os
 import plistlib
-import re
 import subprocess
-import sys
 
 root = Path(__file__).resolve().parents[2]
 info = plistlib.loads((root / 'Resources/Info.plist').read_bytes())
@@ -13,40 +11,13 @@ assert info['CFBundleDisplayName'] == 'Switch2Kit'
 assert info['CFBundleName'] == 'Switch2Kit'
 assert info['CFBundleExecutable'] == 'Switch2KitApp'
 assert 'Peter Sharma' in info['NSHumanReadableCopyright']
-about = (root / 'Sources/Switch2KitApp/UI/AboutAndOnboarding.swift').read_text()
-assert re.search(r'static let updatesEnabled\s*=\s*false', about)
-assert re.search(r'static let defaultUpdateFeedURL\s*=\s*""', about)
-updater = (root / 'Sources/Switch2KitApp/UI/Updater.swift').read_text()
-# Extract the actual resolver without its unrelated AppKit/SwiftUI UI. Use
-# a nonempty default and an explicit saved override to show
-# both are rejected by the production policy guard.
-a = updater.index('    var feedURL: URL? {')
-b = updater.index('\n    /// Auto-check', a)
-resolver = updater[a:b]
-Path(sys.argv[1]).write_text('''import Foundation
-enum AppInfo {
-    static let updatesEnabled = false
-    static let defaultUpdateFeedURL = "https://example.invalid/default.json"
-}
-final class Updater {
-    static let feedURLKey = "switch2kit-update-policy-test"
-''' + resolver + '''
-}
-@main enum Test {
-    static func main() {
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: Updater.feedURLKey)
-        defer { defaults.removeObject(forKey: Updater.feedURLKey) }
-        precondition(Updater().feedURL == nil, "Default feed must be disabled")
-        defaults.set("https://example.invalid/override.json", forKey: Updater.feedURLKey)
-        precondition(Updater().feedURL == nil, "Saved override must not bypass update policy")
-        print("PASS disabled default and override update feeds")
-    }
-}
-''')
-for method in ['downloadAndInstall(_ entry: AppcastEntry)', 'installNow()']:
-    start = updater.index('    func ' + method)
-    assert 'guard AppInfo.updatesEnabled else { return }' in updater[start:start + 150]
+# Automatic installation is removed, not merely disabled by a preference.
+app = root / 'Sources/Switch2KitApp'
+assert not (app / 'UI/Updater.swift').exists()
+for path in app.rglob('*.swift'):
+    source = path.read_text()
+    for removed in ('Updater', 'AppcastEntry', 'updateFeedURL', 'updateLastCheck'):
+        assert removed not in source, f'Stale update dependency {removed}: {path}'
 # No signed build or credentials are accessed by these negative controls.
 env = dict(os.environ)
 for name in ('SIGN_IDENTITY', 'SIGN_ENTITLEMENTS', 'NOTARY_KEYCHAIN_PROFILE', 'PROVISIONING_PROFILE'):

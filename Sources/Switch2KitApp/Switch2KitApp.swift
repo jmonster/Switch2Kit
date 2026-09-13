@@ -13,7 +13,7 @@ struct Switch2KitApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(engine: appDelegate.engine, updater: appDelegate.updater)
+            MenuContent(engine: appDelegate.engine)
         } label: {
             MenuBarIcon(engine: appDelegate.engine)
         }
@@ -45,9 +45,6 @@ struct Switch2KitApp: App {
         Window("About", id: "about") { AboutView() }
             .windowResizability(.contentSize)
 
-        Window("Software Update", id: "update") { UpdaterView(updater: appDelegate.updater) }
-            .windowResizability(.contentSize)
-
         // First-run welcome tour. A scene (not a hand-built NSWindow) so the
         // dismiss environment action works and the menu can reopen it later.
         // Presented automatically only until the user has seen it once.
@@ -77,7 +74,6 @@ struct MenuBarIcon: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let engine: BridgeEngine
-    let updater = Updater()
 
     override init() {
         // An import interrupted after changing only one preference key must be
@@ -107,9 +103,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         engine.addSink(OutputStatusStore.shared.register(NetworkGamepadSink()))
         engine.addSink(OutputStatusStore.shared.register(VirtualHIDSink()))
         notifications.attach(to: engine)
-        // Daily auto-update check (only if a feed URL is configured); results
-        // surface as an "Update Available" item in the menu-bar dropdown.
-        updater.checkOnLaunchIfDue()
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !terminating else { return .terminateLater }
@@ -129,7 +122,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
 struct MenuContent: View {
     @ObservedObject var engine: BridgeEngine
-    @ObservedObject var updater: Updater
     @ObservedObject private var settings = ControllerSettings.shared
     @Environment(\.openWindow) private var openWindow
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -165,16 +157,6 @@ struct MenuContent: View {
                 let battery = c.batteryMillivolts > 0 ? " — \(c.batteryPercent)%" : ""
                 Text("\(c.player >= 0 ? "P\(c.player + 1)" : "—")  \(settings.displayName(forSerial: c.serial, modelName: c.name))\(battery)")
             }
-        }
-
-        // A found (or already-downloaded) update stays one click away even
-        // after the update window is closed.
-        if case .available(let entry) = updater.state {
-            Divider()
-            Button("Update Available: v\(entry.version)…") { show("update") }
-        } else if case .readyToInstall(let entry) = updater.state {
-            Divider()
-            Button("Update Ready to Install: v\(entry.version)…") { show("update") }
         }
 
         Divider()

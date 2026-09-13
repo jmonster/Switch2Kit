@@ -19,14 +19,9 @@ enum AppInfo {
         return String(revision.prefix(12)) + (dirty ? " (modified)" : "")
     }
 
-    /// Updates are installed manually.
-    static let updatesEnabled = false
-    static let defaultUpdateFeedURL = ""
-
-    /// Pre-release features hidden from the beta UI: gestures, keyboard mapping,
-    /// and the Experiments cluster. App-control support is retained independently
-    /// of the removed embedded games. Enable the flag in this app's defaults
-    /// domain for development, then relaunch.
+    /// Pre-release app-control features (gestures and keyboard mapping) and
+    /// controller experiments. Enable this flag in the app's defaults domain
+    /// for development, then relaunch.
     static var showPreReleaseFeatures: Bool {
         UserDefaults.standard.bool(forKey: "showPreReleaseFeatures")
     }
@@ -93,6 +88,7 @@ struct OnboardingView: View {
                 VStack(spacing: 16) {
                     Image(systemName: pages[page].icon)
                         .font(.system(size: 48))
+                        .foregroundStyle(.tint)
                     Text(pages[page].title).font(.title.bold())
                     Text(pages[page].body)
                         .foregroundStyle(.secondary)

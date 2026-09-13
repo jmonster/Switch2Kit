@@ -9,7 +9,7 @@ bash scripts/build-app.sh
 open build/Switch2Kit.app
 ```
 
-Development builds are ad-hoc signed. Automatic updates are disabled; install new builds manually.
+Development builds are ad-hoc signed. The app has no automatic updater; install new builds manually.
 
 The app supplies its Bluetooth usage description in `Resources/Info.plist`. Enable Accessibility only for keyboard or mouse output. Library input, the dashboard visualizer, and the standalone example do not require it.
 
