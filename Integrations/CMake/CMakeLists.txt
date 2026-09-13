@@ -83,23 +83,4 @@ endif()
 add_dependencies(Switch2Kit::C Switch2KitCBuild)
 set(SWITCH2KIT_C_BINARY_DIR "${_s2k_bin}" CACHE INTERNAL "Built C facade directory")
 
-# The host signs the completed app. This function neither signs nor changes entitlements.
-function(switch2kit_embed target)
-  if(NOT APPLE)
-    return()
-  endif()
-  get_target_property(_bundle "${target}" MACOSX_BUNDLE)
-  if(NOT _bundle)
-    message(FATAL_ERROR "switch2kit_embed requires a MACOSX_BUNDLE target")
-  endif()
-  add_custom_command(TARGET "${target}" POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:Switch2Kit::C>"
-      "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks/"
-    COMMAND xcrun swift-stdlib-tool --copy --platform macosx
-      --scan-executable "$<TARGET_FILE:Switch2Kit::C>"
-      --destination "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks"
-    VERBATIM)
-  set_property(TARGET "${target}" APPEND PROPERTY BUILD_RPATH "@executable_path/../Frameworks")
-  set_property(TARGET "${target}" APPEND PROPERTY INSTALL_RPATH "@executable_path/../Frameworks")
-endfunction()
+include("${CMAKE_CURRENT_LIST_DIR}/Bundle.cmake")
