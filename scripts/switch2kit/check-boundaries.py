@@ -5,7 +5,7 @@ import re
 
 root = Path(__file__).resolve().parents[2]
 kit = root / 'Sources/Switch2Kit'
-forbidden = re.compile(r'\b(CoreHID|CGEvent|AXIsProcessTrusted|AXIsProcessTrustedWithOptions|UserDefaults|SDL|UDPHub|WebSocketHub|KeyboardMapper|MouseController|DashboardView|Switch2KitApp|Switch2KitApp)\b|wabisabi\.ware\.gamecubed|SWITCH2KIT_|browser|WebSocket', re.I)
+forbidden = re.compile(r'\b(CoreHID|CGEvent|AXIsProcessTrusted|AXIsProcessTrustedWithOptions|UserDefaults|SDL|UDPHub|WebSocketHub|KeyboardMapper|MouseController|DashboardView|Switch2KitApp)\b|wabisabi\.ware\.gamecubed|SWITCH2KIT_|browser|WebSocket', re.I)
 files = sorted(kit.rglob('*.swift'))
 assert files, 'No library sources found'
 for path in files:

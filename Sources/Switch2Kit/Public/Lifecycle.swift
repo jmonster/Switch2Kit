@@ -81,7 +81,8 @@ public enum Switch2KitError: Error, Equatable, Sendable {
     case invalidParameter
     /// More than 32 event observers were requested; cancel an old observation first.
     case observerLimitReached
-    /// More than 128 pending LED/RSSI/tool operations; some requests were rejected.
+    /// The 64-controller rumble inbox or 128-entry LED/RSSI/tool queue is full.
+    /// Excess requests are rejected; updates to an already-pending rumble intent still coalesce.
     case operationQueueFull
     /// Immediate feedback could not be admitted because the radio, command lane or rate limit is busy.
     case operationBusy

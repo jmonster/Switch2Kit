@@ -19,6 +19,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     private struct RumbleInbox: Sendable {
         var pending: [Switch2ControllerID: RumbleIntent] = [:]
         var scheduled = false
+        var overflowed = false
     }
     private let rumbleInbox = Mutex(RumbleInbox())
     private struct ControlIntent: Sendable {
@@ -74,20 +75,24 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     }
     package func submitRumble(_ id: Switch2ControllerID, strong: Double, weak: Double, duration: TimeInterval?, feedback: Bool = false) {
         let schedule = rumbleInbox.withLock { inbox in
-            guard inbox.pending[id] != nil || inbox.pending.count < 64 else { return false }
-            inbox.pending[id] = RumbleIntent(strong: strong, weak: weak, duration: duration, feedback: feedback,
-                                            submittedAt: ProcessInfo.processInfo.systemUptime,
-                                            generation: hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration)
+            if inbox.pending[id] != nil || inbox.pending.count < 64 {
+                inbox.pending[id] = RumbleIntent(strong: strong, weak: weak, duration: duration, feedback: feedback,
+                                                submittedAt: ProcessInfo.processInfo.systemUptime,
+                                                generation: hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration)
+            } else { inbox.overflowed = true }
             guard !inbox.scheduled else { return false }
             inbox.scheduled = true; return true
         }
         if schedule { btQueue.async { [weak self] in self?.drainRumble() } }
     }
     private func drainRumble() {
-        let intents = rumbleInbox.withLock { inbox in
-            let result = inbox.pending; inbox.pending.removeAll(keepingCapacity: true)
-            inbox.scheduled = false; return result
+        let (intents, overflowed) = rumbleInbox.withLock { inbox in
+            let result = inbox.pending, overflowed = inbox.overflowed
+            inbox.pending.removeAll(keepingCapacity: true)
+            inbox.scheduled = false; inbox.overflowed = false
+            return (result, overflowed)
         }
+        if overflowed { failure(nil, .operationQueueFull) }
         for (id, intent) in intents {
             guard let session = sessions.values.first(where: { $0.peripheral.identifier == id.rawValue }),
                   !session.isRetired else { failure(id, .controllerNotReady); continue }
@@ -130,7 +135,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     package func stop(completion: (@Sendable () -> Void)? = nil) {
         btQueue.async { [self] in
             running = false
-            rumbleInbox.withLock { $0.pending.removeAll() }
+            rumbleInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             controlInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             if central != nil { resetConnections(cancel: true, reason: .stopped) }
             publishState(.paused)
@@ -141,7 +146,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     package func shutdown() {
         btQueue.async { [self] in
             running = false
-            rumbleInbox.withLock { $0.pending.removeAll() }
+            rumbleInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             controlInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             if central != nil { resetConnections(cancel: true, reason: .stopped) }
             central?.delegate = nil; central = nil
