@@ -1,13 +1,21 @@
 import Foundation
 import Synchronization
 
+// Keep Mutex in stable reference storage when captured by both the observer
+// and DispatchQueue.sync. Apple Swift 6.3.3 diagnoses a copy of a noncopyable
+// value for the equivalent local capture in this Swift 5 compatibility suite.
+// The counter remains synchronized; no assertion or production code changes.
+private final class InputCounter: Sendable {
+    let value = Mutex(0)
+}
+
 @main enum EngineTests {
     static func main() {
         let engine = BridgeEngine.fixture()
-        let deliveredInputs = Mutex(0)
+        let deliveredInputs = InputCounter()
         let outputQueue = DispatchQueue(label: "test.transport.observer")
         let observation = try! engine.hub.observe(queue: outputQueue, capacity: 256) { event in
-            if case .input = event { deliveredInputs.withLock { $0 += 1 } }
+            if case .input = event { deliveredInputs.value.withLock { $0 += 1 } }
         }
         defer { observation.cancel() }
         engine.btQueue.sync {
@@ -31,7 +39,7 @@ import Synchronization
             let callback = replacement.onState
             callback?(0, ControllerState())
             outputQueue.sync {}
-            precondition(deliveredInputs.withLock { $0 } == 1)
+            precondition(deliveredInputs.value.withLock { $0 } == 1)
             engine.retire(replacement, cancel: true)
             precondition(replacement.isRetired && engine.sessions[1] === other)
             precondition(engine.disconnecting.contains(replacement.peripheral.identifier))
@@ -41,7 +49,7 @@ import Synchronization
             engine.sessionReady(newest)
             callback?(0, ControllerState())
             outputQueue.sync {}
-            precondition(deliveredInputs.withLock { $0 } == 1, "Old input closure reached replacement output")
+            precondition(deliveredInputs.value.withLock { $0 } == 1, "Old input closure reached replacement output")
             engine.sessionFailed(replacement, reason: "late failure")
             engine.sessionDidUpdateState(replacement)
             precondition(engine.central.cancelled.count == 1 && engine.hub.snapshot.controllers.contains { $0.id.rawValue == newest.peripheral.identifier })
