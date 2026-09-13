@@ -22,4 +22,4 @@ The app owns its four-player policy, preferences, visualizers, optional outputs,
 
 `Tests/Switch2KitTests` covers public values, decoding, calibration, discovery, observations, diagnostics, and example navigation. `tests/session` and `tests/engine` exercise production state-machine methods using fake Bluetooth boundaries. `tests/application-adapter` covers state conversion, Joy-Con grouping, input release, resynchronization, and application lifecycle. Output suites test their respective adapters and wire protocols.
 
-CI builds the package, example, dashboard, and an independent SwiftPM source consumer. Source-boundary checks enforce one production protocol/session/transport implementation and prevent application imports in the library. There is no separate binary-framework distribution pipeline.
+CI builds the package, example, dashboard, independent SwiftPM source consumer, and optional native C library with fresh C/C++ consumers. Swift source consumers need no prebuilt framework. Source-boundary checks enforce one production protocol/session/transport implementation and prevent application imports in the library.

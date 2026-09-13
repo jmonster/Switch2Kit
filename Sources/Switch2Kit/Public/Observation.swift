@@ -18,6 +18,7 @@ public final class Switch2ControllerObservation: Sendable {
 
 // A token belongs to exactly one attempt. Retirement is terminal; a reconnect gets a NEW token.
 package final class SessionLifetime: Sendable {
+    package init() {}
     package let id = UUID()
     private let active = Mutex(true)
     package var isActive: Bool { active.withLock { $0 } }
@@ -34,7 +35,12 @@ package struct EventEnvelope: Sendable {
 
 // Every mutable field is mutex-protected; handler calls are serialized by a single scheduled drain.
 // The Bluetooth producer never invokes a handler, waits for a handler, or enqueues one task per report.
-package final class EventMailbox: Sendable {
+package protocol EventSink: Sendable {
+    func enqueue(_ event: EventEnvelope)
+    func cancel()
+}
+
+package final class EventMailbox: EventSink {
     private struct State: Sendable {
         var pending: [EventEnvelope] = []
         var overflow = false
@@ -107,11 +113,12 @@ package final class EventMailbox: Sendable {
 }
 
 package final class ControllerEventHub: Sendable {
+    package init() {}
     private struct State: Sendable {
         var snapshot = Switch2ManagerSnapshot()
         var sequence: UInt64 = 1
         var nextObserver: UInt64 = 0
-        var observers: [UInt64: EventMailbox] = [:]
+        var observers: [UInt64: any EventSink] = [:]
         var lifetimes: [Switch2ControllerID: SessionLifetime] = [:]
     }
     private let state = Mutex(State())
@@ -187,10 +194,97 @@ package final class ControllerEventHub: Sendable {
         }
     }
     package func cancelAll() {
-        state.withLock { value in
-            for mailbox in value.observers.values { mailbox.cancel() }
+        let observers = state.withLock { value in
+            let observers = Array(value.observers.values)
             value.observers.removeAll()
             value.lifetimes.removeAll()
+            return observers
+        }
+        for observer in observers { observer.cancel() }
+    }
+}
+
+
+// Bounded pull observation used by non-Swift hosts. No callbacks or delivery tasks.
+// The only producer is ControllerEventHub; one host thread drains each reader.
+package final class ControllerEventReader: EventSink {
+    private struct State: Sendable {
+        var pending: [EventEnvelope] = []
+        var overflow = true
+        var cancelled = false
+        var delivered: UInt64 = 0
+    }
+    private let state = Mutex(State())
+    private let capacity: Int
+    private let current: @Sendable () -> EventEnvelope
+    private let remove: @Sendable () -> Void
+    package init(capacity: Int, current: @escaping @Sendable () -> EventEnvelope,
+                 remove: @escaping @Sendable () -> Void) {
+        self.capacity = capacity; self.current = current; self.remove = remove
+    }
+    package func enqueue(_ event: EventEnvelope) {
+        state.withLock { value in
+            guard !value.cancelled, event.sequence > value.delivered else { return }
+            if case .snapshot = event.event { value.overflow = true }
+            if value.pending.count >= capacity { value.overflow = true }
+            if value.overflow { value.pending.removeAll(keepingCapacity: true) }
+            else { value.pending.append(event) }
+        }
+    }
+    // Never call current() while holding the reader mutex: the hub acquires them
+    // in the opposite order while publishing. This also applies to cancel/remove.
+    package func read(maximum: Int) -> (events: [Switch2ControllerEvent], snapshot: Switch2ManagerSnapshot, resync: Bool, more: Bool) {
+        let picked: (events: [EventEnvelope], resync: Bool) = state.withLock { value in
+            guard !value.cancelled, maximum > 0 else { return ([], false) }
+            if value.overflow { value.overflow = false; return ([], true) }
+            let events = Array(value.pending.prefix(maximum))
+            value.pending.removeFirst(events.count)
+            return (events, events.contains { $0.lifetime?.isActive == false || $0.snapshotLifetimes.contains { !$0.isActive } })
+        }
+        let now = current()
+        guard case .snapshot(let snapshot) = now.event else { preconditionFailure("Hub current must be a snapshot") }
+        // A second check closes retirement between removal from the inbox and projection.
+        let resync = picked.resync || picked.events.contains {
+            $0.lifetime?.isActive == false || $0.snapshotLifetimes.contains { !$0.isActive }
+        }
+        return state.withLock { value in
+            guard !value.cancelled else { return ([], snapshot, false, false) }
+            if resync {
+                value.delivered = max(value.delivered, now.sequence)
+                value.pending.removeAll { $0.sequence <= value.delivered }
+                // A concurrent producer may have overflowed after current() was read.
+                // Keep that overflow bit, forcing another authoritative snapshot next read.
+                return ([], snapshot, true, value.overflow || !value.pending.isEmpty)
+            }
+            let events = picked.events.filter { $0.sequence > value.delivered }
+            if let last = events.last { value.delivered = last.sequence }
+            return (events.map(\.event), snapshot, false, value.overflow || !value.pending.isEmpty)
+        }
+    }
+    package func reset() {
+        state.withLock { $0.pending.removeAll(keepingCapacity: true); $0.overflow = true }
+    }
+    package func cancel() {
+        state.withLock { $0.cancelled = true; $0.pending.removeAll(); $0.overflow = false }
+        remove()
+    }
+    package var pendingCount: Int { state.withLock { $0.pending.count } }
+}
+
+extension ControllerEventHub {
+    package func makeReader(capacity: Int) throws -> ControllerEventReader {
+        guard (1...256).contains(capacity) else { throw Switch2KitError.invalidParameter }
+        return try state.withLock { value in
+            guard value.observers.count < 32 else { throw Switch2KitError.observerLimitReached }
+            value.nextObserver &+= 1
+            let id = value.nextObserver
+            let reader = ControllerEventReader(capacity: capacity, current: { [weak self] in
+                self?.current() ?? EventEnvelope(sequence: .max, event: .snapshot(.init()), lifetime: nil)
+            }, remove: { [weak self] in
+                _ = self?.state.withLock { $0.observers.removeValue(forKey: id) }
+            })
+            value.observers[id] = reader
+            return reader
         }
     }
 }

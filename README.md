@@ -48,6 +48,10 @@ The host provides `NSBluetoothAlwaysUsageDescription` and, when sandboxed, `com.
 
 [Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md)
 
+## C/C++ integration
+
+Use the optional [C ABI and CMake integration](docs/switch2kit/cpp.md) for in-process emulator backends. It shares the Swift controller engine and does not require the dashboard.
+
 ## Dashboard
 
 ```sh
@@ -69,6 +73,6 @@ bash scripts/build-switch2kit-demo.sh
 bash scripts/verify-switch2kit-consumer.sh
 ```
 
-The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. SwiftPM source integration is the supported library-distribution path; the independent consumer check needs no prebuilt framework. See the [distribution note](docs/switch2kit/xcframework.md) for migration from historical XCFramework builds.
+The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. Swift consumers use SwiftPM source integration; the independent consumer check needs no prebuilt framework. The [distribution note](docs/switch2kit/xcframework.md) covers migration from the standalone Swift XCFramework. The optional C/C++ integration retains its native library build and validation.
 
 [Architecture](docs/switch2kit/architecture.md) · [Protocol](docs/protocol.md) · [Contributors](CREDITS.md)
