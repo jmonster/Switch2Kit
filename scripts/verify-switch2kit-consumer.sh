@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fresh consumers have no dependency on the dashboard.
+# Build a fresh source consumer with no dependency on the dashboard.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
 [ "$(uname -s)" = Darwin ] || { echo 'Consumer verification requires macOS and Xcode.' >&2; exit 2; }
@@ -43,27 +43,8 @@ func checkConsumerAPI() throws {
 SWIFT
 swift package --package-path "$WORK/source" describe
 swift build --package-path "$WORK/source" -Xswiftc -warnings-as-errors
-FRAMEWORK=$(python3 - "$ROOT/build/Switch2Kit.xcframework" <<'PY'
-import pathlib, plistlib, sys
-root = pathlib.Path(sys.argv[1])
-with (root / 'Info.plist').open('rb') as f: entry = plistlib.load(f)['AvailableLibraries'][0]
-print(root / entry['LibraryIdentifier'] / entry['LibraryPath'])
-PY
-)
-mkdir -p "$WORK/binary"
-ditto "$FRAMEWORK" "$WORK/binary/Switch2Kit.framework"
-# Force .swiftinterface consumption instead of same-toolchain compiled modules.
-find "$WORK/binary/Switch2Kit.framework" -type f -name '*.swiftmodule' -delete
-SDK=$(xcrun --sdk macosx --show-sdk-path)
-for arch in arm64 x86_64; do
-  xcrun --sdk macosx swiftc -swift-version 6 -warnings-as-errors -target "$arch-apple-macosx15.0" \
-    -sdk "$SDK" -F "$WORK/binary" -framework Switch2Kit \
-    "$WORK/source/Sources/Consumer/main.swift" -o "$WORK/Consumer-$arch" \
-    -Xlinker -rpath -Xlinker "$WORK/binary"
-  file "$WORK/Consumer-$arch"
-  lipo "$WORK/Consumer-$arch" -verify_arch "$arch"
-  if otool -L "$WORK/Consumer-$arch" | grep -q CoreHID; then
-    echo 'Independent consumer unexpectedly links CoreHID.' >&2; exit 1
-  fi
-done
-echo 'PASS fresh SwiftPM source consumer and both binary interface/link consumers (no radio opened)'
+BIN=$(swift build --package-path "$WORK/source" --show-bin-path)
+if otool -L "$BIN/Consumer" | grep -q CoreHID; then
+    echo 'Independent source consumer unexpectedly links CoreHID.' >&2; exit 1
+fi
+echo 'PASS fresh SwiftPM source consumer (no radio opened)'

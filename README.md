@@ -66,10 +66,9 @@ swift build
 swift test
 bash tests/run.sh
 bash scripts/build-switch2kit-demo.sh
-bash scripts/build-switch2kit-xcframework.sh
 bash scripts/verify-switch2kit-consumer.sh
 ```
 
-The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. The [XCFramework guide](docs/switch2kit/xcframework.md) covers universal arm64/x86_64 builds and Xcode integration. SwiftPM source integration is the default.
+The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. SwiftPM source integration is the supported library-distribution path; the independent consumer check needs no prebuilt framework. See the [distribution note](docs/switch2kit/xcframework.md) for migration from historical XCFramework builds.
 
 [Architecture](docs/switch2kit/architecture.md) · [Protocol](docs/protocol.md) · [Contributors](CREDITS.md)
