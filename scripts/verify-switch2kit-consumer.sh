@@ -20,6 +20,29 @@ cat > "$WORK/source/Sources/Consumer/main.swift" <<'SWIFT'
 import Foundation
 import Switch2Kit
 
+// Compile against public declarations only; no testable import or example helper.
+enum AppCommand: Hashable, Sendable { case confirm, cancel }
+func checkActionAPI() throws {
+    var router = try Switch2ActionRouter(actions: [AppCommand.confirm, .cancel], bindings: [
+        .init(.confirm, from: .buttons(.a)), .init(.cancel, from: .buttons(.b))])
+    _ = router.setActive(true)
+    _ = router.receive(Switch2ControllerState(), from: .keyboard, at: 0)
+    let events: [Switch2ActionEvent<AppCommand>] = router.receive([.confirm], from: .keyboard, at: 1)
+    for event in events { _ = (event.action, event.phase) }
+    _ = router.tick(at: 3)
+    _ = try router.replaceBindings([.init(.confirm, from: .axis(.primaryX, positive: true))])
+    _ = router.remove(.keyboard)
+    _ = router.reset()
+    var navigation = Switch2ActionRouter<Switch2NavigationAction>.navigation()
+    _ = navigation.setActive(false)
+}
+
+func checkActionEventAPI(_ event: Switch2ControllerEvent) {
+    var router = Switch2ActionRouter<Switch2NavigationAction>.navigation()
+    _ = router.setActive(true)
+    _ = router.receive(event, at: 0)
+}
+
 @MainActor
 func checkConsumerAPI() throws {
     let manager = Switch2ControllerManager(configuration: .init(discoveryMode: .onDemand))

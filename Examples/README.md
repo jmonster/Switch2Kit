@@ -1,6 +1,6 @@
 # Independent Switch2Kit example
 
-`Switch2KitDemo` imports the stable library, not the dashboard. `NavigationSupport` is a package-only example helper shared with tests; it is not a public Switch2Kit product.
+`Switch2KitDemo` imports the stable library, not the dashboard. It uses the public `Switch2ActionRouter` navigation preset; there is no separate example-only routing module.
 
 Build with macOS/Xcode 26+:
 
