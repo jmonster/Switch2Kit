@@ -1,4 +1,4 @@
-name: Switch2Kit distribution and independent consumers
+name: Swift source and native C distribution
 on:
   pull_request:
   push:
@@ -19,18 +19,13 @@ jobs:
           persist-credentials: false
       - name: Check source ownership boundaries
         run: python3 scripts/switch2kit/check-boundaries.py
-      - name: Archive and inspect the universal controller framework from another directory
+      - name: Compile independent Swift source consumer from another directory
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/build"
           cd "$RUNNER_TEMP"
-          bash "$GITHUB_WORKSPACE/scripts/build-switch2kit-xcframework.sh" 2>&1 | tee "$GITHUB_WORKSPACE/build/Switch2Kit-distribution.log"
-      - name: Compile independent source and binary interface consumers
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/verify-switch2kit-consumer.sh 2>&1 | tee build/Switch2Kit-consumers.log
+          bash "$GITHUB_WORKSPACE/scripts/verify-switch2kit-consumer.sh" 2>&1 | tee "$GITHUB_WORKSPACE/build/Switch2Kit-consumers.log"
       - name: Build universal C ABI and independent C++ consumers
         run: bash scripts/build-switch2kit-c.sh
       - name: Preserve the C ABI distribution
@@ -40,15 +35,6 @@ jobs:
           path: |
             build/Switch2KitC.xcframework.zip
             build/Switch2KitC.xcframework.zip.sha256
-          retention-days: 14
-      - name: Preserve inspected development framework and checksums
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: Switch2Kit-xcframework
-          path: |
-            build/Switch2Kit.xcframework.zip
-            build/Switch2Kit.xcframework.zip.sha256
-            build/Switch2Kit-build.txt
           retention-days: 14
       - name: Preserve build and inspection diagnostics
         if: always()
