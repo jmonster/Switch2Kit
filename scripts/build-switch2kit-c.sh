@@ -23,7 +23,7 @@ for ARCH in arm64 x86_64; do
 done
 lipo -create "${SLICES[@]}" -output "$LIB"
 file "$LIB"
-lipo -verify_arch arm64 x86_64 "$LIB"
+lipo "$LIB" -verify_arch arm64 x86_64
 if otool -L "$LIB" | grep -E 'CoreHID|Switch2KitApp'; then fail 'Unexpected application dependency.'; fi
 nm -gjU "$LIB" > "$WORK/exports"
 for symbol in s2k_create s2k_destroy s2k_read s2k_start s2k_stop s2k_play_feedback s2k_set_rumble; do
@@ -45,7 +45,7 @@ CPP
 xcrun clang++ -std=c++17 -Wall -Wextra -Werror -arch arm64 -arch x86_64 \
   -mmacosx-version-min=15.0 -I "$ROOT/Sources/Switch2KitCABI/include" \
   "$WORK/main.cpp" -L "$BIN" -lSwitch2KitC -Wl,-rpath,"$BIN" -o "$WORK/consumer"
-lipo -verify_arch arm64 x86_64 "$WORK/consumer"
+lipo "$WORK/consumer" -verify_arch arm64 x86_64
 "$WORK/consumer"
 xcodebuild -create-xcframework -library "$LIB" \
   -headers "$ROOT/Sources/Switch2KitCABI/include" -output "$WORK/Switch2KitC.xcframework"
