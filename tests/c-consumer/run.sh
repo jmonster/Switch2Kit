@@ -8,7 +8,7 @@ cmake -S "$ROOT/tests/c-consumer" -B "$WORK" -DCMAKE_BUILD_TYPE=Release
 cmake --build "$WORK" --parallel 2
 ctest --test-dir "$WORK" --output-on-failure
 if [ "$(uname -s)" = Darwin ]; then
-  LIB=$(find "$WORK/switch2kit/swift" -name libSwitch2KitC.dylib -type f | head -1)
+  LIB=$(find "$WORK/switch2kit" -name libSwitch2KitC.dylib -type f | head -1)
   otool -L "$LIB"
   if otool -L "$LIB" | grep -E 'CoreHID|Switch2KitApp'; then exit 1; fi
 fi

@@ -9,11 +9,19 @@ xcodebuild -version
 mkdir -p "$ROOT/build"
 WORK=$(mktemp -d "$ROOT/build/.switch2kit-c.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
-ARGS=(--package-path "$ROOT" --scratch-path "$WORK/swift" -c release --arch arm64 --arch x86_64)
-xcrun swift build "${ARGS[@]}" --product Switch2KitC
-BIN=$(xcrun swift build "${ARGS[@]}" --show-bin-path)
+SDK=$(xcrun --sdk macosx --show-sdk-path)
+BIN="$WORK/universal"
+mkdir -p "$BIN"
 LIB="$BIN/libSwitch2KitC.dylib"
-[ -f "$LIB" ] || fail 'SwiftPM did not produce the C library.'
+SLICES=()
+for ARCH in arm64 x86_64; do
+  ARGS=(--package-path "$ROOT" --scratch-path "$WORK/swift-$ARCH" -c release
+        --triple "$ARCH-apple-macosx15.0" --sdk "$SDK")
+  xcrun swift build "${ARGS[@]}" --product Switch2KitC
+  ARCH_BIN=$(xcrun swift build "${ARGS[@]}" --show-bin-path)
+  SLICES+=("$ARCH_BIN/libSwitch2KitC.dylib")
+done
+lipo -create "${SLICES[@]}" -output "$LIB"
 file "$LIB"
 lipo -verify_arch arm64 x86_64 "$LIB"
 if otool -L "$LIB" | grep -E 'CoreHID|Switch2KitApp'; then fail 'Unexpected application dependency.'; fi
