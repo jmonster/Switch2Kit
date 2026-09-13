@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
 concurrency:
   group: emulator-integration-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   host:
-    runs-on: macos-26-intel
+    runs-on: macos-15-intel
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -26,7 +28,7 @@ jobs:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
         run: bash tests/emulator-host/verify.sh
   native:
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 55
     strategy:
       fail-fast: false
@@ -72,7 +74,7 @@ jobs:
           set -o pipefail
           extra=(-DENABLE_VULKAN=OFF)
           if [ "$EMULATOR" = dolphin ]; then
-            extra+=(-DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)" -DENABLE_TESTS=OFF)
+            extra+=(-DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)" -DENABLE_TESTS=OFF -DPOSTPROCESS_BUNDLE=ON)
           fi
           bash scripts/build-switch2kit-emulator.sh "$EMULATOR" \
             "$PWD/build/emulator-source" "$PWD/build/emulator-build" \
