@@ -73,12 +73,14 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         self.sessionLimit = min(64, max(1, configuration.maximumControllers))
         super.init()
     }
-    package func submitRumble(_ id: Switch2ControllerID, strong: Double, weak: Double, duration: TimeInterval?, feedback: Bool = false) {
+    package func submitRumble(_ id: Switch2ControllerID, strong: Double, weak: Double, duration: TimeInterval?, feedback: Bool = false, expectedConnection: UUID? = nil) {
         let schedule = rumbleInbox.withLock { inbox in
+            let current = hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
+            guard expectedConnection == nil || current == expectedConnection else { return false }
             if inbox.pending[id] != nil || inbox.pending.count < 64 {
                 inbox.pending[id] = RumbleIntent(strong: strong, weak: weak, duration: duration, feedback: feedback,
                                                 submittedAt: ProcessInfo.processInfo.systemUptime,
-                                                generation: hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration)
+                                                generation: expectedConnection ?? current)
             } else { inbox.overflowed = true }
             guard !inbox.scheduled else { return false }
             inbox.scheduled = true; return true
@@ -176,9 +178,13 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             self.updateScanning()
         }
     }
-    package func disconnect(_ id: Switch2ControllerID, forget: Bool) {
+    package func disconnect(_ id: Switch2ControllerID, forget: Bool, expectedConnection: UUID? = nil) {
         btQueue.async { [weak self] in
             guard let self else { return }
+            if let expectedConnection,
+               self.sessions.values.first(where: { $0.peripheral.identifier == id.rawValue })?.lifetime.id != expectedConnection {
+                return
+            }
             if forget {
                 self.discovery.forget(id.rawValue)
 
@@ -194,8 +200,8 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     // Bounded ingress for LEDs/RSSI/companions. The generation is captured at
     // submission, so a delayed control request cannot act on a replacement link.
     // Operations are library/companion code, never arbitrary public host handlers.
-    package func withSession(_ id: Switch2ControllerID, operation: @escaping @Sendable (ControllerSession) -> Void) {
-        let generation = hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
+    package func withSession(_ id: Switch2ControllerID, expectedConnection: UUID? = nil, operation: @escaping @Sendable (ControllerSession) -> Void) {
+        let generation = expectedConnection ?? hub.snapshot.controllers.first { $0.id == id }?.sessionGeneration
         let schedule = controlInbox.withLock { inbox in
             if inbox.pending.count < 128 {
                 inbox.pending.append(ControlIntent(id: id, generation: generation, operation: operation))

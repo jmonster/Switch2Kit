@@ -22,7 +22,7 @@ public final class Switch2ControllerManager: ObservableObject {
     /// Immediate thread-safe snapshot, without the presentation throttle.
     public nonisolated var currentSnapshot: Switch2ManagerSnapshot { hub.snapshot }
 
-    private nonisolated let hub: ControllerEventHub
+    package nonisolated let hub: ControllerEventHub
     package nonisolated let transport: ControllerTransport
     private var presentationObservation: Switch2ControllerObservation?
 
