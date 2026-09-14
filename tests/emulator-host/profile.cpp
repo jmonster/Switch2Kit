@@ -49,6 +49,18 @@ int main() {
     }
     assert(host.loadMotionProfile(path + ".missing") == S2K_INVALID_ARGUMENT);
     write(text);
+    S2KID unchanged{}; unchanged.bytes[0] = 42;
+    assert(host.loadMotionProfile(path, "s2k:00000000000000000000000000000002", &unchanged) == S2K_INVALID_ARGUMENT);
+    assert(unchanged.bytes[0] == 42 && unchanged.bytes[15] == 0);
+    assert(host.loadMotionProfile(path, "s2k:malformed", &unchanged) == S2K_INVALID_ARGUMENT);
+    assert(host.loadMotionProfile(path, identity, &unchanged) == S2K_OK);
+    assert(unchanged.bytes[0] == 0 && unchanged.bytes[15] == 1);
+    assert(host.loadMotionProfile(path + std::string(1, '\0') + ".ignored") == S2K_INVALID_ARGUMENT);
+    const auto fifo = std::string(directory) + "/not a regular file";
+    assert(mkfifo(fifo.c_str(), 0600) == 0);
+    assert(host.loadMotionProfile(fifo) == S2K_INVALID_ARGUMENT);
+    assert(std::remove(fifo.c_str()) == 0);
+    assert(host.loadMotionProfile(directory) == S2K_INVALID_ARGUMENT);
     std::thread query([&] {
         for (int i = 0; i < 1000; ++i) {
             assert(host.motionState(physical).owned);
@@ -62,7 +74,7 @@ int main() {
     assert(host.pump() == S2K_OK && host.instance(identity) != original);
     SDL_CloseGamepad(pad); pad = SDL_OpenGamepad(host.instance(identity)); assert(pad);
     assert(SDL_GamepadHasSensor(pad, SDL_SENSOR_ACCEL));
-    host.clearMotionProfiles(); assert(host.pump() == S2K_OK);
+    host.removeMotionProfile(identity); assert(host.pump() == S2K_OK);
     SDL_CloseGamepad(pad); pad = SDL_OpenGamepad(host.instance(identity)); assert(pad);
     assert(!SDL_GamepadHasSensor(pad, SDL_SENSOR_ACCEL));
     assert(host.motionState(physical).status == Switch2Kit::SDL3MotionStatus::UnavailableProfile);

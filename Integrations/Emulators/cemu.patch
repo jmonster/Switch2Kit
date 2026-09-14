@@ -1,3 +1,5 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 644032c..8b2256f 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -1,6 +1,8 @@
@@ -9,7 +11,7 @@
  option(MACOS_BUNDLE "The executable when built on macOS will be created as an application bundle" OFF)
  option(ALLOW_PORTABLE "Allow Cemu to be run in portable mode" ON)
  
-@@ -99,7 +101,9 @@
+@@ -99,7 +101,9 @@ endif()
  
  if (APPLE)
      enable_language(OBJC OBJCXX)
@@ -20,7 +22,7 @@
  endif()
  
  if (UNIX AND NOT APPLE)
-@@ -168,6 +172,19 @@
+@@ -168,6 +172,19 @@ if(ENABLE_SDL)
  	add_compile_definitions(HAS_SDL)
  endif()
  
@@ -40,27 +42,32 @@
  # glslang versions older than 11.11.0 define targets without a namespace
  if (NOT TARGET glslang::SPIRV AND TARGET SPIRV)
  	add_library(glslang::SPIRV ALIAS SPIRV)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index d8378c3..991ff98 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
-@@ -110,13 +110,17 @@
+@@ -110,7 +110,7 @@ if (MACOS_BUNDLE)
  	set(MACOSX_BUNDLE_COPYRIGHT "Copyright © ${CURRENT_YEAR} Cemu Project")
  
  	set(MACOSX_BUNDLE_CATEGORY "public.app-category.games")
 - 	set(MACOSX_MINIMUM_SYSTEM_VERSION "13.4")
-+ 	set(MACOSX_MINIMUM_SYSTEM_VERSION "${CMAKE_OSX_DEPLOYMENT_TARGET}")
++	set(MACOSX_MINIMUM_SYSTEM_VERSION "${CMAKE_OSX_DEPLOYMENT_TARGET}")
    	set(MACOSX_BUNDLE_TYPE_EXTENSION "wua")
  
  	set_target_properties(CemuBin PROPERTIES
- 		MACOSX_BUNDLE true
+@@ -118,6 +118,10 @@ if (MACOS_BUNDLE)
  		RESOURCE "${RESOURCE_FILES}"
  	)
-+
+ 
 +    if(ENABLE_SWITCH2KIT)
 +        switch2kit_embed(CemuBin)
 +    endif()
- 
++
  	set(FOLDERS gameProfiles resources)
  	foreach(folder ${FOLDERS})
+ 		add_custom_command (TARGET CemuBin POST_BUILD
+diff --git a/src/gui/wxgui/input/InputAPIAddWindow.cpp b/src/gui/wxgui/input/InputAPIAddWindow.cpp
+index b10a2c7..9b1ef9c 100644
 --- a/src/gui/wxgui/input/InputAPIAddWindow.cpp
 +++ b/src/gui/wxgui/input/InputAPIAddWindow.cpp
 @@ -15,6 +15,9 @@
@@ -73,7 +80,7 @@
  
  wxDEFINE_EVENT(wxControllersRefreshed, wxCommandEvent);
  
-@@ -107,6 +110,28 @@
+@@ -107,6 +110,28 @@ InputAPIAddWindow::InputAPIAddWindow(wxWindow* parent, const wxPoint& position,
  		sizer->Add(m_settings_panel, 1, wxEXPAND);
  	}
  
@@ -102,6 +109,8 @@
  	this->SetSizer(sizer);
  	this->Layout();
  	sizer->Fit(this);
+diff --git a/src/gui/wxgui/input/InputAPIAddWindow.h b/src/gui/wxgui/input/InputAPIAddWindow.h
+index 1e17a8d..1873f2b 100644
 --- a/src/gui/wxgui/input/InputAPIAddWindow.h
 +++ b/src/gui/wxgui/input/InputAPIAddWindow.h
 @@ -5,6 +5,9 @@
@@ -114,7 +123,7 @@
  
  #include "wxgui/helpers/wxCustomData.h"
  #include "input/api/Controller.h"
-@@ -41,6 +44,9 @@
+@@ -41,6 +44,9 @@ private:
  
  	void discard_thread_result();
  
@@ -124,9 +133,82 @@
  	wxChoice* m_input_api;
  	wxComboBox* m_controller_list;
  	wxButton* m_ok_button;
+diff --git a/src/gui/wxgui/input/settings/DefaultControllerSettings.cpp b/src/gui/wxgui/input/settings/DefaultControllerSettings.cpp
+index c10c15c..e45e684 100644
+--- a/src/gui/wxgui/input/settings/DefaultControllerSettings.cpp
++++ b/src/gui/wxgui/input/settings/DefaultControllerSettings.cpp
+@@ -8,6 +8,11 @@
+ #include <wx/statline.h>
+ #include <wx/checkbox.h>
+ #include <wx/statbox.h>
++#ifdef HAVE_SWITCH2KIT
++#include <wx/filedlg.h>
++#include <wx/timer.h>
++#include "input/api/SDL/SDLController.h"
++#endif
+ 
+ #include "wxgui/helpers/wxControlObject.h"
+ #include "wxgui/helpers/wxHelpers.h"
+@@ -37,7 +42,39 @@ DefaultControllerSettings::DefaultControllerSettings(wxWindow* parent, const wxP
+ 		m_use_motion->Enable(m_controller->has_motion());
+ 		box_sizer->Add(m_use_motion, 0, wxEXPAND | wxALL, 5);
+ 
+-		// Vibration
++#ifdef HAVE_SWITCH2KIT
++        if (const auto native = std::dynamic_pointer_cast<SDLController>(m_controller);
++            native && native->uuid().starts_with("s2k:"))
++        {
++            auto* profile = new wxButton(box, wxID_ANY, _("Choose Switch2Kit motion profile..."));
++            auto* remove = new wxButton(box, wxID_ANY, _("Remove motion profile"));
++            auto* status = new wxStaticText(box, wxID_ANY, wxString::FromUTF8(native->motion_status()));
++            box_sizer->Add(profile, 0, wxALL | wxEXPAND, 5);
++            box_sizer->Add(remove, 0, wxALL | wxEXPAND, 5);
++            box_sizer->Add(status, 0, wxALL | wxEXPAND, 5);
++            profile->Bind(wxEVT_BUTTON, [this, native, status](wxCommandEvent&) {
++                wxFileDialog dialog(this, _("Choose measured device calibration"), {}, {},
++                    _("Switch2Kit profile (*.s2kmotion)|*.s2kmotion|All files|*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
++                if (dialog.ShowModal() == wxID_OK)
++                {
++                    native->set_motion_profile(dialog.GetPath().utf8_string());
++                    status->SetLabel(wxString::FromUTF8(native->motion_status()));
++                }
++            });
++            remove->Bind(wxEVT_BUTTON, [native, status](wxCommandEvent&) {
++                native->set_motion_profile({});
++                status->SetLabel(wxString::FromUTF8(native->motion_status()));
++            });
++            m_motion_timer = std::make_unique<wxTimer>(this);
++            Bind(wxEVT_TIMER, [this, native, status](wxTimerEvent&) {
++                native->connect();
++                m_use_motion->Enable(native->has_motion());
++                status->SetLabel(wxString::FromUTF8(native->motion_status()));
++            }, m_motion_timer->GetId());
++            m_motion_timer->Start(500);
++        }
++#endif
++        // Vibration
+ 		auto* rumbleSizer = new wxBoxSizer(wxHORIZONTAL);
+ 
+ 		const auto rumble = (int)(m_settings.rumble * 100);
+diff --git a/src/gui/wxgui/input/settings/DefaultControllerSettings.h b/src/gui/wxgui/input/settings/DefaultControllerSettings.h
+index a5cb76e..6e22491 100644
+--- a/src/gui/wxgui/input/settings/DefaultControllerSettings.h
++++ b/src/gui/wxgui/input/settings/DefaultControllerSettings.h
+@@ -16,6 +16,9 @@ public:
+ 	~DefaultControllerSettings();
+ 
+ private:
++#ifdef HAVE_SWITCH2KIT
++    std::unique_ptr<wxTimer> m_motion_timer;
++#endif
+ 	void update_settings();
+ 
+ 	ControllerPtr m_controller;
+diff --git a/src/input/CMakeLists.txt b/src/input/CMakeLists.txt
+index 4978ef0..a5f16b5 100644
 --- a/src/input/CMakeLists.txt
 +++ b/src/input/CMakeLists.txt
-@@ -108,3 +108,7 @@
+@@ -108,3 +108,7 @@ target_link_libraries(CemuInput PRIVATE
  if (ENABLE_BLUEZ)
  	target_link_libraries(CemuInput PRIVATE bluez::bluez)
  endif ()
@@ -134,9 +216,11 @@
 +if(ENABLE_SWITCH2KIT)
 +    target_link_libraries(CemuInput PRIVATE Switch2Kit::SDL3)
 +endif()
+diff --git a/src/input/ControllerFactory.cpp b/src/input/ControllerFactory.cpp
+index 3827e1d..c0a300f 100644
 --- a/src/input/ControllerFactory.cpp
 +++ b/src/input/ControllerFactory.cpp
-@@ -65,6 +65,10 @@
+@@ -65,6 +65,10 @@ ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::strin
  #ifdef HAS_SDL
  	case InputAPI::SDLController:
  		{
@@ -147,13 +231,88 @@
  			// diid_guid
  			const auto index = uuid.find_first_of('_');
  			if (index == std::string_view::npos)
+diff --git a/src/input/api/Controller.cpp b/src/input/api/Controller.cpp
+index b913a49..cdbf477 100644
+--- a/src/input/api/Controller.cpp
++++ b/src/input/api/Controller.cpp
+@@ -205,8 +205,13 @@ ControllerBase::Settings ControllerBase::get_settings() const
+ 
+ void ControllerBase::set_settings(const Settings& settings)
+ {
+-	std::scoped_lock lock(m_settings_mutex);
+-	m_settings = settings;
++    bool motionChanged;
++    {
++        std::scoped_lock lock(m_settings_mutex);
++        motionChanged = m_settings.motion != settings.motion;
++        m_settings = settings;
++    }
++    if (motionChanged) motion_settings_changed();
+ }
+ 
+ void ControllerBase::set_axis_settings(const AxisSetting& settings)
+@@ -235,6 +240,11 @@ void ControllerBase::set_rumble(float rumble)
+ 
+ void ControllerBase::set_use_motion(bool state)
+ {
+-	std::scoped_lock lock(m_settings_mutex);
+-	m_settings.motion = state;
++    bool motionChanged;
++    {
++        std::scoped_lock lock(m_settings_mutex);
++        motionChanged = m_settings.motion != state;
++        m_settings.motion = state;
++    }
++    if (motionChanged) motion_settings_changed();
+ }
+diff --git a/src/input/api/Controller.h b/src/input/api/Controller.h
+index feae19a..79daf07 100644
+--- a/src/input/api/Controller.h
++++ b/src/input/api/Controller.h
+@@ -112,9 +112,16 @@ public:
+ 	float get_axis_value(uint64 button) const;
+ 	virtual bool has_axis() const { return true; }
+ 
+-	bool use_motion() { return has_motion() && m_settings.motion; }
++	bool use_motion() { return has_motion() && get_settings().motion; }
+ 	virtual bool has_motion() { return false; }
+ 	virtual MotionSample get_motion_sample() { return {}; }
++    // Availability is separate from capability/settings. A missing native stream
++    // must not be passed to VPAD/KPAD as an invented zero-valued measurement.
++    virtual std::optional<MotionSample> get_available_motion_sample()
++    {
++        if (use_motion()) return get_motion_sample();
++        return {};
++    }
+ 
+ 	virtual bool has_position() { return false; }
+ 	virtual glm::vec2 get_position() { return {}; }
+@@ -156,6 +163,7 @@ public:
+ 	bool operator!=(const ControllerBase& c) const { return !(*this == c); }
+ 
+ protected:
++	virtual void motion_settings_changed() {}
+ 	std::string m_uuid;
+ 	std::string m_display_name;
+ 
+diff --git a/src/input/api/SDL/SDLController.cpp b/src/input/api/SDL/SDLController.cpp
+index 77b0417..99ce55c 100644
 --- a/src/input/api/SDL/SDLController.cpp
 +++ b/src/input/api/SDL/SDLController.cpp
-@@ -18,6 +18,18 @@
- 	SDL_GUIDToString(m_guid, tmp, std::size(tmp));
+@@ -1,6 +1,9 @@
+ #include "input/api/SDL/SDLController.h"
+ 
+ #include "input/api/SDL/SDLControllerProvider.h"
++#ifdef HAVE_SWITCH2KIT
++#include "CemuMotion.hpp"
++#endif
+ 
+ SDLController::SDLController(const SDL_GUID& guid, size_t guid_index)
+ 	: base_type(fmt::format("{}_", guid_index), fmt::format("Controller {}", guid_index + 1)), m_guid_index(guid_index),
+@@ -19,8 +22,23 @@ SDLController::SDLController(const SDL_GUID& guid, size_t guid_index, std::strin
  	m_uuid += tmp;
  }
-+
+ 
 +#ifdef HAVE_SWITCH2KIT
 +SDLController::SDLController(std::string_view physical_key, std::string_view display_name)
 +    : base_type(std::string(physical_key), display_name.empty() ? "Switch2Kit controller" : display_name),
@@ -165,14 +324,36 @@
 +        })) throw std::invalid_argument("Invalid Switch2Kit controller identity");
 +}
 +#endif
- 
++
  SDLController::~SDLController()
  {
-@@ -52,13 +64,25 @@
++#ifdef HAVE_SWITCH2KIT
++    m_motion_policy.reset();
++#endif
+ 	if (m_controller)
+ 	{
+ 		SDL_CloseGamepad(m_controller);
+@@ -38,6 +56,9 @@ bool SDLController::is_connected()
+ 
+ 	if (!SDL_GamepadConnected(m_controller))
+ 	{
++#ifdef HAVE_SWITCH2KIT
++        m_motion_policy.reset();
++#endif
+ 		SDL_CloseGamepad(m_controller);
+ 		m_controller = nullptr;
+ 		return false;
+@@ -48,17 +69,30 @@ bool SDLController::is_connected()
+ 
+ bool SDLController::connect()
+ {
++    std::scoped_lock connectionLock(m_controller_mutex);
+ 	if (is_connected())
  		return true;
  
- 	m_has_rumble = false;
+-	m_has_rumble = false;
 -	const auto index = m_provider->get_index(m_guid_index, m_guid);
++	m_has_rumble = m_has_gyro = m_has_accel = false;
 +    auto index = m_provider->get_index(m_guid_index, m_guid);
 +#ifdef HAVE_SWITCH2KIT
 +    const auto native_instance = m_physical_key.empty() ? 0 : SDLControllerProvider::FindSwitch2Device(m_physical_key);
@@ -195,34 +376,180 @@
  	if (!gamepad_ids || index < 0 || index >= gamepad_count)
  	{
  		SDL_free(gamepad_ids);
+@@ -80,10 +114,21 @@ bool SDLController::connect()
+ 		m_buttons[i] = SDL_GamepadHasButton(m_controller, (SDL_GamepadButton)i);
+ 	for (size_t i = 0; i < SDL_GAMEPAD_AXIS_COUNT; ++i)
+ 		m_axis[i] = SDL_GamepadHasAxis(m_controller, (SDL_GamepadAxis)i);
+-	if (SDL_GamepadHasSensor(m_controller, SDL_SENSOR_ACCEL))
+-		m_has_accel = SDL_SetGamepadSensorEnabled(m_controller, SDL_SENSOR_ACCEL, true);
+-	if (SDL_GamepadHasSensor(m_controller, SDL_SENSOR_GYRO))
+-		m_has_gyro = SDL_SetGamepadSensorEnabled(m_controller, SDL_SENSOR_GYRO, true);
++#ifdef HAVE_SWITCH2KIT
++    if (!m_physical_key.empty())
++    {
++        m_has_accel = SDL_GamepadHasSensor(m_controller, SDL_SENSOR_ACCEL);
++        m_has_gyro = SDL_GamepadHasSensor(m_controller, SDL_SENSOR_GYRO);
++        motion_settings_changed();
++    }
++    else
++#endif
++    {
++        if (SDL_GamepadHasSensor(m_controller, SDL_SENSOR_ACCEL))
++            m_has_accel = SDL_SetGamepadSensorEnabled(m_controller, SDL_SENSOR_ACCEL, true);
++        if (SDL_GamepadHasSensor(m_controller, SDL_SENSOR_GYRO))
++            m_has_gyro = SDL_SetGamepadSensorEnabled(m_controller, SDL_SENSOR_GYRO, true);
++    }
+ 	m_has_rumble = SDL_RumbleGamepad(m_controller, 0, 0, 0);
+ 	return true;
+ }
+@@ -147,3 +192,67 @@ ControllerState SDLController::raw_state()
+ 
+ 	return result;
+ }
++
++#ifdef HAVE_SWITCH2KIT
++std::optional<MotionSample> SDLController::get_available_motion_sample()
++{
++    if (!use_motion()) return {};
++    std::scoped_lock lock(m_controller_mutex);
++    if (!is_connected()) return {};
++    if (m_physical_key.empty()) return get_motion_sample();
++    return SDLControllerProvider::AvailableSwitch2Motion(m_diid);
++}
++void SDLController::motion_settings_changed()
++{
++    const bool enabled = get_settings().motion;
++    std::scoped_lock lock(m_controller_mutex);
++    if (m_physical_key.empty() || !m_controller || !SDL_GamepadConnected(m_controller)) return;
++    if (!m_motion_policy) m_motion_policy = std::make_unique<Switch2Kit::CemuSensorPolicy>();
++    m_motion_policy_error = !m_motion_policy->update(m_controller, enabled && m_has_accel && m_has_gyro);
++}
++int SDLController::set_motion_profile(const std::string& path)
++{
++    if (m_physical_key.empty() || path.size() > 4096) return S2K_INVALID_ARGUMENT;
++    const int result = path.empty() ? (SDLControllerProvider::RemoveSwitch2MotionProfile(m_physical_key), S2K_OK) :
++        SDLControllerProvider::LoadSwitch2MotionProfile(path, m_physical_key);
++    std::scoped_lock lock(m_controller_mutex);
++    m_motion_profile_error = result != S2K_OK;
++    if (result == S2K_OK) m_motion_profile_path = path;
++    return result;
++}
++std::string SDLController::motion_status() const
++{
++    // Called by the settings UI; no persistent key or raw sensor data is logged.
++    {
++        std::scoped_lock lock(m_controller_mutex);
++        if (m_motion_profile_error) return "Invalid/unreadable calibration; previous selection retained";
++        if (m_motion_policy_error) return "Motion sensor enablement failed; disable and reenable Use motion";
++        if (!get_settings().motion) return "Motion disabled by Use motion setting";
++    }
++    return SDLControllerProvider::Switch2MotionStatus(m_physical_key);
++}
++void SDLController::save(pugi::xml_node& node)
++{
++    std::scoped_lock lock(m_controller_mutex);
++    if (!m_physical_key.empty())
++    {
++        node.remove_child("motion");
++        node.append_child("motion").text().set(get_settings().motion);
++    }
++    node.remove_child("switch2kit_motion_profile");
++    if (!m_physical_key.empty() && !m_motion_profile_path.empty())
++        node.append_child("switch2kit_motion_profile").text().set(m_motion_profile_path.c_str());
++}
++void SDLController::load(const pugi::xml_node& node)
++{
++    if (m_physical_key.empty()) return;
++    const auto* value = node.child("switch2kit_motion_profile").child_value();
++    const auto length = strnlen(value, 4097);
++    if (length > 4096)
++    {
++        std::scoped_lock lock(m_controller_mutex);
++        m_motion_profile_error = true;
++    }
++    else if (length) set_motion_profile(std::string(value, length));
++}
++#endif
+diff --git a/src/input/api/SDL/SDLController.h b/src/input/api/SDL/SDLController.h
+index 1a4dd8d..86d5bc0 100644
 --- a/src/input/api/SDL/SDLController.h
 +++ b/src/input/api/SDL/SDLController.h
-@@ -11,6 +11,9 @@
+@@ -5,12 +5,24 @@
+ 
+ #include <SDL3/SDL_gamepad.h>
+ 
++#ifdef HAVE_SWITCH2KIT
++namespace Switch2Kit { class CemuSensorPolicy; }
++#endif
++
+ class SDLController : public Controller<SDLControllerProvider>
+ {
+ public:
  	SDLController(const SDL_GUID& guid, size_t guid_index);
  	SDLController(const SDL_GUID& guid, size_t guid_index, std::string_view display_name);
  	
 +#ifdef HAVE_SWITCH2KIT
 +    SDLController(std::string_view physical_key, std::string_view display_name);
++    int set_motion_profile(const std::string& path);
++    std::string motion_status() const;
++    std::optional<MotionSample> get_available_motion_sample() override;
++    void save(pugi::xml_node& node) override;
++    void load(const pugi::xml_node& node) override;
 +#endif
  	~SDLController() override;
  	
  	std::string_view api_name() const override
-@@ -46,6 +49,9 @@
+@@ -23,8 +35,8 @@ public:
+ 	bool is_connected() override;
+ 	bool connect() override;
+ 	
+-	bool has_motion() override { return m_has_gyro && m_has_accel; }
+-	bool has_rumble() override { return m_has_rumble; }
++	bool has_motion() override { std::scoped_lock lock(m_controller_mutex); return m_has_gyro && m_has_accel; }
++	bool has_rumble() override { std::scoped_lock lock(m_controller_mutex); return m_has_rumble; }
+ 	
+ 	void start_rumble() override;
+ 	void stop_rumble() override;
+@@ -46,7 +58,15 @@ private:
  
  	size_t m_guid_index;
  	SDL_GUID m_guid;
+-	std::recursive_mutex m_controller_mutex;
 +#ifdef HAVE_SWITCH2KIT
++    void motion_settings_changed() override;
 +    std::string m_physical_key;
++    std::string m_motion_profile_path;
++    bool m_motion_profile_error = false;
++    bool m_motion_policy_error = false;
++    std::unique_ptr<Switch2Kit::CemuSensorPolicy> m_motion_policy;
 +#endif
- 	std::recursive_mutex m_controller_mutex;
++	mutable std::recursive_mutex m_controller_mutex;
  	SDL_Gamepad* m_controller = nullptr;
  	SDL_JoystickID m_diid = -1;
+ 
+diff --git a/src/input/api/SDL/SDLControllerProvider.cpp b/src/input/api/SDL/SDLControllerProvider.cpp
+index 3aa146a..fb5fcba 100644
 --- a/src/input/api/SDL/SDLControllerProvider.cpp
 +++ b/src/input/api/SDL/SDLControllerProvider.cpp
-@@ -5,6 +5,29 @@
+@@ -5,6 +5,71 @@
  
  #include <SDL3/SDL.h>
  #include <boost/functional/hash.hpp>
++#ifdef HAVE_SWITCH2KIT
++#include "CemuMotion.hpp"
++#endif
++struct SDLControllerProvider::MotionState
++{
++    WiiUMotionHandler handler;
++    MotionSample data;
++    MotionInfoTracking tracking;
++#ifdef HAVE_SWITCH2KIT
++    bool nativeMotion = false;
++    Switch2Kit::CemuMotion native;
++#endif
++};
++std::unordered_map<SDL_JoystickID, SDLControllerProvider::MotionState> SDLControllerProvider::s_motion_states;
++
 +#ifdef HAVE_SWITCH2KIT
 +#include "SDLHost.hpp"
 +static Switch2Kit::SDLHost& nativeControllers()
@@ -245,11 +572,38 @@
 +{
 +    return nativeControllers().instance(std::string(key));
 +}
++int SDLControllerProvider::LoadSwitch2MotionProfile(const std::string& path, const std::string& key)
++{
++    return nativeControllers().loadMotionProfile(path, key);
++}
++void SDLControllerProvider::RemoveSwitch2MotionProfile(const std::string& key)
++{
++    nativeControllers().removeMotionProfile(key);
++}
++std::string SDLControllerProvider::Switch2MotionStatus(const std::string& key)
++{
++    const auto id = nativeControllers().instance(key);
++    if (!id) return "Controller disconnected; selection retained for reconnect";
++    const auto state = Switch2Kit::SDL3Adapter::motionState(id);
++    auto status = state.status;
++    if (status == Switch2Kit::SDL3MotionStatus::Active && !AvailableSwitch2Motion(id))
++        status = Switch2Kit::SDL3MotionStatus::Waiting;
++    return Switch2Kit::SDL3Adapter::motionStatusText(status);
++}
++std::optional<MotionSample> SDLControllerProvider::AvailableSwitch2Motion(SDL_JoystickID id)
++{
++    const auto state = Switch2Kit::SDL3Adapter::motionState(id);
++    std::scoped_lock lock(s_mutex);
++    const auto it = s_motion_states.find(id);
++    if (it == s_motion_states.end() || !it->second.nativeMotion) return {};
++    it->second.native.synchronize(state);
++    return it->second.native.availableSample();
++}
 +#endif
  
  struct SDL_JoystickGUIDHash
  {
-@@ -68,6 +91,15 @@
+@@ -68,6 +133,15 @@ std::vector<std::shared_ptr<ControllerBase>> SDLControllerProvider::get_controll
  	{
  		for (size_t i = 0; i < gamepad_count; ++i)
  		{
@@ -265,12 +619,38 @@
  			const auto guid = SDL_GetGamepadGUIDForID(gamepad_ids[i]);
  			const auto it = guid_counter.try_emplace(guid, 0);
  			if (const char* name = SDL_GetGamepadNameForID(gamepad_ids[i]))
-@@ -141,12 +173,18 @@
+@@ -108,9 +182,21 @@ int SDLControllerProvider::get_index(size_t guid_index, const SDL_GUID& guid) co
+ 
+ MotionSample SDLControllerProvider::motion_sample(SDL_JoystickID diid)
+ {
+-	std::shared_lock lock(s_mutex);
+-	auto it = s_motion_states.find(diid);
+-	return (it != s_motion_states.end()) ? it->second.data : MotionSample{};
++#ifdef HAVE_SWITCH2KIT
++    // Query SDL before taking s_mutex: callbacks/enumeration use that lock order.
++    const auto native = Switch2Kit::SDL3Adapter::motionState(diid);
++    std::scoped_lock lock(s_mutex);
++    auto it = s_motion_states.find(diid);
++    if (it != s_motion_states.end() && it->second.nativeMotion)
++    {
++        it->second.native.synchronize(native); // Also resets during event-free inactivity.
++        return it->second.native.snapshot();
++    }
++#else
++    std::shared_lock lock(s_mutex);
++    auto it = s_motion_states.find(diid);
++#endif
++    return (it != s_motion_states.end()) ? it->second.data : MotionSample{};
+ }
+ 
+ void SDLControllerProvider::InitSDL()
+@@ -141,12 +227,19 @@ void SDLControllerProvider::InitSDL()
  
  void SDLControllerProvider::ShutdownSDL()
  {
 +#ifdef HAVE_SWITCH2KIT
 +    nativeControllers().shutdown();
++    { std::scoped_lock lock(s_mutex); s_motion_states.clear(); }
 +#endif
  	SDL_QuitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC);
  }
@@ -284,9 +664,44 @@
  	SDL_Event event;
  	while (SDL_PollEvent(&event))
  		HandleSDLEvent(event);
+@@ -206,10 +299,28 @@ void SDLControllerProvider::HandleSDLEvent(SDL_Event& event)
+ 		}
+ 		case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:		/**< Game controller sensor was updated */
+ 		{
+-			SDL_JoystickID id = event.gsensor.which;
+-			uint64_t ts = event.gsensor.timestamp;
+-			std::scoped_lock _l(s_mutex);
+-			auto& state = s_motion_states[id];
++            SDL_JoystickID id = event.gsensor.which;
++#ifdef HAVE_SWITCH2KIT
++            // Old queued events from a detached generation must not create state.
++            Switch2Kit::SDL3MotionState native;
++            {
++                TempState joystickLock(SDL_LockJoysticks, SDL_UnlockJoysticks);
++                auto* gamepad = SDL_GetGamepadFromID(id);
++                if (!gamepad || !SDL_GamepadConnected(gamepad)) break;
++                native = Switch2Kit::SDL3Adapter::motionStateAt(id, event.gsensor.sensor_timestamp);
++            }
++#endif
++            uint64_t ts = event.gsensor.timestamp;
++            std::scoped_lock _l(s_mutex);
++            auto& state = s_motion_states[id];
++#ifdef HAVE_SWITCH2KIT
++            if (native.owned || state.nativeMotion)
++            {
++                state.nativeMotion = true;
++                state.native.consume(native, event.gsensor);
++                break;
++            }
++#endif
+ 			auto& tracking = state.tracking;
+ 
+ 			if (event.gsensor.sensor == SDL_SENSOR_ACCEL)
+diff --git a/src/input/api/SDL/SDLControllerProvider.h b/src/input/api/SDL/SDLControllerProvider.h
+index e67eb06..8804ee8 100644
 --- a/src/input/api/SDL/SDLControllerProvider.h
 +++ b/src/input/api/SDL/SDLControllerProvider.h
-@@ -23,6 +23,11 @@
+@@ -23,6 +23,15 @@ public:
  	int get_index(size_t guid_index, const SDL_GUID& guid) const;
  
  	MotionSample motion_sample(SDL_JoystickID diid);
@@ -294,10 +709,144 @@
 +    static int FindSwitch2Controllers();
 +    static std::string Switch2ControllerStatus();
 +    static SDL_JoystickID FindSwitch2Device(std::string_view key);
++    static int LoadSwitch2MotionProfile(const std::string& path, const std::string& key);
++    static void RemoveSwitch2MotionProfile(const std::string& key);
++    static std::string Switch2MotionStatus(const std::string& key);
++    static std::optional<MotionSample> AvailableSwitch2Motion(SDL_JoystickID id);
 +#endif
  
  	// exposed for manual event handling on macOS
  #if BOOST_OS_MACOS
+@@ -56,14 +65,6 @@ private:
+ 		glm::vec3 acc{};
+ 	};
+ 
+-	struct MotionState
+-	{
+-		WiiUMotionHandler handler;
+-		MotionSample data;
+-		MotionInfoTracking tracking;
+-
+-		MotionState() = default;
+-	};
+-
+-	inline static std::unordered_map<SDL_JoystickID, MotionState> s_motion_states{};
++    struct MotionState;
++    static std::unordered_map<SDL_JoystickID, MotionState> s_motion_states;
+ };
+diff --git a/src/input/emulated/EmulatedController.cpp b/src/input/emulated/EmulatedController.cpp
+index 1e4db92..7e2cf98 100644
+--- a/src/input/emulated/EmulatedController.cpp
++++ b/src/input/emulated/EmulatedController.cpp
+@@ -110,13 +110,13 @@ bool EmulatedController::has_motion() const
+ 	return std::any_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) {return c->use_motion(); });
+ }
+ 
+-MotionSample EmulatedController::get_motion_data() const
++std::optional<MotionSample> EmulatedController::get_motion_data() const
+ {
+ 	std::shared_lock lock(m_mutex);
+ 	for (const auto& controller : m_controllers)
+ 	{
+-		if (controller->use_motion())
+-			return controller->get_motion_sample();
++        if (auto sample = controller->get_available_motion_sample())
++            return sample;
+ 	}
+ 
+ 	return {};
+@@ -147,13 +147,13 @@ bool EmulatedController::has_second_motion() const
+ 	return motion >= 2;
+ }
+ 
+-MotionSample EmulatedController::get_second_motion_data() const
++std::optional<MotionSample> EmulatedController::get_second_motion_data() const
+ {
+ 	int motion = 0;
+ 	std::shared_lock lock(m_mutex);
+ 	for (const auto& controller : m_controllers)
+ 	{
+-		if (controller->use_motion())
++		if (auto sample = controller->get_available_motion_sample())
+ 		{
+ 			// if wiimote has nunchuck connected, we use its acceleration
+             #ifdef SUPPORTS_WIIMOTE
+@@ -169,7 +169,7 @@ MotionSample EmulatedController::get_second_motion_data() const
+ 			motion++;
+ 			if(motion == 2)
+ 			{
+-				return controller->get_motion_sample();
++				return sample;
+ 			}
+ 		}
+ 	}
+diff --git a/src/input/emulated/EmulatedController.h b/src/input/emulated/EmulatedController.h
+index 41baffb..cdf428b 100644
+--- a/src/input/emulated/EmulatedController.h
++++ b/src/input/emulated/EmulatedController.h
+@@ -58,11 +58,11 @@ public:
+ 	bool is_battery_low() const;
+ 
+ 	bool has_motion() const;
+-	MotionSample get_motion_data() const;
++	std::optional<MotionSample> get_motion_data() const;
+ 
+ 	// some controllers (nunchuck) provide extra motion data
+ 	bool has_second_motion() const;
+-	MotionSample get_second_motion_data() const;
++	std::optional<MotionSample> get_second_motion_data() const;
+ 
+ 	bool has_position() const;
+ 	glm::vec2 get_position() const;
+diff --git a/src/input/emulated/VPADController.cpp b/src/input/emulated/VPADController.cpp
+index a791c5f..aeedf49 100644
+--- a/src/input/emulated/VPADController.cpp
++++ b/src/input/emulated/VPADController.cpp
+@@ -238,9 +238,9 @@ void VPADController::update_touch(VPADStatus_t& status)
+ 
+ void VPADController::update_motion(VPADStatus_t& status)
+ {
+-	if (has_motion())
+-	{
+-		auto motionSample = get_motion_data();
++    if (auto available = get_motion_data())
++    {
++        auto motionSample = *available;
+ 
+ 		glm::vec3 acc;
+ 		motionSample.getVPADAccelerometer(&acc[0]);
+diff --git a/src/input/emulated/WPADController.cpp b/src/input/emulated/WPADController.cpp
+index 2eae0f8..ff1a988 100644
+--- a/src/input/emulated/WPADController.cpp
++++ b/src/input/emulated/WPADController.cpp
+@@ -256,9 +256,9 @@ void WPADController::KPADRead(KPADStatus_t& status, const BtnRepeat& repeat)
+ 		status.mpls.dir.Z.z = 1;
+ 	}
+ 
+-	if (has_motion())
+-	{
+-		auto motion_sample = get_motion_data();
++    if (auto available = get_motion_data())
++    {
++        auto motion_sample = *available;
+ 
+ 		glm::vec3 acc;
+ 		motion_sample.getAccelerometer(&acc[0]);
+@@ -337,9 +337,9 @@ void WPADController::KPADRead(KPADStatus_t& status, const BtnRepeat& repeat)
+ 		status.ex_status.fs.stick.x = axis.x;
+ 		status.ex_status.fs.stick.y = axis.y;
+ 
+-		if(has_second_motion())
+-		{
+-			auto motion_sample = get_second_motion_data();
++        if (auto available = get_second_motion_data())
++        {
++            auto motion_sample = *available;
+ 
+ 			glm::vec3 acc;
+ 			motion_sample.getAccelerometer(&acc[0]);
+diff --git a/src/resource/MacOSXBundleInfo.plist.in b/src/resource/MacOSXBundleInfo.plist.in
+index ccd1c92..5426ebf 100644
 --- a/src/resource/MacOSXBundleInfo.plist.in
 +++ b/src/resource/MacOSXBundleInfo.plist.in
 @@ -65,5 +65,6 @@

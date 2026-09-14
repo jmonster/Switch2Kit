@@ -25,3 +25,20 @@ target_include_directories(emulator-motion-pair PRIVATE "${CMAKE_CURRENT_LIST_DI
 target_link_libraries(emulator-motion-pair PRIVATE Switch2Kit::SDL3)
 add_test(NAME emulator-motion-pair COMMAND emulator-motion-pair)
 set_tests_properties(emulator-motion-pair PROPERTIES TIMEOUT 30)
+
+# Compile actual pinned emulator motion processing when its source is supplied.
+# No rewritten sensor/fusion implementation is used by this consumer.
+if(S2K_CEMU_SOURCE)
+  if(NOT EXISTS "${S2K_CEMU_SOURCE}/src/input/motion/MotionHandler.h")
+    message(FATAL_ERROR "S2K_CEMU_SOURCE must contain the pinned Cemu source")
+  endif()
+  find_package(Boost 1.70 REQUIRED)
+  add_executable(cemu-native-motion cemu-motion.cpp)
+  target_compile_features(cemu-native-motion PRIVATE cxx_std_20)
+  target_compile_options(cemu-native-motion PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+  target_include_directories(cemu-native-motion PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../Integrations/Emulators")
+  target_include_directories(cemu-native-motion SYSTEM PRIVATE "${S2K_CEMU_SOURCE}/src" ${Boost_INCLUDE_DIRS})
+  target_link_libraries(cemu-native-motion PRIVATE Switch2Kit::SDL3 S2KSDLFixture)
+  add_test(NAME cemu-native-motion COMMAND cemu-native-motion)
+  set_tests_properties(cemu-native-motion PROPERTIES TIMEOUT 30)
+endif()
