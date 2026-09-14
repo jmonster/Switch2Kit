@@ -65,6 +65,10 @@ S2KResult convert_motion(const S2KState& raw, const S2KMotionCalibration& measur
 
 ## Emulator integration boundary
 
-This API is the conversion stage, not automatic SDL gyro support. The SDL3 adapter still does not advertise motion sensors. Enabling those requires measured per-device/model profiles, sensor registration, timestamp and gap handling, and end-to-end verification of the target emulator's frame conventions.
+The shared SDL3 adapter registers calibrated acceleration and gyro sensors only after a compatible [physical-device motion profile](motion-profiles.md) is explicitly installed. Without a valid profile, basic controls remain available and calibrated sensors are absent. The adapter uses this same Swift converter, not a second C++ calibration implementation.
+
+Use the [calibration tool](../../tools/motion-calibration/README.md) for bounded, explicit six-pose acceleration and stationary gyro-bias capture. Gyro scale and axis orientation require independent known-rate measurements or verified controller-specific configuration evidence. Export a chosen profile, then select it in the [Dolphin or Cemu integration](../../Integrations/Emulators/README.md); file persistence belongs to that host. Numeric validation and synthetic fixtures do not qualify a measured controller or physical gameplay.
+
+Both pinned emulator patches consume fresh SDL sensor pairs through their existing motion processing. Receive-clock correlation, report sequences and stream epochs reject stale or incomplete input and reset processing after discontinuities. Profile replacement deliberately reattaches the affected SDL device while preserving its physical assignment.
 
 SDL specifies acceleration in m/s² and gyro in rad/s with a defined body frame: see [SDL sensor types](https://wiki.libsdl.org/SDL3/SDL_SensorType). Never pass raw counts as those units. Host receive time is not hardware sample time; reset integration on reconnect, sequence discontinuities, missing telemetry and overflow rather than filling gaps with repeated samples. Do not fuse samples from different Joy-Con halves under one connection clock.

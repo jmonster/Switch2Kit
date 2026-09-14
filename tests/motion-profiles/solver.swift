@@ -9,12 +9,19 @@ struct SolverRegression {
     }
     static func main() throws {
         let binding = try CaptureBinding(["00112233-4455-6677-8899-aabbccddeeff", "8297", "bt-report-v1", "0xa7", "fixture"])
-        let means = [[11, -7, 1003], [11, -7, -997], [-4989, -7, 3], [5011, -7, 3], [11, -2007, 3], [11, 1993, 3]]
+        let means: [[Int]] = [[11, -7, 1003], [11, -7, -997], [-4989, -7, 3], [5011, -7, 3], [11, -2007, 3], [11, 1993, 3]]
         var windows = [[CalibrationSample]]()
         for mean in means {
-            windows.append(try (0..<128).map { i in
-                try CalibrationSample([String(i + 1), String(10 + Double(i) * 0.01), "0", "0", "1000"] + mean.map(String.init))
-            })
+            // Keep overload resolution bounded on Apple Swift as well as Linux Swift.
+            let gyroFields = mean.map { String($0) }
+            var window = [CalibrationSample]()
+            for i in 0..<128 {
+                let receivedAt = 10.0 + Double(i) * 0.01
+                var fields = [String(i + 1), String(receivedAt), "0", "0", "1000"]
+                fields.append(contentsOf: gyroFields)
+                window.append(try CalibrationSample(fields))
+            }
+            windows.append(window)
         }
         let bytes = try knownRateReference(binding: binding, windows: windows, rate: 1, evidence: "Synthetic regression only")
         let reference = try GyroReference(data: bytes)
