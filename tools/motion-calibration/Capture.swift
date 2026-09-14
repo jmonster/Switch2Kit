@@ -54,7 +54,7 @@ private final class CaptureSession {
         }
     }
     func pump() {
-        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.002, false)
+        CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0.002, false)
         Thread.sleep(forTimeInterval: 0.002) // Keep an empty run loop from becoming a busy spin.
     }
     func read() throws -> (flags: UInt32, events: [S2KEvent]) {
