@@ -178,7 +178,16 @@ int main() {
             assert(timestamp - priorReceive == expected);
             priorReceive = timestamp;
         }
-        std::puts("PASS same-batch discontinuity floor, overflow snapshot exclusion and 5000 bounded per-report sensor pairs");
+        // An event-consumer stall is independent of the engine/adapter input loop.
+        // Keep fresh reports flowing while allowing older SDL events to age out.
+        submit(0); pump(); const auto delayed = SDL3Adapter::motionState(id).timestampNS;
+        for (int i = 0; i < 12; ++i) { SDL_Delay(10); submit(0); pump(); }
+        const auto recent = SDL3Adapter::motionState(id);
+        assert(recent.status == SDL3MotionStatus::Active);
+        assert(SDL3Adapter::motionStateAt(id, delayed).status == SDL3MotionStatus::Waiting);
+        assert(SDL3Adapter::motionStateAt(id, recent.timestampNS).status == SDL3MotionStatus::Active);
+        events();
+        std::puts("PASS same-batch discontinuity floor, overflow snapshot exclusion, event-consumer stalls and 5000 bounded per-report sensor pairs");
         // Measured reference signs differ from holding orientation. Apply a proper
         // rotation exactly once to both already-independent sensor calibrations.
         auto changed = synthetic(0, models[0]); changed.holding_axes[0] = -2; changed.holding_axes[1] = 1;

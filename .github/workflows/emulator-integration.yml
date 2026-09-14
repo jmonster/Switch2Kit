@@ -29,12 +29,21 @@ jobs:
           ref: 3310f3b8b184d64a62b89fd59088c799432badf5
           path: build/Cemu-motion
           persist-credentials: false
-      - name: Install headers for the pinned Cemu motion consumer
-        run: brew install boost
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: dolphin-emu/dolphin
+          ref: c185d27ede09771fe93a3b520c576f646f937ed9
+          path: build/Dolphin-motion
+          persist-credentials: false
+      - name: Install headers and patch the actual Dolphin motion consumer
+        run: |
+          brew install boost fmt
+          python3 Integrations/Emulators/apply.py dolphin build/Dolphin-motion
       - name: Exercise application lifecycle and concurrent enumeration
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
           S2K_CEMU_SOURCE: ${{ github.workspace }}/build/Cemu-motion
+          S2K_DOLPHIN_SOURCE: ${{ github.workspace }}/build/Dolphin-motion
         run: bash tests/emulator-host/verify.sh
   native:
     runs-on: macos-15

@@ -56,6 +56,10 @@ int main() {
     assert(host.loadMotionProfile(path, identity, &unchanged) == S2K_OK);
     assert(unchanged.bytes[0] == 0 && unchanged.bytes[15] == 1);
     assert(host.loadMotionProfile(path + std::string(1, '\0') + ".ignored") == S2K_INVALID_ARGUMENT);
+    const auto injected = std::string(directory) + "/record\ninjection.s2kmotion";
+    { std::ofstream file(injected); file << text; assert(file.good()); }
+    assert(host.loadMotionProfile(injected) == S2K_INVALID_ARGUMENT);
+    assert(std::remove(injected.c_str()) == 0);
     const auto fifo = std::string(directory) + "/not a regular file";
     assert(mkfifo(fifo.c_str(), 0600) == 0);
     assert(host.loadMotionProfile(fifo) == S2K_INVALID_ARGUMENT);

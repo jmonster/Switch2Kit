@@ -3,10 +3,7 @@
 #include <array>
 #include <algorithm>
 #include <mutex>
-#include <cerrno>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include "HostFile.hpp"
 #include <map>
 #include <string>
 
@@ -99,28 +96,11 @@ public:
      * A malformed/oversized/unreadable file leaves the previous profile untouched. */
     S2KResult loadMotionProfile(const std::string& path, const std::string& expectedPhysicalKey = {},
                                 S2KID* loadedPhysical = nullptr) {
-        if (path.empty() || path.size() > 4096 || path.find('\0') != std::string::npos)
+        std::string bytes;
+        if (readHostFile(path, S2K_MOTION_PROFILE_MAX_BYTES, bytes) != HostFileResult::OK)
             return S2K_INVALID_ARGUMENT;
-        // Nonblocking open + descriptor metadata reject FIFOs/devices even through
-        // symlinks or a path replacement race. No file read occurs on the BT queue.
-        const int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-        if (fd < 0) return S2K_INVALID_ARGUMENT;
-        struct Close { int fd; ~Close() { ::close(fd); } } close{fd};
-        struct stat info{};
-        if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size <= 0 ||
-            info.st_size > S2K_MOTION_PROFILE_MAX_BYTES) return S2K_INVALID_ARGUMENT;
-        std::array<uint8_t, S2K_MOTION_PROFILE_MAX_BYTES + 1> bytes{};
-        size_t count = 0;
-        for (unsigned attempts = 0; attempts < 16; ++attempts) {
-            const auto n = ::read(fd, bytes.data() + count, bytes.size() - count);
-            if (n < 0) { if (errno == EINTR) continue; return S2K_INVALID_ARGUMENT; }
-            if (n == 0) break;
-            count += static_cast<size_t>(n);
-            if (count > S2K_MOTION_PROFILE_MAX_BYTES) return S2K_INVALID_ARGUMENT;
-        }
-        if (count != static_cast<size_t>(info.st_size)) return S2K_INVALID_ARGUMENT;
         S2KMotionProfile profile{};
-        const auto result = s2k_decode_motion_profile(bytes.data(), static_cast<uint32_t>(count), &profile, sizeof(profile));
+        const auto result = s2k_decode_motion_profile(reinterpret_cast<const uint8_t*>(bytes.data()), static_cast<uint32_t>(bytes.size()), &profile, sizeof(profile));
         if (result != S2K_OK) return result;
         if (!expectedPhysicalKey.empty() && physicalKey(profile.device) != expectedPhysicalKey)
             return S2K_INVALID_ARGUMENT;
@@ -169,13 +149,14 @@ public:
         if (!adapter_ || !adapter_->identity(instance, &id, &connection)) return S2K_NOT_READY;
         return error_ = s2k_play_feedback(context_, &id, &connection, intensity);
     }
-private:
+    /** Physical key encoding shared by host-owned persistence. Not for logging. */
     static std::string physicalKey(const S2KID& id) {
         static constexpr char hex[] = "0123456789abcdef";
         std::string result = "s2k:";
         for (const auto b : id.bytes) { result += hex[b >> 4]; result += hex[b & 15]; }
         return result;
     }
+private:
     static bool parseKey(const std::string& identity, S2KID& id) {
         if (identity.size() != 36 || identity.compare(0, 4, "s2k:") != 0) return false;
         const auto digit = [](char c) -> int {
