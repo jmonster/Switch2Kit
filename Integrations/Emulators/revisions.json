@@ -3,13 +3,41 @@
     "repository": "dolphin-emu/dolphin",
     "revision": "c185d27ede09771fe93a3b520c576f646f937ed9",
     "files": {
+      "Source/Core/Common/IniFile.cpp": {
+        "before": "2a21485e089cae8ea748332a54bba18b8af5a3c20f9c765daa7dcc09148bed79",
+        "after": "af7c128c6cb1199dd90febe370a610f0dd92292f24ff3fbd2c5dca409b9367cc"
+      },
+      "Source/Core/Common/IniFile.h": {
+        "before": "62268f92f303401f4273651f3bd0220fa32db83b29af78cfc0bec73adfea841d",
+        "after": "cd7e9cdd4203df0386d79661f622b1e57945a412f00a9f27101512f6bff57d66"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp": {
+        "before": "dbe6f4f947cc3fd6072a90b4908494201b9f738f19cb5fe4fcc07be9052c94b1",
+        "after": "eca4a7f1f487a79896c9dad7c0174c9521c3f839174d57a1695f6208c96e6fc3"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/Dynamics.h": {
+        "before": "fded5ab9109282821b99237ecb61294656f950a3b59ff5cf630c2e99a4a374b1",
+        "after": "3f64a35d18788908943f4ea2a8479766e93a5f45e5b2fd5bb5145d7e7c0eba83"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp": {
+        "before": "a0012be09d060e300cc1b3448610ebcb9d289bf0a154f042fae568f6bd1a2eb0",
+        "after": "1731e476ea134fac79cb0c598cee94f6fdedb6989bba061ff6042405d7c6d1ed"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp": {
+        "before": "b235b625ded952a73573e599e54cc6e58c940537830dcb28e0656db627c268dd",
+        "after": "224deb94ad1892a870147f3f25e9c2b2ddb09b41fe24904194ab30b58d3111ff"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.h": {
+        "before": "03c69b240256d545bd529cda98bf14b81a40c585ea13e5721c0c4b263d5e7e87",
+        "after": "73c182be6da2fc1040b7eabae9b5f280e6e21afcc6ee06c0bf7d3f10ac1a364f"
+      },
       "Source/Core/DolphinQt/CMakeLists.txt": {
         "before": "985f7079bf624890175f47f976d67f8430970dc0997a047bb7fd58486250c3b3",
         "after": "a3717638092147dbc1a9682673587380c31093f163ff58ff808f129772b1e0fb"
       },
       "Source/Core/DolphinQt/Config/ControllersPane.cpp": {
         "before": "e35e32abdf46b7bf078209fc4c54a0b2a2270999018b9585da3bbd8a19fa893a",
-        "after": "30f764dd4ae1422ce3567b872140b10ffcdb24e2d86d8a2f6c5ef151797d0bc6"
+        "after": "f4d6446e5d2401904bab21dc083cc397e706dd9c5272a3fe1de3995f51741fbc"
       },
       "Source/Core/DolphinQt/Info.plist.in": {
         "before": "466b08800117b4ed3ca020b84adbc3300f6463ea6380bb44a4e1e1823852b93a",
@@ -17,19 +45,27 @@
       },
       "Source/Core/InputCommon/CMakeLists.txt": {
         "before": "8e8da07ea6b72a30eaad0d64261d3c01804b09dff1ce562c794f8e85f16f2a64",
-        "after": "81abc2cb81a5033f2ad6d842d3b9ca13cc57a97daa0d97e89a5427d6c8bcb0cf"
+        "after": "6fb4b2514fd4ebb551007a20c4d446a343d19720b2a18a680bbf231ea007b365"
+      },
+      "Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.cpp": {
+        "before": "2e3455d16087ef9c707582fa5d2e8190f58726391ab9be776fdf9638beab5704",
+        "after": "9568b2541732846a6edab3d71b70921cd90623ec4827fbc45b428257c2a2cfbb"
+      },
+      "Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h": {
+        "before": "a41352b247b95ce9fee588eb0d387465ae7915bdbc0d36a081a444816d667e6b",
+        "after": "64828c1a1f1d2afb042ce44fc6a0a37000a7ae58f63e7ab56c749f52fb10314c"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp": {
         "before": "3a3fa5ae3b1249d21e2292d79a03c9387cf71dc39d60616983106a5866a88730",
-        "after": "fb042a761f3b0d5547084a71288c7e625b0b63369c26bdd4144363539c42db20"
+        "after": "936c3dff10415e76c22c395aa4ec08d353fdeec55c70077dd0cea9f08b761fff"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDL.h": {
         "before": "2fdfe907be5d670aba19f0a580fcc0a2b55c598b53c0bb5c82581ef0f10b40a3",
-        "after": "cc25fa0fc0632e0b45464f09d888dd34f54f951439c2652c5d417775417d04ae"
+        "after": "fa04461244a29f3976db9fef314b33e03284f3626234a42d47f798e20192540c"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp": {
         "before": "53071f46498156098beb629e28d00c2901a546c1afab532bc39350ce7b1ac76f",
-        "after": "a22196f35cf07b5de1c28716b297a5af971f6d16bb80cdca3dbda2f15eeeb31d"
+        "after": "c5761215ea8e83dddc5d629f69a217e35199f3cda139ec95ca529ca9a8cbd4e9"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h": {
         "before": "98b7141880f53a040febd2b5cb27196277f897662705d5c192396842c6b9cc11",
@@ -47,7 +83,7 @@
       },
       "src/CMakeLists.txt": {
         "before": "20c43274c1b987d5da11e895ba8138735ed90f5cacf609344f98a2a476bd834f",
-        "after": "1aa3c56267acc58b1f7c526fdf07f0d1a419a19381f3e7642b6896ce3c436b32"
+        "after": "e8fa610a26173123b82117a47ced783123486584f3c6da6e7d68471d615f70ca"
       },
       "src/gui/wxgui/input/InputAPIAddWindow.cpp": {
         "before": "c98f0656708f2b17623724dca7b6aeb04efb77dc014fcc4793fa61a159ede8d1",
@@ -57,6 +93,14 @@
         "before": "7d40ac2867b8c62d13099c7f279659feb04e0ddf0b90cf1407cfb727e971283f",
         "after": "f230951ab1691f2fd4bdf3f0b79eb871ae69c8fed958e0e849ec60015f9f604e"
       },
+      "src/gui/wxgui/input/settings/DefaultControllerSettings.cpp": {
+        "before": "f9b4bbe9e9bc107a9899dc67edb40cfc4bb5b085608807fae2351e52b6da75d1",
+        "after": "256f01ba2939ea881f497819737d7317c20b46ba45c7d107facf4772118194e1"
+      },
+      "src/gui/wxgui/input/settings/DefaultControllerSettings.h": {
+        "before": "e7db5234d0009adf8b6c0f6774bef7849ff5a4293bc899c63c0c6bb569192269",
+        "after": "2e7a62d6795672c38c405e0a16488af5ca67a0e8fa224749e8cb5999e55a77f3"
+      },
       "src/input/CMakeLists.txt": {
         "before": "c68ca5d0354f775b3caa85047b813773ea576a263334545c61bfe45c282c9d80",
         "after": "451f1019c50fa6c741ff3d0240e6bd82738db6b9b22dfd6e563cab169926cb41"
@@ -65,21 +109,45 @@
         "before": "85783154e54f407fab6292c86255db0813204420246d617c09e04ed1b9ca705c",
         "after": "dab31f397a0cfa3df295a865dfd8184e284db2d160364431f71fb342abc48d2c"
       },
+      "src/input/api/Controller.cpp": {
+        "before": "e1891d3de60e820bf9a866a3b6ce077c04679c7083f742eaa9944b1da08d3b36",
+        "after": "3a4755974965c4e7542c35bf29bd45e1b736beca82c9874a3c89bf38dbedae48"
+      },
+      "src/input/api/Controller.h": {
+        "before": "581dcce29926dae041180651c79bb9a87db89a0a1f0c795a2951c2c404c348ca",
+        "after": "fb967f49942c28e800c62321503a8525245ac9db2b4cdb68760341926ae605f7"
+      },
       "src/input/api/SDL/SDLController.cpp": {
         "before": "ce8eebc74fcf23252338d4ae4a72dfd293da32016b5328d544b243c79febb760",
-        "after": "6bd2239fb97672d61f5a41bbcf6fe4e47b037a2545956481e59f3936f4a0a1a2"
+        "after": "4719f385512ac52eb413d7087be40a927d7c8e8ed8bb87e4bb2f5ff4adbeccb9"
       },
       "src/input/api/SDL/SDLController.h": {
         "before": "6c2476fcd7fb372d5887dc66484572d80ce97fa507603e2c9d0d6c48f201b320",
-        "after": "0efa0ec6c36eea243eb0b17cfbaea1ff5e4f45b34426e3a7386e1fc47b3e45d3"
+        "after": "ff0b902a19b20bbcf782aa62d7e088ab7ba376143b3fed9b41de32385595a427"
       },
       "src/input/api/SDL/SDLControllerProvider.cpp": {
         "before": "65c299f965e976ead5c1364639e8e460275b89d6f33344fbf26452f647fcdf3f",
-        "after": "c07ce8592b94cf1baa5184a6a3a8810e49023667d7b76a097c6c47e0dcc4a7ea"
+        "after": "975e2f6a0c0d2a8f994417da6a4421f0f29a78da717cef11d3cd42f7a125efa9"
       },
       "src/input/api/SDL/SDLControllerProvider.h": {
         "before": "51bba178d1a454c66dc049c41aa3243ca4238c88db6f1c4aa4e5ea8c48f916e9",
-        "after": "af8cfa5093491cd1c599b41c67734b7804cd00ca25ed74ebff40e5663398a0d9"
+        "after": "4f4a9937a4687b041bc5e29d543088636932d842f89bb04a39ee19d029734302"
+      },
+      "src/input/emulated/EmulatedController.cpp": {
+        "before": "0f6638abb1b99dc304813b67c0c4b1f6e0ec4adb629c0f2613947eb7d45157d4",
+        "after": "c75ef1b7b41b428de4bd93014a77757d06b2bdf6160ff1a6420c36e65a31f8ed"
+      },
+      "src/input/emulated/EmulatedController.h": {
+        "before": "20d20466bd2b82c777048912c9f08193b3fe070b8be706af0d90aa00beb2fb6c",
+        "after": "3ee998ee6ebd6e907bafbd2e72760fd46a598a826a787554eb0b5424d4b92d15"
+      },
+      "src/input/emulated/VPADController.cpp": {
+        "before": "72efc4f9555b31f605bb76c74ed47edc986f9e064ef810e7e310d4480cdaa305",
+        "after": "a2860da0ca01eb802fcad0558c1d3abef135a9de089ad20ffa2c737675a97b3f"
+      },
+      "src/input/emulated/WPADController.cpp": {
+        "before": "b63345f7a3981e96cb2483e3fcd382bc52d74bd9d883d235b7f0c5f0c2f5f92f",
+        "after": "88472d42d1d5c06bf9afb63efdeb1ff6c5d8e6e075998afc2da322a67a2934cd"
       },
       "src/resource/MacOSXBundleInfo.plist.in": {
         "before": "72c342af8246b92139dcb652df402261845688401fe4c90026e1cdda935ea350",

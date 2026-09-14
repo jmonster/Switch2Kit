@@ -26,6 +26,9 @@ function(switch2kit_embed target)
     COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:Switch2Kit::C>"
       "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks/"
+    COMMAND "${CMAKE_COMMAND}"
+      "-DS2K_BUNDLE_LIBRARY=$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks/$<TARGET_FILE_NAME:Switch2Kit::C>"
+      -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/PrepareBundle.cmake"
     COMMAND xcrun swift-stdlib-tool --copy --platform macosx
       --scan-executable "$<TARGET_FILE:Switch2Kit::C>"
       --destination "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks"

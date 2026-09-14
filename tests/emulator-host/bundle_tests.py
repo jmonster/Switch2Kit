@@ -1,6 +1,8 @@
 """Configure real CMake bundle metadata; no Apple linker or Bluetooth required."""
 from pathlib import Path
 import plistlib
+import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -10,6 +12,69 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class BundleTests(unittest.TestCase):
+    def prepare_copy(self, paths, failure=None):
+        with tempfile.TemporaryDirectory(prefix='Native bundle with spaces ') as temporary:
+            root = Path(temporary)
+            original = root / 'source library.dylib'
+            original.write_bytes(b'Original source build must not change')
+            library = root / 'Host.app/Contents/Frameworks/libSwitch2KitC.dylib'
+            library.parent.mkdir(parents=True)
+            library.write_bytes(original.read_bytes())
+            tools = root / 'tools'
+            tools.mkdir()
+            log = root / 'calls.jsonl'
+            commands = ''.join('Load command %d\n          cmd LC_RPATH\n      cmdsize 128\n         path %s (offset 12)\n' %
+                               (i, path) for i, path in enumerate(paths))
+            if failure == 'malformed':
+                commands += '          cmd LC_RPATH\n      cmdsize 12\n'
+            tool = tools / 'xcrun'
+            tool.write_text('''#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ['TOOL_LOG'], 'a') as log:
+    log.write(json.dumps(sys.argv[1:]) + "\\n")
+if sys.argv[1] == "otool":
+    print(os.environ['LOAD_COMMANDS'])
+    sys.exit(1 if os.environ['TOOL_FAILURE'] == 'inspect' else 0)
+if sys.argv[1] == "install_name_tool":
+    sys.exit(1 if os.environ['TOOL_FAILURE'] == 'edit' else 0)
+sys.exit(2)
+''')
+            tool.chmod(0o755)
+            environment = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+                               TOOL_LOG=str(log), LOAD_COMMANDS=commands, TOOL_FAILURE=failure or '')
+            result = subprocess.run(['cmake', '-DS2K_BUNDLE_LIBRARY=' + str(library), '-P',
+                                     str(ROOT / 'Integrations/CMake/PrepareBundle.cmake')], env=environment,
+                                    text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            self.assertEqual(original.read_bytes(), b'Original source build must not change')
+            calls = [json.loads(line) for line in log.read_text().splitlines()]
+            self.assertEqual(calls[0], ['otool', '-l', str(library)])
+            self.assertTrue(all(call[-1] == str(library) for call in calls))
+            if failure:
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                if failure != 'edit':
+                    self.assertEqual(len(calls), 1)
+            else:
+                self.assertEqual(result.returncode, 0, result.stdout)
+            return calls[1:]
+
+    def test_only_build_machine_runtime_paths_are_removed_from_the_copy(self):
+        external = '/Applications/Xcode Test.app/Toolchains/swift-6.2/macosx'
+        paths = ['/usr/lib/swift', '@loader_path', '@executable_path/../Frameworks',
+                 '/System/Library/Frameworks', external, external, '/usr/library/not-system']
+        calls = self.prepare_copy(paths)
+        self.assertEqual([call[:3] for call in calls], [
+            ['install_name_tool', '-delete_rpath', external],
+            ['install_name_tool', '-delete_rpath', '/usr/library/not-system']])
+
+    def test_bundle_preparation_fails_closed_on_tool_or_format_errors(self):
+        for failure in ('inspect', 'edit', 'malformed'):
+            with self.subTest(failure=failure):
+                self.prepare_copy(['/build/toolchain'], failure)
+
+    def test_bundle_without_external_runtime_paths_is_unchanged(self):
+        for paths in ([], ['/usr/lib/swift', '@loader_path']):
+            self.assertEqual(self.prepare_copy(paths), [])
+
     def test_scoped_permissions_survive_bundle_generation_and_reconfigure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

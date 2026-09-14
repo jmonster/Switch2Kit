@@ -49,7 +49,12 @@ private final class SDLTestSource: ControllerSource {
                     rightStick: model == .joyCon2Left ? nil : .init(x: raw.right_x, y: raw.right_y),
                     leftTrigger: .init(isPressed: raw.left_pressed != 0, travel: model == .nsoGameCube ? raw.left_travel : nil),
                     rightTrigger: .init(isPressed: raw.right_pressed != 0, travel: model == .nsoGameCube ? raw.right_travel : nil),
-                    battery: .init(millivolts: 3900), receivedAt: raw.received_at, sequence: raw.sequence),
+                    battery: .init(millivolts: 3900),
+                    motion: raw.present & UInt32(S2K_HAS_MOTION) != 0 ? .init(
+                        accelerationRaw: .init(x: raw.accel.0, y: raw.accel.1, z: raw.accel.2),
+                        angularVelocityRaw: .init(x: raw.gyro.0, y: raw.gyro.1, z: raw.gyro.2),
+                        magneticFieldRaw: .init(x: raw.magnetometer.0, y: raw.magnetometer.1, z: raw.magnetometer.2),
+                        temperatureCelsius: raw.temperature_celsius) : nil, receivedAt: raw.received_at, sequence: raw.sequence),
                 connectedAt: Date(), bodyColor: nil, buttonColor: nil, serialNumber: nil,
                 sessionGeneration: token.id, lastActivityAt: 0)
             value.controllers[index] = c

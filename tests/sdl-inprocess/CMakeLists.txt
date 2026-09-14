@@ -52,3 +52,27 @@ target_link_libraries(sdl-inprocess PRIVATE Switch2Kit::SDL3 S2KSDLFixture)
 set_property(TARGET sdl-inprocess APPEND PROPERTY BUILD_RPATH "${SWITCH2KIT_C_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 add_test(NAME sdl-inprocess COMMAND sdl-inprocess)
 set_tests_properties(sdl-inprocess PROPERTIES TIMEOUT 45)
+
+# Compile the SAME adapter source with test-only clock symbols. Do not
+# replace SDL, the Swift facade, or the engine, and do not add a public test API.
+# The normal Switch2Kit::SDL3 target and sdl-inprocess still use production clocks.
+add_library(S2KSDLClockedAdapter STATIC "${_root}/Integrations/SDL3/Switch2KitSDL3.cpp")
+target_compile_features(S2KSDLClockedAdapter PUBLIC cxx_std_17)
+# Mirror the production target's private compile policy as well as its source.
+# In particular, the host fixture disables exceptions globally but the adapter
+# constructor still requires its existing target-local -fexceptions override.
+target_compile_options(S2KSDLClockedAdapter PRIVATE
+  "$<TARGET_PROPERTY:Switch2KitSDL3,COMPILE_OPTIONS>"
+  -include "${CMAKE_CURRENT_LIST_DIR}/Clock.hpp")
+target_compile_definitions(S2KSDLClockedAdapter PRIVATE
+  SDL_GetTicksNS=s2k_test_ticks_ns s2k_monotonic_time=s2k_test_monotonic_time
+  S2K_MOTION_CONTINUOUS_NS=s2k_test_continuous_ns)
+target_include_directories(S2KSDLClockedAdapter PUBLIC "${_root}/Integrations/SDL3")
+target_link_libraries(S2KSDLClockedAdapter PUBLIC Switch2Kit::C SDL3::SDL3)
+add_executable(sdl-motion motion.cpp Clock.cpp)
+target_compile_features(sdl-motion PRIVATE cxx_std_17)
+target_compile_options(sdl-motion PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+target_link_libraries(sdl-motion PRIVATE S2KSDLClockedAdapter S2KSDLFixture)
+set_property(TARGET sdl-motion APPEND PROPERTY BUILD_RPATH "${SWITCH2KIT_C_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
+add_test(NAME sdl-motion COMMAND sdl-motion)
+set_tests_properties(sdl-motion PROPERTIES TIMEOUT 45)

@@ -2,14 +2,48 @@
 """Inspect the built emulator's native integration, without opening Bluetooth."""
 import argparse
 import json
+import os
 from pathlib import Path
 import plistlib
+import re
 import subprocess
+import sys
 
 def dependencies(output):
     """Read only otool's indented load entries, never its filename headers."""
     return {line.strip().split(" (compatibility version", 1)[0]
             for line in output.splitlines() if line.startswith(("\t", " "))}
+
+
+def version_tuple(value):
+    assert re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", value), "Invalid macOS version"
+    parts = tuple(map(int, value.split(".")))
+    return parts + (0,) * (3 - len(parts))
+
+
+def load_metadata(output):
+    """Parse actual load-command blocks, not paths or text from file headers."""
+    versions, rpaths = [], []
+    for block in re.split(r"(?m)^Load command [0-9]+\s*$", output):
+        command = re.search(r"(?m)^\s*cmd (LC_[A-Z0-9_]+)\s*$", block)
+        if not command:
+            continue
+        kind = command[1]
+        if kind in ("LC_BUILD_VERSION", "LC_VERSION_MIN_MACOSX"):
+            if kind == "LC_BUILD_VERSION":
+                platform = re.search(r"(?m)^\s*platform (\S+)\s*$", block)
+                assert platform and platform[1].lower() in ("1", "macos"), "Not a macOS binary"
+            field = "minos" if kind == "LC_BUILD_VERSION" else "version"
+            value = re.search(r"(?m)^\s*" + field + r" ([0-9.]+)\s*$", block)
+            assert value, "Missing Mach-O deployment target"
+            version_tuple(value[1])
+            versions.append(value[1])
+        elif kind == "LC_RPATH":
+            value = re.search(r"(?m)^\s*path (.+) \(offset [0-9]+\)\s*$", block)
+            assert value, "Malformed runtime search path"
+            rpaths.append(value[1])
+    assert versions, "Missing Mach-O macOS deployment target"
+    return {"minimum_macos_versions": versions, "runtime_search_paths": sorted(set(rpaths))}
 
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -28,7 +62,10 @@ assert len(apps) == 1, f"Expected one integrated app, got {apps}"
 app = apps[0]
 plist = plistlib.loads((app / "Contents/Info.plist").read_bytes())
 assert plist.get("NSBluetoothAlwaysUsageDescription"), "Missing host Bluetooth description"
-assert float(plist.get("LSMinimumSystemVersion", "0")) >= 15, "Incorrect enabled-backend minimum"
+minimum = version_tuple(plist.get("LSMinimumSystemVersion", "0"))
+assert minimum >= (15, 0, 0), "Incorrect enabled-backend minimum"
+expected_id = "org.dolphin-emu.dolphin" if emulator == "dolphin" else "info.cemu.Cemu"
+assert plist.get("CFBundleIdentifier") == expected_id, "Changed emulator bundle identifier"
 exe = app / "Contents/MacOS" / plist["CFBundleExecutable"]
 lib = app / "Contents/Frameworks/libSwitch2KitC.dylib"
 # Resolve Mach-O inspection through the selected Xcode toolchain, not PATH.
@@ -51,16 +88,47 @@ for path in (exe, lib):
     with diag.open("a") as report:
         report.write(f"$ xcrun lipo -archs {path}\n{' '.join(architectures)}\n")
     assert architecture in architectures, f"{path.name}: missing {architecture}; found {architectures}"
-    binaries.append({"path": str(path.relative_to(app)), "architectures": architectures})
+    metadata = load_metadata(subprocess.check_output(["xcrun", "otool", "-l", str(path)], text=True))
+    assert all((15, 0, 0) <= version_tuple(v) <= minimum for v in metadata["minimum_macos_versions"]), \
+        f"{path.name}: Mach-O deployment target disagrees with the host plist"
+    if path == lib:
+        assert all(not p.startswith("/") or any(p == root or p.startswith(root + "/")
+                   for root in ("/usr/lib", "/System/Library"))
+                   for p in metadata["runtime_search_paths"]), "C facade retains a build-machine runtime path"
+    binaries.append({"path": str(path.relative_to(app)), "architectures": architectures, **metadata})
 links = subprocess.check_output(["xcrun", "otool", "-L", str(exe)], text=True)
 print(links, flush=True)
 sdk_links = {"@rpath/libSwitch2KitC.dylib", "@executable_path/../Frameworks/libSwitch2KitC.dylib"}
 assert dependencies(links) & sdk_links, "App is not linked to the bundled C facade"
 native_links = dependencies(subprocess.check_output(["xcrun", "otool", "-L", str(lib)], text=True))
 assert not any("CoreHID.framework" in link for link in native_links), "C facade links CoreHID"
+assert not any("Switch2KitApp" in link for link in native_links), "C facade links the dashboard"
+# Exercise the actual bundled facade without creating a manager or opening Bluetooth.
+# A fresh process must resolve its runtime dependencies without build-machine overrides.
+probe = """import ctypes, math, sys
+library = ctypes.CDLL(sys.argv[1])
+library.s2k_abi_version.argtypes = []
+library.s2k_abi_version.restype = ctypes.c_uint32
+assert library.s2k_abi_version() == 1
+library.s2k_monotonic_time.argtypes = []
+library.s2k_monotonic_time.restype = ctypes.c_double
+received_now = library.s2k_monotonic_time()
+assert math.isfinite(received_now) and received_now > 0
+print('PASS bundled C facade load, ABI and receive clock (no Bluetooth)')
+"""
+probe_environment = {key: value for key, value in os.environ.items()
+                     if not key.startswith('DYLD_') and key != 'LD_LIBRARY_PATH'}
+result = subprocess.run([sys.executable, '-I', '-c', probe, str(lib)], env=probe_environment,
+                        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+with diag.open('a') as report:
+    report.write('Bundled C facade load probe (no Bluetooth):\n' + result.stdout + '\n')
+result.check_returncode()
+print(result.stdout, end='', flush=True)
 subprocess.run(["plutil", "-lint", str(app / "Contents/Info.plist")], check=True)
 commands = json.loads((build / "compile_commands.json").read_text())
-required = ("SDL.cpp", "SDLGamepad.cpp", "ControllersPane.cpp") if emulator == "dolphin" else ("SDLControllerProvider.cpp", "SDLController.cpp", "ControllerFactory.cpp", "InputAPIAddWindow.cpp")
+required = ("SDL.cpp", "SDLGamepad.cpp", "ControllersPane.cpp", "Dynamics.cpp", "WiimoteEmu.cpp") if emulator == "dolphin" else (
+    "SDLControllerProvider.cpp", "SDLController.cpp", "ControllerFactory.cpp", "InputAPIAddWindow.cpp",
+    "DefaultControllerSettings.cpp", "VPADController.cpp", "WPADController.cpp")
 for filename in required:
     assert any(Path(row["file"]).name == filename and "HAVE_SWITCH2KIT" in row["command"] for row in commands), f"Missing enabled integration: {filename}"
 subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(build / "integration-app.zip")], check=True)
@@ -72,6 +140,7 @@ subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app)
     "bundle_identifier": plist.get("CFBundleIdentifier"),
     "minimum_system_version": plist["LSMinimumSystemVersion"],
     "bluetooth_description_present": bool(plist["NSBluetoothAlwaysUsageDescription"]),
+    "bundled_sdk_load_checked": True,
     "executable_dependencies": sorted(dependencies(links)),
     "sdk_dependencies": sorted(native_links),
 }, indent=2) + "\n")
