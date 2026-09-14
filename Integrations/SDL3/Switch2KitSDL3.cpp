@@ -19,6 +19,48 @@ Key key(const S2KID& id) { Key k{}; std::copy_n(id.bytes, 16, k.begin()); return
 bool equal(const S2KID& a, const S2KID& b) { return std::memcmp(a.bytes, b.bytes, 16) == 0; }
 constexpr Uint64 staleNS = 500000000;
 constexpr Uint64 refreshNS = 200000000;
+constexpr Uint64 motionGapNS = 100000000; // Admission bound, not a claimed sensor rate.
+constexpr const char* motionOwner = "Switch2Kit.motion.owner";
+constexpr const char* motionStatus = "Switch2Kit.motion.status";
+constexpr const char* motionEpoch = "Switch2Kit.motion.epoch";
+constexpr const char* motionFloor = "Switch2Kit.motion.valid-since-ns";
+constexpr const char* motionTime = "Switch2Kit.motion.receive-ns";
+constexpr const char* motionSequence = "Switch2Kit.motion.sequence";
+void invalidateProperties(SDL_PropertiesID properties, SDL3MotionStatus status) {
+    const auto previous = SDL_GetNumberProperty(properties, motionEpoch, 0);
+    SDL_SetNumberProperty(properties, motionEpoch, previous == SDL_MAX_SINT64 ? 1 : previous + 1);
+    SDL_SetNumberProperty(properties, motionStatus, static_cast<Sint64>(status));
+    SDL_SetNumberProperty(properties, motionFloor, 0);
+    SDL_SetNumberProperty(properties, motionTime, 0);
+    SDL_SetNumberProperty(properties, motionSequence, 0);
+}
+// Correlate clocks after reading the input batch. Do not cast uptime (or Unix time)
+// to SDL nanoseconds. Only a bounded recent receive-time delta is converted. A
+// slow bracket is unusable, and sleep/wake clock disagreement breaks continuity.
+// The lower bracket is conservative: a receive timestamp cannot become future
+// delivery time due to midpoint estimation. A segment advances from one seed
+// using bounded receive deltas, so repeated correlations do not add clock jitter.
+struct ClockPair {
+    double receive{};
+    Uint64 ticks{};
+    bool valid{};
+    static ClockPair sample() {
+        const auto before = SDL_GetTicksNS();
+        const auto receive = s2k_monotonic_time();
+        const auto after = SDL_GetTicksNS();
+        return {receive, before,
+                std::isfinite(receive) && receive >= 0 && after >= before && after - before <= 1000000};
+    }
+    bool map(double received, Uint64& result) const {
+        if (!valid || !std::isfinite(received) || received < 0 || received > receive) return false;
+        const double age = (receive - received) * 1e9;
+        if (!std::isfinite(age) || age > static_cast<double>(motionGapNS)) return false;
+        const auto delta = static_cast<Uint64>(age);
+        if (delta >= ticks || ticks > static_cast<Uint64>(SDL_MAX_SINT64)) return false;
+        result = ticks - delta;
+        return true;
+    }
+};
 Sint16 axis(double value) {
     if (!std::isfinite(value)) return 0;
     value = std::clamp(value, -1.0, 1.0);
@@ -52,6 +94,9 @@ struct Control {
     Uint64 heartbeat{}, renewed{};
     Uint16 strong{}, weak{};
     S2KResult error = S2K_OK;
+    // These fields are accessed only under SDL's joystick lock, never on Bluetooth.
+    SDL_PropertiesID motionProperties{};
+    Uint64 sensorRevision{};
 };
 using SharedControl = std::shared_ptr<Control>;
 static bool SDLCALL rumble(void* data, Uint16 strong, Uint16 weak) {
@@ -64,6 +109,18 @@ static bool SDLCALL rumble(void* data, Uint16 strong, Uint16 weak) {
     c.error = s2k_set_rumble(c.context, &c.id, &c.connection, strong / 65535.0, weak / 65535.0);
     if (c.error != S2K_OK) return false;
     c.strong = strong; c.weak = weak; c.renewed = SDL_GetTicksNS();
+    return true;
+}
+static bool SDLCALL sensors(void* data, bool enabled) {
+    auto& c = **static_cast<SharedControl*>(data);
+    std::lock_guard<std::mutex> lock(c.mutex);
+    if (!c.context) return false;
+    ++c.sensorRevision;
+    if (c.motionProperties)
+        invalidateProperties(c.motionProperties, enabled ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
+    // The C context uses the compatibility sensor setup, recorded by the profile.
+    // This callback gates delivery, not a second protocol/configuration backend.
+    // SDL calls it for the aggregate first-enable/last-disable, not for each type.
     return true;
 }
 static void SDLCALL player(void* data, int number) {
@@ -90,9 +147,20 @@ struct SDL3Adapter::Impl {
         bool armed = true;
         uint64_t lastSequence{};
         uint32_t capabilities{};
+        S2KMotionCalibration calibration{};
+        bool hasProfile = false;
+        unsigned sensorMask{};
+        Uint64 sensorRevision{}, previousTime{}, previousSequence{}, lastArrival{};
+        double previousReceive{}, highReceive{};
+        uint64_t highSequence{};
+        bool seeded = false;
+
     };
     S2KContext* context;
     std::map<Key, Device> devices;
+    std::map<Key, S2KMotionProfile> profiles;
+    std::map<Key, bool> replacements; // At most one pending replacement per retained device.
+    ClockPair previousClock{};
     S2KSnapshot snapshot{};
     S2KResult error = S2K_OK;
     bool wasActive = true;
@@ -111,6 +179,7 @@ struct SDL3Adapter::Impl {
     }
     void remove(std::map<Key, Device>::iterator it) {
         auto& d = it->second;
+        invalidate(d, SDL3MotionStatus::Waiting);
         stopEffect(d, false, SDL_GetTicksNS());
         { std::lock_guard<std::mutex> lock(d.control->mutex); d.control->context = nullptr; }
         SDL_CloseJoystick(d.joystick);
@@ -133,6 +202,16 @@ struct SDL3Adapter::Impl {
         d.control->context = context; d.control->id = c.id; d.control->connection = c.connection_id;
         d.control->heartbeat = now; d.control->active = active;
         SDL_VirtualJoystickDesc desc{}; SDL_INIT_INTERFACE(&desc);
+        const auto selected = profiles.find(key(c.id));
+        if (selected != profiles.end()) {
+            const auto result = s2k_motion_profile_calibration(&selected->second, &c, &d.calibration, sizeof(d.calibration));
+            d.hasProfile = result == S2K_OK;
+            if (!d.hasProfile) error = result;
+        }
+        const SDL_VirtualJoystickSensorDesc sensorDescriptions[] = {{SDL_SENSOR_ACCEL, 0}, {SDL_SENSOR_GYRO, 0}};
+        if (d.hasProfile) {
+            desc.nsensors = 2; desc.sensors = sensorDescriptions; desc.SetSensorsEnabled = sensors;
+        }
         desc.type = SDL_JOYSTICK_TYPE_GAMEPAD; desc.vendor_id = 0x057e;
         desc.product_id = static_cast<Uint16>(c.model); desc.name = name(c.model);
         std::array<uint32_t, SDL_GAMEPAD_BUTTON_COUNT> bits{};
@@ -145,7 +224,7 @@ struct SDL3Adapter::Impl {
         bits[SDL_GAMEPAD_BUTTON_GUIDE] = S2K_BUTTON_HOME;
         bits[SDL_GAMEPAD_BUTTON_START] = S2K_BUTTON_PLUS;
         if (c.capabilities & S2K_CAP_LEFT_STICK) bits[SDL_GAMEPAD_BUTTON_LEFT_STICK] = S2K_BUTTON_L_STICK;
-        if (c.capabilities & S2K_CAP_RIGHT_STICK) bits[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = S2K_BUTTON_R_STICK;
+        if (c.capabilities & S2K_CAP_RIGHT_STICK) bits[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = S2K_BUTTON_RIGHT_STICK;
         bits[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER] = S2K_BUTTON_L;
         bits[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = S2K_BUTTON_R;
         bits[SDL_GAMEPAD_BUTTON_DPAD_UP] = S2K_BUTTON_UP;
@@ -187,9 +266,87 @@ struct SDL3Adapter::Impl {
         }
         d.joystick = SDL_OpenJoystick(d.instance);
         if (!d.joystick) { SDL_DetachVirtualJoystick(d.instance); error = S2K_INTERNAL_ERROR; return nullptr; }
+        d.control->motionProperties = SDL_GetJoystickProperties(d.joystick);
+        SDL_SetBooleanProperty(d.control->motionProperties, motionOwner, true);
+        invalidate(d, d.hasProfile ? SDL3MotionStatus::Disabled : selected == profiles.end() ?
+                   SDL3MotionStatus::UnavailableProfile : SDL3MotionStatus::InvalidCalibration);
         auto [added, inserted] = devices.emplace(key(c.id), std::move(d));
         (void)inserted;
         return &added->second;
+    }
+    void invalidate(Device& d, SDL3MotionStatus status) {
+        d.seeded = false; d.previousTime = d.previousSequence = d.lastArrival = 0;
+        d.previousReceive = 0;
+        if (d.control->motionProperties) invalidateProperties(d.control->motionProperties, status);
+    }
+    unsigned enabledSensors(const Device& d) const {
+        auto* gamepad = SDL_GetGamepadFromID(d.instance); // Borrowed; no extra open/enable.
+        return !d.hasProfile || !gamepad ? 0 :
+            (SDL_GamepadSensorEnabled(gamepad, SDL_SENSOR_ACCEL) ? 1u : 0u) |
+            (SDL_GamepadSensorEnabled(gamepad, SDL_SENSOR_GYRO) ? 2u : 0u);
+    }
+    void refreshSensors(Device& d, bool active, Uint64 now) {
+        if (!d.hasProfile) return;
+        const auto mask = enabledSensors(d);
+        if (mask != d.sensorMask || d.sensorRevision != d.control->sensorRevision) {
+            d.sensorMask = mask; d.sensorRevision = d.control->sensorRevision;
+            invalidate(d, mask ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
+        } else if ((!active && d.seeded) || (d.lastArrival && (now < d.lastArrival || now - d.lastArrival > motionGapNS))) {
+            invalidate(d, mask ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
+        }
+    }
+    void motion(Device& d, const S2KState& s, bool active, const ClockPair& clock) {
+        refreshSensors(d, active, clock.ticks);
+        if (!d.hasProfile || !d.sensorMask || !active) return;
+        const auto fail = [&] { invalidate(d, SDL3MotionStatus::Waiting); };
+        Uint64 timestamp{};
+        if (!s.sequence || s.sequence <= d.highSequence || !std::isfinite(s.received_at) || s.received_at <= d.highReceive) { fail(); return; }
+        d.highSequence = s.sequence;
+        // Do not poison the receive high-water with a future or non-monotonic clock.
+        if (clock.map(s.received_at, timestamp)) d.highReceive = s.received_at;
+        if (!(s.present & S2K_HAS_MOTION) || !s.sequence || !clock.map(s.received_at, timestamp)) { fail(); return; }
+        // The known raw format is signed-16-bit. Rail hits are unusable; absence or
+        // clipping is not a stationary zero. Neither raw values nor identifiers log.
+        for (const auto value : {s.accel[0], s.accel[1], s.accel[2], s.gyro[0], s.gyro[1], s.gyro[2]})
+            if (value == -32768 || value == 32767) { fail(); return; }
+        if (d.seeded) {
+            // Advance from the segment's existing correlation. Re-correlating each
+            // fast report can move a timestamp backwards merely due to call jitter.
+            const double elapsed = (s.received_at - d.previousReceive) * 1e9;
+            if (s.sequence - d.previousSequence != 1 || elapsed > motionGapNS) fail();
+            else {
+                const auto delta = static_cast<Uint64>(std::llround(elapsed));
+                if (!delta || d.previousTime > static_cast<Uint64>(SDL_MAX_SINT64) - delta) { fail(); return; }
+                const auto stable = d.previousTime + delta;
+                const auto disagreement = stable > timestamp ? stable - timestamp : timestamp - stable;
+                if (disagreement > 5000000) fail();
+                else timestamp = stable;
+            }
+        }
+        S2KCalibratedMotion sample{};
+        if (s2k_convert_motion(&s, &d.calibration, &sample, sizeof(sample)) != S2K_OK) { fail(); return; }
+        const float acceleration[] = {static_cast<float>(sample.acceleration[0]), static_cast<float>(sample.acceleration[1]), static_cast<float>(sample.acceleration[2])};
+        const float gyro[] = {static_cast<float>(sample.angular_velocity[0]), static_cast<float>(sample.angular_velocity[1]), static_cast<float>(sample.angular_velocity[2])};
+        for (const auto value : {acceleration[0], acceleration[1], acceleration[2], gyro[0], gyro[1], gyro[2]})
+            if (!std::isfinite(value)) { fail(); return; }
+        d.previousSequence = s.sequence; d.previousReceive = s.received_at;
+        d.previousTime = timestamp; d.lastArrival = clock.ticks;
+        if (!d.seeded) {
+            d.seeded = true;
+            SDL_SetNumberProperty(d.control->motionProperties, motionFloor, static_cast<Sint64>(timestamp));
+            return; // First report establishes a receive-time baseline; never integrate across a gap.
+        }
+        bool sent = true;
+        if (d.sensorMask & 1) sent = SDL_SendJoystickVirtualSensorData(d.joystick, SDL_SENSOR_ACCEL, timestamp, acceleration, 3);
+        if (sent && (d.sensorMask & 2)) sent = SDL_SendJoystickVirtualSensorData(d.joystick, SDL_SENSOR_GYRO, timestamp, gyro, 3);
+        if (!sent) { fail(); error = S2K_INTERNAL_ERROR; }
+        else {
+            SDL_SetNumberProperty(d.control->motionProperties, motionTime, static_cast<Sint64>(timestamp));
+            SDL_SetNumberProperty(d.control->motionProperties, motionSequence, static_cast<Sint64>(std::min(s.sequence, static_cast<uint64_t>(SDL_MAX_SINT64))));
+            SDL_SetNumberProperty(d.control->motionProperties, motionStatus, static_cast<Sint64>(SDL3MotionStatus::Active));
+        }
+        // The caller's per-report input flush also commits at most these two sensor
+        // entries. No unbounded SDL virtual-sensor staging accumulates across reports.
     }
     void apply(Device& d, const S2KState& state, bool active) {
         if (!d.armed && neutral(state)) d.armed = true;
@@ -214,7 +371,13 @@ struct SDL3Adapter::Impl {
         }
         for (uint32_t i = 0; i < snapshot.count; ++i) {
             const auto& c = snapshot.controllers[i];
-            if (auto* d = ensure(c, active, now)) apply(*d, c.state, active);
+            if (auto* d = ensure(c, active, now)) {
+                if (d->hasProfile) invalidate(*d, enabledSensors(*d) ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
+                d->highSequence = std::max(d->highSequence, c.state.sequence);
+                if (std::isfinite(c.state.received_at) && c.state.received_at <= s2k_monotonic_time())
+                    d->highReceive = std::max(d->highReceive, c.state.received_at);
+                apply(*d, c.state, active); // State reconciliation is never a fresh motion sample.
+            }
         }
     }
     S2KResult pump(bool active) {
@@ -227,7 +390,11 @@ struct SDL3Adapter::Impl {
         const bool stalled = lastPump && now - lastPump > staleNS;
         for (auto& [id, d] : devices) {
             (void)id;
-            if (stalled || active != wasActive) stopEffect(d, active, now);
+            if (stalled || active != wasActive) {
+                stopEffect(d, active, now);
+                if (d.hasProfile) invalidate(d, enabledSensors(d) ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
+            }
+            refreshSensors(d, active, now);
             { std::lock_guard<std::mutex> guard(d.control->mutex); d.control->heartbeat = now; d.control->active = active; }
             if (!active || active != wasActive) { d.armed = false; apply(d, S2KState{}, false); d.armed = false; }
         }
@@ -239,11 +406,41 @@ struct SDL3Adapter::Impl {
         const auto result = s2k_read(context, events.data(), events.size(), sizeof(S2KEvent), &count,
                                      &snapshot, sizeof(snapshot), &flags);
         if (result != S2K_OK) { clear(); return error = result; }
+        const auto clock = ClockPair::sample();
+        bool clockGap = !clock.valid;
+        if (previousClock.valid && clock.valid) {
+            const double hostDelta = clock.receive - previousClock.receive;
+            const double sdlDelta = clock.ticks >= previousClock.ticks ? (clock.ticks - previousClock.ticks) / 1e9 : -1;
+            clockGap = hostDelta < 0 || sdlDelta < 0 || std::abs(hostDelta - sdlDelta) > 0.005;
+        }
+        previousClock = clock;
+        if (clockGap) for (auto& [id, d] : devices) {
+            (void)id;
+            if (d.hasProfile) invalidate(d, enabledSensors(d) ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
+        }
+        for (const auto& [id, unused] : replacements) {
+            (void)unused;
+            const auto found = devices.find(id); if (found != devices.end()) remove(found);
+        }
+        if (!replacements.empty()) {
+            for (uint32_t i = 0; i < snapshot.count; ++i) {
+                const auto& c = snapshot.controllers[i];
+                if (replacements.count(key(c.id))) if (auto* d = ensure(c, active, now)) {
+                    d->highSequence = c.state.sequence;
+                    if (std::isfinite(c.state.received_at) && c.state.received_at <= clock.receive) d->highReceive = c.state.received_at;
+                    apply(*d, c.state, active);
+                }
+            }
+            replacements.clear();
+        }
         if (flags & S2K_READ_RESYNC) reconcile(active, now);
         else for (uint32_t i = 0; i < count; ++i) {
             const auto& event = events[i];
             if (event.kind == S2K_EVENT_CONNECTED || event.kind == S2K_EVENT_INPUT) {
-                if (auto* d = ensure(event.controller, active, now)) apply(*d, event.controller.state, active);
+                if (auto* d = ensure(event.controller, active, now)) {
+                    if (event.kind == S2K_EVENT_INPUT && !clockGap) motion(*d, event.controller.state, active, clock);
+                    apply(*d, event.controller.state, active);
+                }
             } else if (event.kind == S2K_EVENT_DISCONNECTED) {
                 auto it = devices.find(key(event.controller.id)); if (it != devices.end()) remove(it);
             } else if (event.kind == S2K_EVENT_ERROR) error = event.detail;
@@ -285,4 +482,59 @@ bool SDL3Adapter::identity(SDL_JoystickID instance, S2KID* physical, S2KID* conn
 SDL_JoystickID SDL3Adapter::instance(const S2KID& physical) const {
     auto it = impl->devices.find(key(physical)); return it == impl->devices.end() ? 0 : it->second.instance;
 }
+S2KResult SDL3Adapter::installMotionProfile(const S2KMotionProfile& profile) {
+    JoystickLock lock;
+    if (impl->pumping) return S2K_BUSY;
+    S2KMotionCalibration calibration{};
+    const auto result = s2k_motion_profile_calibration(&profile, nullptr, &calibration, sizeof(calibration));
+    if (result != S2K_OK) return result;
+    const auto id = key(profile.device);
+    for (uint32_t i = 0; i < impl->snapshot.count; ++i) {
+        const auto& controller = impl->snapshot.controllers[i];
+        if (key(controller.id) == id) {
+            const auto compatible = s2k_motion_profile_calibration(&profile, &controller, &calibration, sizeof(calibration));
+            if (compatible != S2K_OK) return compatible;
+        }
+    }
+    const auto old = impl->profiles.find(id);
+    if (old != impl->profiles.end() && std::memcmp(&old->second, &profile, sizeof(profile)) == 0) return S2K_OK;
+    if (old == impl->profiles.end() && impl->profiles.size() >= S2K_MAX_CONTROLLERS) return S2K_QUEUE_FULL;
+    impl->profiles[id] = profile;
+    if (impl->devices.count(id)) impl->replacements[id] = true;
+    return S2K_OK;
+}
+void SDL3Adapter::removeMotionProfile(const S2KID& physical) {
+    JoystickLock lock;
+    const auto id = key(physical);
+    if (impl->profiles.erase(id) && impl->devices.count(id)) impl->replacements[id] = true;
+}
+SDL3MotionState SDL3Adapter::motionState(SDL_JoystickID instance) {
+    JoystickLock lock;
+    SDL3MotionState state{};
+    auto* joystick = SDL_GetJoystickFromID(instance);
+    if (!joystick) return state;
+    const auto properties = SDL_GetJoystickProperties(joystick);
+    state.owned = SDL_GetBooleanProperty(properties, motionOwner, false);
+    if (!state.owned) return state;
+    state.status = static_cast<SDL3MotionStatus>(SDL_GetNumberProperty(properties, motionStatus, 0));
+    state.epoch = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionEpoch, 0));
+    state.validSinceNS = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionFloor, 0));
+    state.timestampNS = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionTime, 0));
+    state.sequence = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionSequence, 0));
+    const auto now = SDL_GetTicksNS();
+    if (state.status == SDL3MotionStatus::Active && (!state.timestampNS || now < state.timestampNS || now - state.timestampNS > motionGapNS))
+        state.status = SDL3MotionStatus::Waiting;
+    return state;
+}
+const char* SDL3Adapter::motionStatusText(SDL3MotionStatus status) {
+    switch (status) {
+    case SDL3MotionStatus::UnavailableProfile: return "Motion unavailable: choose a measured device profile";
+    case SDL3MotionStatus::Disabled: return "Motion sensor disabled";
+    case SDL3MotionStatus::Waiting: return "Waiting for usable motion samples";
+    case SDL3MotionStatus::Active: return "Calibrated motion active (host receive timing)";
+    case SDL3MotionStatus::InvalidCalibration: return "Invalid or incompatible motion calibration";
+    }
+    return "Motion unavailable";
+}
+
 }
