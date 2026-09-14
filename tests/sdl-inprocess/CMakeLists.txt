@@ -58,7 +58,11 @@ set_tests_properties(sdl-inprocess PROPERTIES TIMEOUT 45)
 # The normal Switch2Kit::SDL3 target and sdl-inprocess still use production clocks.
 add_library(S2KSDLClockedAdapter STATIC "${_root}/Integrations/SDL3/Switch2KitSDL3.cpp")
 target_compile_features(S2KSDLClockedAdapter PUBLIC cxx_std_17)
-target_compile_options(S2KSDLClockedAdapter PRIVATE -Wall -Wextra -Werror)
+# Mirror the production target's private compile policy as well as its source.
+# In particular, the host fixture disables exceptions globally but the adapter
+# constructor still requires its existing target-local -fexceptions override.
+target_compile_options(S2KSDLClockedAdapter PRIVATE
+  "$<TARGET_PROPERTY:Switch2KitSDL3,COMPILE_OPTIONS>")
 target_compile_definitions(S2KSDLClockedAdapter PRIVATE
   SDL_GetTicksNS=s2k_test_ticks_ns s2k_monotonic_time=s2k_test_monotonic_time)
 target_include_directories(S2KSDLClockedAdapter PUBLIC "${_root}/Integrations/SDL3")
