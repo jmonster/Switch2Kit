@@ -1,7 +1,10 @@
 #pragma once
 #include <Switch2KitSDL3.hpp>
 #include <array>
+#include <algorithm>
 #include <mutex>
+#include <fstream>
+#include <map>
 #include <string>
 
 namespace Switch2Kit {
@@ -37,7 +40,13 @@ public:
         Guard lock(mutex_);
         if (!context_) return S2K_OK;
         if (!(SDL_WasInit(SDL_INIT_GAMEPAD) & SDL_INIT_GAMEPAD)) return S2K_OK;
-        if (!adapter_) adapter_ = std::make_unique<SDL3Adapter>(context_);
+        if (!adapter_) {
+            adapter_ = std::make_unique<SDL3Adapter>(context_);
+            for (const auto& [id, profile] : profiles_) {
+                (void)id;
+                if ((error_ = adapter_->installMotionProfile(profile)) != S2K_OK) return error_;
+            }
+        }
         return error_ = adapter_->pump(active);
     }
     /** Retire native sessions and detach only this host's virtual SDL devices.
@@ -92,6 +101,53 @@ public:
         }
         return adapter_->instance(id);
     }
+    /** Explicit user-selected file import. Read at most 4097 bytes outside the SDL
+     * and host locks; no default directory, background watcher or library preference
+     * store exists. The file chooses a physical device, never a player/SDL ordinal.
+     * Hosts may persist the chosen path in their OWN settings and explicitly reload.
+     * A malformed/oversized/unreadable file leaves the previous profile untouched. */
+    S2KResult loadMotionProfile(const std::string& path) {
+        std::ifstream stream(path, std::ios::binary);
+        if (!stream) return S2K_INVALID_ARGUMENT;
+        std::array<uint8_t, S2K_MOTION_PROFILE_MAX_BYTES + 1> bytes{};
+        stream.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
+        if (stream.bad()) return S2K_INVALID_ARGUMENT;
+        const auto count = stream.gcount();
+        if (count <= 0 || count > S2K_MOTION_PROFILE_MAX_BYTES) return S2K_INVALID_ARGUMENT;
+        S2KMotionProfile profile{};
+        const auto result = s2k_decode_motion_profile(bytes.data(), static_cast<uint32_t>(count), &profile, sizeof(profile));
+        return result == S2K_OK ? installMotionProfile(profile) : result;
+    }
+    /** Host-owned bounded in-memory selection, also usable without a filesystem. */
+    S2KResult installMotionProfile(const S2KMotionProfile& profile) {
+        S2KMotionCalibration checked{};
+        if (const auto result = s2k_motion_profile_calibration(&profile, nullptr, &checked, sizeof(checked)); result != S2K_OK)
+            return result;
+        Guard lock(mutex_);
+        std::array<uint8_t, 16> id{}; std::copy_n(profile.device.bytes, 16, id.begin());
+        if (!profiles_.count(id) && profiles_.size() >= S2K_MAX_CONTROLLERS) return S2K_QUEUE_FULL;
+        if (adapter_) if (const auto result = adapter_->installMotionProfile(profile); result != S2K_OK) return result;
+        profiles_[id] = profile;
+        return S2K_OK;
+    }
+    /** Explicit removal. Controller input/assignment remains available; sensor
+     * topology changes on the next pump. No caller-owned file is deleted. */
+    void removeMotionProfile(const S2KID& physical) {
+        Guard lock(mutex_);
+        std::array<uint8_t, 16> id{}; std::copy_n(physical.bytes, 16, id.begin());
+        profiles_.erase(id);
+        if (adapter_) adapter_->removeMotionProfile(physical);
+    }
+    void clearMotionProfiles() {
+        Guard lock(mutex_);
+        if (adapter_) for (const auto& [id, profile] : profiles_) { (void)id; adapter_->removeMotionProfile(profile.device); }
+        profiles_.clear();
+    }
+    /** Status from the actual SDL device, not a presentation snapshot. */
+    SDL3MotionState motionState(const S2KID& physical) {
+        Guard lock(mutex_);
+        return adapter_ ? SDL3Adapter::motionState(adapter_->instance(physical)) : SDL3MotionState{};
+    }
     /** Explicit feedback action, separate from SDL's cancellable game effects. */
     S2KResult feedback(SDL_JoystickID instance, double intensity = 0.5) {
         Guard lock(mutex_);
@@ -111,5 +167,6 @@ private:
     S2KContext* context_{};
     std::unique_ptr<SDL3Adapter> adapter_;
     S2KResult error_ = S2K_OK;
+    std::map<std::array<uint8_t, 16>, S2KMotionProfile> profiles_;
 };
 }
