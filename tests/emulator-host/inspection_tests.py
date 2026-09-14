@@ -98,6 +98,16 @@ class InspectionTests(unittest.TestCase):
                 return ''
 
             def run(arguments, **kwargs):
+                if arguments[0] == sys.executable:
+                    calls.append(arguments)
+                    self.assertEqual(arguments[1:3], ['-I', '-c'])
+                    self.assertIn('ctypes.CDLL', arguments[3])
+                    self.assertEqual(arguments[-1], str(lib))
+                    self.assertEqual(kwargs['timeout'], 30)
+                    self.assertFalse(any(key.startswith('DYLD_') or key == 'LD_LIBRARY_PATH'
+                                         for key in kwargs['env']))
+                    return subprocess.CompletedProcess(arguments, 1 if defect == 'sdk-load' else 0,
+                                                       'Facade load probe')
                 return subprocess.CompletedProcess(arguments, 0, output(arguments))
 
             if symlink:
@@ -116,7 +126,7 @@ class InspectionTests(unittest.TestCase):
                     patch('subprocess.check_output', side_effect=lambda arguments, **kw: output(arguments)), \
                     contextlib.redirect_stdout(io.StringIO()):
                 if defect:
-                    expected = subprocess.CalledProcessError if defect == 'tool-failure' else AssertionError
+                    expected = subprocess.CalledProcessError if defect in ('tool-failure', 'sdk-load') else AssertionError
                     with self.assertRaises(expected):
                         runpy.run_path(str(script), run_name='__main__')
                     self.assertFalse(any(command[0] == 'ditto' for command in calls))
@@ -129,6 +139,7 @@ class InspectionTests(unittest.TestCase):
                     report = json.loads((build / 'integration-inspection.json').read_text())
                     self.assertEqual(report['native_architecture'], architecture)
                     self.assertEqual(len(report['binaries']), 2)
+                    self.assertTrue(report['bundled_sdk_load_checked'])
                     for binary in report['binaries']:
                         self.assertEqual(binary['architectures'], ['arm64', 'x86_64'])
                         self.assertEqual(binary['minimum_macos_versions'], ['15.0'])
@@ -183,6 +194,11 @@ class InspectionTests(unittest.TestCase):
         for defect in ('build-rpath', 'malformed-rpath'):
             with self.subTest(defect=defect):
                 self.inspect('cemu', defect)
+
+    def test_load_failure_does_not_package_an_app(self):
+        for emulator in ('dolphin', 'cemu'):
+            with self.subTest(emulator=emulator):
+                self.inspect(emulator, 'sdk-load')
 
     def test_inspection_failure_does_not_package_an_app(self):
         self.inspect('dolphin', 'tool-failure')

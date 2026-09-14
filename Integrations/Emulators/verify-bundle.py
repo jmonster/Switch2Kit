@@ -2,10 +2,12 @@
 """Inspect the built emulator's native integration, without opening Bluetooth."""
 import argparse
 import json
+import os
 from pathlib import Path
 import plistlib
 import re
 import subprocess
+import sys
 
 def dependencies(output):
     """Read only otool's indented load entries, never its filename headers."""
@@ -101,6 +103,27 @@ assert dependencies(links) & sdk_links, "App is not linked to the bundled C faca
 native_links = dependencies(subprocess.check_output(["xcrun", "otool", "-L", str(lib)], text=True))
 assert not any("CoreHID.framework" in link for link in native_links), "C facade links CoreHID"
 assert not any("Switch2KitApp" in link for link in native_links), "C facade links the dashboard"
+# Exercise the actual bundled facade without creating a manager or opening Bluetooth.
+# A fresh process must resolve its runtime dependencies without build-machine overrides.
+probe = """import ctypes, math, sys
+library = ctypes.CDLL(sys.argv[1])
+library.s2k_abi_version.argtypes = []
+library.s2k_abi_version.restype = ctypes.c_uint32
+assert library.s2k_abi_version() == 1
+library.s2k_monotonic_time.argtypes = []
+library.s2k_monotonic_time.restype = ctypes.c_double
+received_now = library.s2k_monotonic_time()
+assert math.isfinite(received_now) and received_now > 0
+print('PASS bundled C facade load, ABI and receive clock (no Bluetooth)')
+"""
+probe_environment = {key: value for key, value in os.environ.items()
+                     if not key.startswith('DYLD_') and key != 'LD_LIBRARY_PATH'}
+result = subprocess.run([sys.executable, '-I', '-c', probe, str(lib)], env=probe_environment,
+                        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+with diag.open('a') as report:
+    report.write('Bundled C facade load probe (no Bluetooth):\n' + result.stdout + '\n')
+result.check_returncode()
+print(result.stdout, end='', flush=True)
 subprocess.run(["plutil", "-lint", str(app / "Contents/Info.plist")], check=True)
 commands = json.loads((build / "compile_commands.json").read_text())
 required = ("SDL.cpp", "SDLGamepad.cpp", "ControllersPane.cpp", "Dynamics.cpp", "WiimoteEmu.cpp") if emulator == "dolphin" else (
@@ -117,6 +140,7 @@ subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app)
     "bundle_identifier": plist.get("CFBundleIdentifier"),
     "minimum_system_version": plist["LSMinimumSystemVersion"],
     "bluetooth_description_present": bool(plist["NSBluetoothAlwaysUsageDescription"]),
+    "bundled_sdk_load_checked": True,
     "executable_dependencies": sorted(dependencies(links)),
     "sdk_dependencies": sorted(native_links),
 }, indent=2) + "\n")
