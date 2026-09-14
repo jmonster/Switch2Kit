@@ -37,7 +37,19 @@ jobs:
           name: sdl-inprocess-source
           path: ${{ runner.temp }}/sdl-source.zip
           retention-days: 3
-      - name: Exercise the Swift engine, C ABI and real SDL3 together
+      - name: Verify native consumers across checkout names from outside the repository
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
-        run: bash tests/sdl-inprocess/verify.sh
+        run: |
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          for name in Switch2Kit unrelated-sdk 'Native SDK-checkout'; do
+            checkout="$work/$name"
+            mkdir "$checkout"
+            git archive HEAD | tar -x -C "$checkout"
+            (
+              cd "$work"
+              bash "$checkout/tests/c-consumer/run.sh"
+              bash "$checkout/tests/sdl-inprocess/verify.sh"
+            )
+          done
