@@ -1,6 +1,324 @@
+diff --git a/Source/Core/Common/IniFile.cpp b/Source/Core/Common/IniFile.cpp
+index 6e6749c..e4852eb 100644
+--- a/Source/Core/Common/IniFile.cpp
++++ b/Source/Core/Common/IniFile.cpp
+@@ -238,13 +238,15 @@ void IniFile::SortSections()
+ 
+ bool IniFile::Load(const std::string& filename, bool keep_current_data)
+ {
+-  if (!keep_current_data)
+-    sections.clear();
+-  // first section consists of the comments before the first real section
+-
+-  // Open file
+   std::ifstream in;
+   File::OpenFStream(in, filename, std::ios::in);
++  return Load(in, keep_current_data);
++}
++
++bool IniFile::Load(std::istream& in, bool keep_current_data)
++{
++  if (!keep_current_data)
++    sections.clear();
+ 
+   if (in.fail())
+     return false;
+@@ -312,7 +314,6 @@ bool IniFile::Load(const std::string& filename, bool keep_current_data)
+     }
+   }
+ 
+-  in.close();
+   return true;
+ }
+ 
+diff --git a/Source/Core/Common/IniFile.h b/Source/Core/Common/IniFile.h
+index 1811751..c6045f1 100644
+--- a/Source/Core/Common/IniFile.h
++++ b/Source/Core/Common/IniFile.h
+@@ -4,6 +4,7 @@
+ #pragma once
+ 
+ #include <list>
++#include <istream>
+ #include <map>
+ #include <string>
+ #include <string_view>
+@@ -91,6 +92,9 @@ public:
+    */
+   bool Load(const std::string& filename, bool keep_current_data = false);
+ 
++  // Allows a host to validate and bound an external settings file before parsing it.
++  bool Load(std::istream& input, bool keep_current_data = false);
++
+   bool Save(const std::string& filename);
+ 
+   bool Exists(std::string_view section_name) const;
+diff --git a/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp b/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp
+index ebf24f7..8929b55 100644
+--- a/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp
++++ b/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp
+@@ -9,6 +9,9 @@
+ 
+ #include "Common/MathUtil.h"
+ #include "Core/Config/SYSCONFSettings.h"
++#ifdef HAVE_SWITCH2KIT
++#include "Core/HW/Wiimote.h"
++#endif
+ #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
+ #include "InputCommon/ControllerEmu/ControlGroup/Cursor.h"
+ #include "InputCommon/ControllerEmu/ControlGroup/Force.h"
+@@ -316,23 +319,32 @@ void EmulateIMUCursor(IMUCursorState* state, ControllerEmu::IMUCursor* imu_ir_gr
+     return;
+   }
+ 
+-  // Apply rotation from gyro data.
+-  const auto gyro_rotation = GetRotationFromGyroscope(*ang_vel * -1 * time_elapsed);
++  EmulateIMUCursorSample(state, *ang_vel,
++                         imu_accelerometer_group->GetState().value_or(Common::Vec3{}), time_elapsed,
++                         imu_ir_group->GetAccelWeight(), float(imu_ir_group->GetTotalYaw()),
++                         imu_ir_group->controls[0]->GetState<bool>());
++}
++
++void EmulateIMUCursorSample(IMUCursorState* state, const Common::Vec3& angular_velocity,
++                            const Common::Vec3& accel, float time_elapsed, float accel_weight,
++                            float total_yaw, bool recenter)
++{
++  // The host admits only fresh, paired samples and resets on discontinuities.
++  // This is the same Dolphin filter used by ordinary IMU bindings, not another fusion backend.
++  const auto gyro_rotation = GetRotationFromGyroscope(angular_velocity * -1 * time_elapsed);
+   state->rotation = gyro_rotation * state->rotation;
+ 
+   // If we have some non-zero accel data use it to adjust gyro drift.
+-  const auto accel_weight = imu_ir_group->GetAccelWeight();
+-  auto const accel = imu_accelerometer_group->GetState().value_or(Common::Vec3{});
+   if (accel.LengthSquared())
+     state->rotation = ComplementaryFilter(state->rotation, accel, accel_weight);
+ 
+   // Clamp yaw within configured bounds.
+   const auto yaw = GetYaw(state->rotation);
+-  const auto max_yaw = float(imu_ir_group->GetTotalYaw() / 2);
++  const auto max_yaw = total_yaw / 2;
+   auto target_yaw = std::clamp(yaw, -max_yaw, max_yaw);
+ 
+   // Handle the "Recenter" button being pressed.
+-  if (imu_ir_group->controls[0]->GetState<bool>())
++  if (recenter)
+   {
+     state->recentered_pitch = GetPitch(state->rotation);
+     target_yaw = 0;
+@@ -346,6 +358,29 @@ void EmulateIMUCursor(IMUCursorState* state, ControllerEmu::IMUCursor* imu_ir_gr
+   state->rotation = state->rotation.Normalized();
+ }
+ 
++#ifdef HAVE_SWITCH2KIT
++Common::Vec3 Switch2MotionFrame(const std::array<float, 3>& value)
++{
++  // This is the same SDL-to-Dolphin frame used by the existing IMU groups.
++  return {-value[0], value[2], value[1]};
++}
++
++void EmulateSwitch2Motion(IMUCursorState* state, const Switch2Kit::DolphinMotionStream::Batch& batch,
++                          float accel_weight, float total_yaw, bool recenter)
++{
++  if (batch.reset) *state = {};
++  for (size_t i = 0; i < batch.count; ++i)
++  {
++    const auto& sample = batch.samples[i];
++    const auto dt = static_cast<float>(sample.deltaSeconds);
++    // Preserve the existing configured correction per unit time, not per radio report.
++    const auto weight = 1.f - std::pow(1.f - accel_weight, dt * ::Wiimote::UPDATE_FREQ);
++    EmulateIMUCursorSample(state, Switch2MotionFrame(sample.angularVelocity),
++                          Switch2MotionFrame(sample.acceleration), dt, weight, total_yaw, recenter);
++  }
++}
++#endif
++
+ void ApproachPositionWithJerk(PositionalState* state, const Common::Vec3& position_target,
+                               const Common::Vec3& max_jerk, float time_elapsed)
+ {
+diff --git a/Source/Core/Core/HW/WiimoteEmu/Dynamics.h b/Source/Core/Core/HW/WiimoteEmu/Dynamics.h
+index 8f35c30..c88fcc0 100644
+--- a/Source/Core/Core/HW/WiimoteEmu/Dynamics.h
++++ b/Source/Core/Core/HW/WiimoteEmu/Dynamics.h
+@@ -2,6 +2,9 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #pragma once
++#ifdef HAVE_SWITCH2KIT
++#include "DolphinMotion.hpp"
++#endif
+ 
+ #include "Common/MathUtil.h"
+ #include "Common/Matrix.h"
+@@ -84,6 +87,17 @@ void EmulateIMUCursor(IMUCursorState* state, ControllerEmu::IMUCursor* imu_ir_gr
+                       ControllerEmu::IMUAccelerometer* imu_accelerometer_group,
+                       ControllerEmu::IMUGyroscope* imu_gyroscope_group, float time_elapsed);
+ 
++// Fresh paired input into the existing cursor filter. The caller owns timing and continuity.
++void EmulateIMUCursorSample(IMUCursorState* state, const Common::Vec3& angular_velocity,
++                            const Common::Vec3& acceleration, float time_elapsed, float accel_weight,
++                            float total_yaw, bool recenter);
++
++#ifdef HAVE_SWITCH2KIT
++Common::Vec3 Switch2MotionFrame(const std::array<float, 3>& value);
++void EmulateSwitch2Motion(IMUCursorState* state, const Switch2Kit::DolphinMotionStream::Batch& batch,
++                          float accel_weight, float total_yaw, bool recenter);
++#endif
++
+ // Convert m/s/s acceleration data to the format used by Wiimote/Nunchuk (10-bit unsigned integers).
+ WiimoteCommon::AccelData ConvertAccelData(const Common::Vec3& accel, u16 zero_g, u16 one_g);
+ 
+diff --git a/Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp b/Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp
+index 22fbe7d..bc08d40 100644
+--- a/Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp
++++ b/Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp
+@@ -577,6 +577,15 @@ void Wiimote::DoState(PointerWrap& p)
+ 
+   // We'll consider the IMU state part of the user's physical controller state and not sync it.
+   // (m_imu_cursor_state)
++#ifdef HAVE_SWITCH2KIT
++  if (p.IsReadMode())
++  {
++    m_native_motion.reset();
++    m_native_sample.reset();
++    m_native_motion_enabled = false;
++    m_imu_cursor_state = {};
++  }
++#endif
+ 
+   p.DoMarker("Wiimote");
+ }
+diff --git a/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp b/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp
+index bbbea66..85f96cf 100644
+--- a/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp
++++ b/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp
+@@ -46,6 +46,9 @@
+ #include "InputCommon/ControllerEmu/ControlGroup/IMUAccelerometer.h"
+ #include "InputCommon/ControllerEmu/ControlGroup/IMUCursor.h"
+ #include "InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h"
++#ifdef HAVE_SWITCH2KIT
++#include "InputCommon/ControllerInterface/SDL/SDL.h"
++#endif
+ #include "InputCommon/ControllerEmu/ControlGroup/IRPassthrough.h"
+ #include "InputCommon/ControllerEmu/ControlGroup/ModifySettingsButton.h"
+ #include "InputCommon/ControllerEmu/ControlGroup/Tilt.h"
+@@ -201,6 +204,11 @@ void Wiimote::Reset()
+   m_shake_state = {};
+ 
+   m_imu_cursor_state = {};
++#ifdef HAVE_SWITCH2KIT
++  m_native_motion.reset();
++  m_native_sample.reset();
++  m_native_motion_enabled = false;
++#endif
+ }
+ 
+ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(index)
+@@ -838,8 +846,35 @@ void Wiimote::StepDynamics()
+   EmulateTilt(&m_tilt_state, m_tilt, 1.f / ::Wiimote::UPDATE_FREQ);
+   EmulatePoint(&m_point_state, m_ir, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
+   EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ);
++#ifdef HAVE_SWITCH2KIT
++  const bool native = m_imu_gyroscope->UsesSwitch2KitMotion();
++  if (native)
++  {
++    const auto batch = ciface::SDL::ReadSwitch2Motion(
++        GetDefaultDevice(), m_native_motion, ControlReference::GetInputGate());
++    if (!m_native_motion_enabled || batch.reset || !m_imu_ir->enabled.GetValue())
++      m_imu_cursor_state = {};
++    m_native_sample = batch.latest;
++    if (m_imu_ir->enabled.GetValue())
++    {
++      EmulateSwitch2Motion(&m_imu_cursor_state, batch, m_imu_ir->GetAccelWeight(),
++                           float(m_imu_ir->GetTotalYaw()), m_imu_ir->controls[0]->GetState<bool>());
++    }
++  }
++  else
++  {
++    if (m_native_motion_enabled)
++      m_imu_cursor_state = {};
++    m_native_motion.reset();
++    m_native_sample.reset();
++    EmulateIMUCursor(&m_imu_cursor_state, m_imu_ir, m_imu_accelerometer, m_imu_gyroscope,
++                    1.f / ::Wiimote::UPDATE_FREQ);
++  }
++  m_native_motion_enabled = native;
++#else
+   EmulateIMUCursor(&m_imu_cursor_state, m_imu_ir, m_imu_accelerometer, m_imu_gyroscope,
+                    1.f / ::Wiimote::UPDATE_FREQ);
++#endif
+ }
+ 
+ Common::Vec3 Wiimote::GetAcceleration(Common::Vec3 extra_acceleration) const
+@@ -948,7 +983,18 @@ Wiimote::OverrideVec3(const ControllerEmu::ControlGroup* control_group, Common::
+ Common::Vec3 Wiimote::GetTotalAcceleration() const
+ {
+   const Common::Vec3 default_accel = Common::Vec3(0, 0, float(GRAVITY_ACCELERATION));
+-  const Common::Vec3 accel = m_imu_accelerometer->GetState().value_or(default_accel);
++  Common::Vec3 accel;
++#ifdef HAVE_SWITCH2KIT
++  if (m_native_motion_enabled)
++  {
++    // Packet state is cached, but the cursor above is integrated only for NEW reports.
++    // With no physical data, retain Dolphin's existing emulated gravity, not a fake SDL sample.
++    const auto& a = m_native_sample;
++    accel = a ? Switch2MotionFrame(a->acceleration) : default_accel;
++  }
++  else
++#endif
++    accel = m_imu_accelerometer->GetState().value_or(default_accel);
+ 
+   return OverrideVec3(m_imu_accelerometer, GetAcceleration(accel));
+ }
+@@ -956,7 +1002,16 @@ Common::Vec3 Wiimote::GetTotalAngularVelocity() const
+ Common::Vec3 Wiimote::GetTotalAngularVelocity() const
+ {
+   const Common::Vec3 default_ang_vel = {};
+-  const Common::Vec3 ang_vel = m_imu_gyroscope->GetState().value_or(default_ang_vel);
++  Common::Vec3 ang_vel;
++#ifdef HAVE_SWITCH2KIT
++  if (m_native_motion_enabled)
++  {
++    const auto& g = m_native_sample;
++    ang_vel = g ? Switch2MotionFrame(g->angularVelocity) : default_ang_vel;
++  }
++  else
++#endif
++    ang_vel = m_imu_gyroscope->GetState().value_or(default_ang_vel);
+ 
+   return OverrideVec3(m_imu_gyroscope, GetAngularVelocity(ang_vel));
+ }
+diff --git a/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.h b/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.h
+index 1e07e2a..e6f0499 100644
+--- a/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.h
++++ b/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.h
+@@ -7,6 +7,9 @@
+ #include <numeric>
+ #include <optional>
+ #include <string>
++#ifdef HAVE_SWITCH2KIT
++#include "DolphinMotion.hpp"
++#endif
+ 
+ #include "Common/Common.h"
+ #include "Common/Config/Config.h"
+@@ -348,6 +351,11 @@ private:
+   PositionalState m_shake_state;
+ 
+   IMUCursorState m_imu_cursor_state;
++#ifdef HAVE_SWITCH2KIT
++  Switch2Kit::DolphinMotionReader m_native_motion;
++  std::optional<Switch2Kit::DolphinMotionStream::Sample> m_native_sample;
++  bool m_native_motion_enabled = false;
++#endif
+ 
+   Config::ConfigChangedCallbackID m_config_changed_callback_id;
+ };
+diff --git a/Source/Core/DolphinQt/CMakeLists.txt b/Source/Core/DolphinQt/CMakeLists.txt
+index 1228885..86b1423 100644
 --- a/Source/Core/DolphinQt/CMakeLists.txt
 +++ b/Source/Core/DolphinQt/CMakeLists.txt
-@@ -689,6 +689,11 @@
+@@ -689,6 +689,11 @@ if(APPLE)
      endif()
    endif()
  
@@ -12,14 +330,19 @@
    if(POSTPROCESS_BUNDLE)
      # Update library references to make the bundle portable
      include(DolphinPostprocessBundle)
+diff --git a/Source/Core/DolphinQt/Config/ControllersPane.cpp b/Source/Core/DolphinQt/Config/ControllersPane.cpp
+index 32134a2..ab1a71a 100644
 --- a/Source/Core/DolphinQt/Config/ControllersPane.cpp
 +++ b/Source/Core/DolphinQt/Config/ControllersPane.cpp
-@@ -4,6 +4,12 @@
+@@ -4,6 +4,15 @@
  #include "DolphinQt/Config/ControllersPane.h"
  
  #include <QVBoxLayout>
 +#ifdef HAVE_SWITCH2KIT
 +#include <QLabel>
++#include <QFileDialog>
++#include <QInputDialog>
++#include <QMessageBox>
 +#include <QPushButton>
 +#include <QTimer>
 +#include "InputCommon/ControllerInterface/SDL/SDL.h"
@@ -27,7 +350,7 @@
  
  #include "DolphinQt/Config/CommonControllersWidget.h"
  #include "DolphinQt/Config/GamecubeControllersWidget.h"
-@@ -25,5 +31,22 @@
+@@ -25,5 +34,54 @@ void ControllersPane::CreateMainLayout()
    layout->addWidget(gamecube_controllers);
    layout->addWidget(m_wiimote_controllers);
    layout->addWidget(common);
@@ -42,6 +365,38 @@
 +    status->setText(result == 0 ? tr("Hold Sync, then select the SDL controller in Configure.") :
 +                                 tr("Controller discovery could not start (%1).").arg(result));
 +  });
++  auto* choose_profile = new QPushButton(tr("Choose Switch2Kit motion profile..."), this);
++  auto* remove_profile = new QPushButton(tr("Remove Switch2Kit motion profile..."), this);
++  auto* motion_help = new QLabel(tr("Select the physical SDL device in the emulated Wii Remote's "
++                                   "Configure window, then enable Calibrated Switch2Kit motion "
++                                   "under Motion Input / Gyroscope. Separate IMU axis bindings are "
++                                   "not used in that mode."), this);
++  motion_help->setWordWrap(true);
++  layout->addWidget(choose_profile);
++  layout->addWidget(remove_profile);
++  layout->addWidget(motion_help);
++  connect(choose_profile, &QPushButton::clicked, this, [this] {
++    const auto path = QFileDialog::getOpenFileName(this, tr("Choose measured device calibration"), {},
++                                                   tr("Switch2Kit profile (*.s2kmotion);;All files (*)"));
++    if (path.isEmpty()) return;
++    const auto error = ciface::SDL::SelectSwitch2MotionProfile(path.toUtf8().toStdString());
++    if (!error.empty()) QMessageBox::warning(this, tr("Motion calibration"), QString::fromStdString(error));
++  });
++  connect(remove_profile, &QPushButton::clicked, this, [this] {
++    const auto profiles = ciface::SDL::Switch2MotionProfiles();
++    QStringList choices;
++    for (const auto& [key, path] : profiles)
++      choices.push_back(QString::fromStdString(path + " [" + key + "]"));
++    if (choices.empty()) return;
++    bool selected = false;
++    const auto choice = QInputDialog::getItem(this, tr("Remove motion profile"),
++        tr("Remove calibration only; keep physical input assignment:"), choices, 0, false, &selected);
++    if (!selected) return;
++    const auto index = choices.indexOf(choice);
++    if (index < 0) return;
++    const auto error = ciface::SDL::RemoveSwitch2MotionProfile(profiles[static_cast<size_t>(index)].first);
++    if (!error.empty()) QMessageBox::warning(this, tr("Motion calibration"), QString::fromStdString(error));
++  });
 +  auto* timer = new QTimer(this);
 +  connect(timer, &QTimer::timeout, this, [status] {
 +    status->setText(QString::fromStdString(ciface::SDL::Switch2ControllerStatus()));
@@ -50,6 +405,8 @@
 +#endif
    layout->addStretch(1);
  }
+diff --git a/Source/Core/DolphinQt/Info.plist.in b/Source/Core/DolphinQt/Info.plist.in
+index 034d472..12887f0 100644
 --- a/Source/Core/DolphinQt/Info.plist.in
 +++ b/Source/Core/DolphinQt/Info.plist.in
 @@ -52,5 +52,6 @@
@@ -59,9 +416,11 @@
 +    ${SWITCH2KIT_BLUETOOTH_USAGE}
  </dict>
  </plist>
+diff --git a/Source/Core/InputCommon/CMakeLists.txt b/Source/Core/InputCommon/CMakeLists.txt
+index 5cc6b66..e57ac36 100644
 --- a/Source/Core/InputCommon/CMakeLists.txt
 +++ b/Source/Core/InputCommon/CMakeLists.txt
-@@ -197,3 +197,18 @@
+@@ -197,3 +197,18 @@ if(TARGET Hidapi::Hidapi)
    target_link_libraries(inputcommon PUBLIC Hidapi::Hidapi)
    target_compile_definitions(inputcommon PRIVATE -DHAVE_HIDAPI=1)
  endif()
@@ -77,25 +436,73 @@
 +  endif()
 +  add_subdirectory("${SWITCH2KIT_SOURCE_DIR}/Integrations/SDL3" "${CMAKE_BINARY_DIR}/switch2kit")
 +  target_link_libraries(inputcommon PUBLIC Switch2Kit::SDL3)
-+  target_include_directories(inputcommon PRIVATE "${SWITCH2KIT_SOURCE_DIR}/Integrations/Emulators")
++  target_include_directories(inputcommon PUBLIC "${SWITCH2KIT_SOURCE_DIR}/Integrations/Emulators")
 +  target_compile_definitions(inputcommon PUBLIC HAVE_SWITCH2KIT)
 +endif()
+diff --git a/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.cpp b/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.cpp
+index 316ed45..5ec0ad7 100644
+--- a/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.cpp
++++ b/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.cpp
+@@ -32,6 +32,14 @@ IMUGyroscope::IMUGyroscope(std::string name_, std::string ui_name_)
+   AddInput(Translatability::Translate, _trans("Yaw Left"));
+   AddInput(Translatability::Translate, _trans("Yaw Right"));
+ 
++#ifdef HAVE_SWITCH2KIT
++  AddSetting(&m_switch2kit_setting,
++             {_trans("Calibrated Switch2Kit motion"), nullptr,
++              _trans("Use fresh paired motion from the default Switch2Kit SDL device. "
++                     "Choose its measured profile in Controller Settings first. "
++                     "Replaces separate IMU bindings and automatic gyro calibration for this device.")},
++             false);
++#endif
+   AddSetting(&m_deadzone_setting,
+              {_trans("Dead Zone"),
+               // i18n: "°/s" is the symbol for degrees (angular measurement) divided by seconds.
+diff --git a/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h b/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h
+index 505ff93..44cb740 100644
+--- a/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h
++++ b/Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h
+@@ -29,6 +29,9 @@ public:
+   ControlState GetDeadzone() const;
+ 
+   bool IsCalibrating() const;
++#ifdef HAVE_SWITCH2KIT
++  bool UsesSwitch2KitMotion() const { return m_switch2kit_setting.GetValue(); }
++#endif
+ 
+ private:
+   using Clock = std::chrono::steady_clock;
+@@ -38,6 +41,9 @@ private:
+   void RestartCalibration();
+   void UpdateCalibration(const StateData&);
+ 
++#ifdef HAVE_SWITCH2KIT
++  SettingValue<bool> m_switch2kit_setting;
++#endif
+   SettingValue<double> m_deadzone_setting;
+   SettingValue<double> m_calibration_period_setting;
+ 
+diff --git a/Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp b/Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp
+index 5aeb9e0..fb991e3 100644
 --- a/Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp
 +++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp
-@@ -6,6 +6,12 @@
- #include <span>
+@@ -7,6 +7,15 @@
  #include <thread>
  #include <vector>
-+
+ 
 +#ifdef HAVE_SWITCH2KIT
 +#include "SDLHost.hpp"
 +#include "Common/FileUtil.h"
 +#include "Common/IniFile.h"
++#include <atomic>
++#include <sstream>
++#include <map>
 +#endif
- 
++
  #ifdef _WIN32
  #include <windows.h>
-@@ -27,6 +33,56 @@
+ #endif
+@@ -27,6 +36,190 @@
  
  namespace ciface::SDL
  {
@@ -106,9 +513,121 @@
 +  return host;
 +}
 +
++static std::mutex s_native_settings_mutex;
++static std::map<std::string, std::string> s_native_profile_paths;
++static std::atomic<bool> s_native_profile_error{false};
++static std::string NativeConfigPath()
++{
++  return File::GetUserPath(D_CONFIG_IDX) + "Switch2Kit.ini";
++}
++static bool LoadNativeConfig(Common::IniFile& ini)
++{
++  std::string bytes;
++  const auto result = Switch2Kit::readHostFile(NativeConfigPath(), 524288, bytes);
++  if (result == Switch2Kit::HostFileResult::Missing)
++    return true;
++  if (result != Switch2Kit::HostFileResult::OK)
++    return false;
++  std::istringstream stream(bytes);
++  return ini.Load(stream);
++}
++
++static bool SaveNativeConfig(Common::IniFile& ini)
++{
++  // IniFile strips one pair of surrounding quotes when loading. Quote each path
++  // on EVERY write, including physical-assignment writes, to preserve spaces/quotes.
++  if (auto* section = ini.GetSection("MotionProfiles"))
++  {
++    const auto values = section->GetValues();
++    for (const auto& [key, path] : values) section->Set(key, "\"" + path + "\"");
++  }
++  return ini.Save(NativeConfigPath());
++}
++
 +int FindSwitch2Controllers()
 +{
++  s_native_profile_error = false;
++  std::map<std::string, std::string> selected;
++  {
++    const std::lock_guard lock(s_native_settings_mutex);
++    Common::IniFile ini;
++    if (!LoadNativeConfig(ini))
++      s_native_profile_error = true;
++    else if (const auto* section = ini.GetSection("MotionProfiles"))
++    {
++      const auto& values = section->GetValues();
++      if (values.size() > 64)
++        s_native_profile_error = true;
++      else
++      {
++        for (const auto& [key, path] : values)
++        {
++          if (key.size() != 36 || key.substr(0, 4) != "s2k:" || path.size() > 4096)
++          {
++            s_native_profile_error = true;
++            continue;
++          }
++          selected.emplace(key, path);
++        }
++        s_native_profile_paths = selected;
++      }
++    }
++  }
++  // User action on the main thread. No file I/O occurs on Bluetooth or under SDL's lock.
++  for (const auto& [key, path] : selected)
++    if (NativeControllers().loadMotionProfile(path, key) != S2K_OK)
++      s_native_profile_error = true;
 +  return NativeControllers().discover();
++}
++
++std::string SelectSwitch2MotionProfile(const std::string& path)
++{
++  S2KID physical{};
++  const auto result = NativeControllers().loadMotionProfile(path, {}, &physical);
++  if (result != S2K_OK)
++  {
++    s_native_profile_error = true;
++    return "Invalid, unreadable or incompatible calibration. Previous selection retained.";
++  }
++  const auto key = Switch2Kit::SDLHost::physicalKey(physical);
++  const std::lock_guard lock(s_native_settings_mutex);
++  if (s_native_profile_paths.size() >= 64 && !s_native_profile_paths.contains(key))
++    return "Profile loaded for this session; remove an old saved profile before saving another.";
++  s_native_profile_paths[key] = path;
++  Common::IniFile ini;
++  if (!LoadNativeConfig(ini))
++    return "Profile loaded for this session, but settings are invalid and were not overwritten.";
++  auto* profiles = ini.GetOrCreateSection("MotionProfiles");
++  if (profiles->GetValues().size() >= 64 && !profiles->Exists(key))
++    return "Profile loaded for this session; remove an old saved profile before saving another.";
++  profiles->Set(key, path);
++  if (!SaveNativeConfig(ini))
++    return "Profile loaded for this session, but saving the selected path failed.";
++  s_native_profile_error = false;
++  return {};
++}
++
++std::vector<std::pair<std::string, std::string>> Switch2MotionProfiles()
++{
++  const std::lock_guard lock(s_native_settings_mutex);
++  return {s_native_profile_paths.begin(), s_native_profile_paths.end()};
++}
++
++std::string RemoveSwitch2MotionProfile(const std::string& key)
++{
++  {
++    const std::lock_guard lock(s_native_settings_mutex);
++    Common::IniFile ini;
++    if (!LoadNativeConfig(ini))
++      return "Settings are invalid and were not overwritten; profile remains selected.";
++    ini.DeleteKey("MotionProfiles", key);
++    if (!SaveNativeConfig(ini))
++      return "Saving profile removal failed; profile remains selected.";
++    s_native_profile_paths.erase(key);
++  }
++  NativeControllers().removeMotionProfile(key);
++  s_native_profile_error = false;
++  return {};
 +}
 +
 +std::string Switch2ControllerStatus()
@@ -118,8 +637,32 @@
 +  if (state.bluetooth == S2K_BT_UNAUTHORIZED) return "Allow Dolphin Bluetooth access in System Settings.";
 +  if (state.bluetooth == S2K_BT_OFF) return "Turn on Bluetooth in System Settings.";
 +  if (state.bluetooth == S2K_BT_UNSUPPORTED) return "Bluetooth is unavailable on this Mac.";
-+  return std::to_string(state.count) + " connected; " +
++  std::string result = std::to_string(state.count) + " connected; " +
 +    (state.discovery == S2K_DISCOVERY_SCANNING ? "searching" : "discovery idle");
++  std::array<unsigned, 5> counts{};
++  for (uint32_t i = 0; i < state.count; ++i)
++  {
++    const auto motion = NativeControllers().motionState(state.controllers[i].id);
++    const auto index = static_cast<size_t>(motion.status);
++    if (index < counts.size()) ++counts[index];
++  }
++  if (s_native_profile_error)
++    result += "\nInvalid/unreadable calibration: choose a valid measured profile.";
++  for (size_t i = 0; i < counts.size(); ++i)
++    if (counts[i]) result += "\n" + std::to_string(counts[i]) + ": " +
++        Switch2Kit::SDL3Adapter::motionStatusText(static_cast<Switch2Kit::SDL3MotionStatus>(i));
++  return result;
++}
++
++Switch2Kit::DolphinMotionReader::Batch ReadSwitch2Motion(
++    const Core::DeviceQualifier& qualifier, Switch2Kit::DolphinMotionReader& reader, bool enabled)
++{
++  // FindDevice releases the interface mutex before we enter SDL's joystick lock.
++  // Keep the device alive while acquiring a request on its existing SDL object.
++  const auto device = enabled ? g_controller_interface.FindDevice(qualifier) : nullptr;
++  const auto id = device && device->GetSource() == "SDL" ?
++      static_cast<Gamepad*>(device.get())->GetSDLInstanceID() : 0;
++  return reader.read(id, enabled);
 +}
 +
 +std::optional<int> Switch2ControllerPreferredId(uint32_t instance)
@@ -127,11 +670,9 @@
 +  const auto identity = NativeControllers().identity(instance);
 +  if (identity.empty()) return std::nullopt;
 +  // Persist physical assignment separately from transient SDL enumeration order.
-+  static std::mutex mutex;
-+  const std::lock_guard lock(mutex);
-+  const std::string path = File::GetUserPath(D_CONFIG_IDX) + "Switch2Kit.ini";
++  const std::lock_guard lock(s_native_settings_mutex);
 +  Common::IniFile ini;
-+  ini.Load(path);
++  if (!LoadNativeConfig(ini)) return std::nullopt;
 +  auto* section = ini.GetOrCreateSection("Controllers");
 +  std::optional<int> available;
 +  for (int i = 0; i < 64; ++i)
@@ -144,7 +685,7 @@
 +  if (available)
 +  {
 +    section->Set(std::to_string(*available), identity);
-+    if (!ini.Save(path)) return std::nullopt;
++    if (!SaveNativeConfig(ini)) return std::nullopt;
 +  }
 +  return available;
 +}
@@ -152,7 +693,7 @@
  
  class InputBackend final : public ciface::InputBackend
  {
-@@ -193,6 +249,9 @@
+@@ -193,6 +386,9 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
  
      Common::ScopeGuard quit_guard([] {
        // TODO: there seems to be some sort of memory leak with SDL, quit isn't freeing everything up
@@ -162,7 +703,7 @@
        SDL_Quit();
      });
      {
-@@ -259,6 +318,9 @@
+@@ -259,6 +455,9 @@ void InputBackend::PopulateDevices()
  
  void InputBackend::UpdateInput(std::vector<std::weak_ptr<ciface::Core::Device>>&)
  {
@@ -172,9 +713,25 @@
    SDL_UpdateGamepads();
  }
  
+@@ -285,6 +484,13 @@ void InputBackend::OpenAndAddDevice(SDL_JoystickID instance_id)
+ 
+ bool InputBackend::HandleEventAndContinue(const SDL_Event& e)
+ {
++#ifdef HAVE_SWITCH2KIT
++  if (e.type == SDL_EVENT_GAMEPAD_SENSOR_UPDATE)
++  {
++    Switch2Kit::DolphinMotionStream::handle(e.gsensor);
++    return true;
++  }
++#endif
+   if (e.type == SDL_EVENT_JOYSTICK_ADDED)
+   {
+     OpenAndAddDevice(e.jdevice.which);
+diff --git a/Source/Core/InputCommon/ControllerInterface/SDL/SDL.h b/Source/Core/InputCommon/ControllerInterface/SDL/SDL.h
+index 822599a..f04d5a2 100644
 --- a/Source/Core/InputCommon/ControllerInterface/SDL/SDL.h
 +++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDL.h
-@@ -5,7 +5,19 @@
+@@ -5,7 +5,29 @@
  
  #include "InputCommon/ControllerInterface/InputBackend.h"
  
@@ -182,6 +739,10 @@
 +#include <cstdint>
 +#include <optional>
 +#include <string>
++#include <utility>
++#include <vector>
++#include "DolphinMotion.hpp"
++#include "InputCommon/ControllerInterface/CoreDevice.h"
 +#endif
 +
  namespace ciface::SDL
@@ -190,10 +751,18 @@
 +// Find is a main-thread settings action; input and SDL shutdown use the existing backend loop.
 +int FindSwitch2Controllers();
 +std::string Switch2ControllerStatus();
++// Empty result means success. Selected paths belong only to Dolphin's settings.
++std::string SelectSwitch2MotionProfile(const std::string& path);
++std::string RemoveSwitch2MotionProfile(const std::string& physical_key);
++std::vector<std::pair<std::string, std::string>> Switch2MotionProfiles();
 +std::optional<int> Switch2ControllerPreferredId(uint32_t instance);
++Switch2Kit::DolphinMotionReader::Batch ReadSwitch2Motion(
++    const Core::DeviceQualifier& device, Switch2Kit::DolphinMotionReader& reader, bool enabled);
 +#endif
  std::unique_ptr<ciface::InputBackend> CreateInputBackend(ControllerInterface* controller_interface);
  }  // namespace ciface::SDL
+diff --git a/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp b/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp
+index babe433..5bab5dc 100644
 --- a/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp
 +++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp
 @@ -2,6 +2,9 @@
@@ -206,7 +775,7 @@
  
  #include <array>
  #include <span>
-@@ -25,6 +28,9 @@
+@@ -25,6 +28,9 @@ Gamepad::Gamepad(SDL_Gamepad* const gamepad, SDL_Joystick* const joystick)
    const char* const sdl_name =
        (gamepad != nullptr) ? SDL_GetGamepadName(gamepad) : SDL_GetJoystickName(joystick);
    m_name = (sdl_name != nullptr) ? sdl_name : "Unknown";
@@ -216,9 +785,31 @@
  
    // If a Joystick input has a Gamepad equivalent button/hat we don't add it.
    // "Equivalent" axes are still added as hidden/undetectable inputs to handle
+@@ -134,12 +140,19 @@ Gamepad::Gamepad(SDL_Gamepad* const gamepad, SDL_Joystick* const joystick)
+       }
+     };
+ 
++#ifdef HAVE_SWITCH2KIT
++    // Native motion is consumed once per report by the emulated Wiimote's reader.
++    // Registering cached MotionInputs here would reintegrate stale data every frame.
++    if (!Switch2Kit::SDL3Adapter::motionState(SDL_GetJoystickID(joystick)).owned)
++#endif
++    {
+     add_sensor(SDL_SENSOR_ACCEL, "Accel", SDL_AXES_ACCELEROMETER);
+     add_sensor(SDL_SENSOR_GYRO, "Gyro", SDL_AXES_GYRO);
+     add_sensor(SDL_SENSOR_ACCEL_L, "Accel L", SDL_AXES_ACCELEROMETER);
+     add_sensor(SDL_SENSOR_GYRO_L, "Gyro L", SDL_AXES_GYRO);
+     add_sensor(SDL_SENSOR_ACCEL_R, "Accel R", SDL_AXES_ACCELEROMETER);
+     add_sensor(SDL_SENSOR_GYRO_R, "Gyro R", SDL_AXES_GYRO);
++    }
+   }
+ 
+   // Legacy inputs
+diff --git a/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h b/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h
+index a36ca38..db0e96c 100644
 --- a/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h
 +++ b/Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h
-@@ -329,6 +329,9 @@
+@@ -329,6 +329,9 @@ public:
  
    std::string GetName() const override;
    std::string GetSource() const override;
@@ -228,7 +819,7 @@
    SDL_JoystickID GetSDLInstanceID() const;
    Core::DeviceRemoval UpdateInput() override
    {
-@@ -371,6 +374,9 @@
+@@ -371,6 +374,9 @@ private:
  
    SDL_Gamepad* const m_gamepad;
    std::string m_name;

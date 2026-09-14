@@ -3,13 +3,41 @@
     "repository": "dolphin-emu/dolphin",
     "revision": "c185d27ede09771fe93a3b520c576f646f937ed9",
     "files": {
+      "Source/Core/Common/IniFile.cpp": {
+        "before": "2a21485e089cae8ea748332a54bba18b8af5a3c20f9c765daa7dcc09148bed79",
+        "after": "af7c128c6cb1199dd90febe370a610f0dd92292f24ff3fbd2c5dca409b9367cc"
+      },
+      "Source/Core/Common/IniFile.h": {
+        "before": "62268f92f303401f4273651f3bd0220fa32db83b29af78cfc0bec73adfea841d",
+        "after": "cd7e9cdd4203df0386d79661f622b1e57945a412f00a9f27101512f6bff57d66"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp": {
+        "before": "dbe6f4f947cc3fd6072a90b4908494201b9f738f19cb5fe4fcc07be9052c94b1",
+        "after": "eca4a7f1f487a79896c9dad7c0174c9521c3f839174d57a1695f6208c96e6fc3"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/Dynamics.h": {
+        "before": "fded5ab9109282821b99237ecb61294656f950a3b59ff5cf630c2e99a4a374b1",
+        "after": "3f64a35d18788908943f4ea2a8479766e93a5f45e5b2fd5bb5145d7e7c0eba83"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp": {
+        "before": "a0012be09d060e300cc1b3448610ebcb9d289bf0a154f042fae568f6bd1a2eb0",
+        "after": "1731e476ea134fac79cb0c598cee94f6fdedb6989bba061ff6042405d7c6d1ed"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp": {
+        "before": "b235b625ded952a73573e599e54cc6e58c940537830dcb28e0656db627c268dd",
+        "after": "224deb94ad1892a870147f3f25e9c2b2ddb09b41fe24904194ab30b58d3111ff"
+      },
+      "Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.h": {
+        "before": "03c69b240256d545bd529cda98bf14b81a40c585ea13e5721c0c4b263d5e7e87",
+        "after": "73c182be6da2fc1040b7eabae9b5f280e6e21afcc6ee06c0bf7d3f10ac1a364f"
+      },
       "Source/Core/DolphinQt/CMakeLists.txt": {
         "before": "985f7079bf624890175f47f976d67f8430970dc0997a047bb7fd58486250c3b3",
         "after": "a3717638092147dbc1a9682673587380c31093f163ff58ff808f129772b1e0fb"
       },
       "Source/Core/DolphinQt/Config/ControllersPane.cpp": {
         "before": "e35e32abdf46b7bf078209fc4c54a0b2a2270999018b9585da3bbd8a19fa893a",
-        "after": "30f764dd4ae1422ce3567b872140b10ffcdb24e2d86d8a2f6c5ef151797d0bc6"
+        "after": "f4d6446e5d2401904bab21dc083cc397e706dd9c5272a3fe1de3995f51741fbc"
       },
       "Source/Core/DolphinQt/Info.plist.in": {
         "before": "466b08800117b4ed3ca020b84adbc3300f6463ea6380bb44a4e1e1823852b93a",
@@ -17,19 +45,27 @@
       },
       "Source/Core/InputCommon/CMakeLists.txt": {
         "before": "8e8da07ea6b72a30eaad0d64261d3c01804b09dff1ce562c794f8e85f16f2a64",
-        "after": "81abc2cb81a5033f2ad6d842d3b9ca13cc57a97daa0d97e89a5427d6c8bcb0cf"
+        "after": "6fb4b2514fd4ebb551007a20c4d446a343d19720b2a18a680bbf231ea007b365"
+      },
+      "Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.cpp": {
+        "before": "2e3455d16087ef9c707582fa5d2e8190f58726391ab9be776fdf9638beab5704",
+        "after": "9568b2541732846a6edab3d71b70921cd90623ec4827fbc45b428257c2a2cfbb"
+      },
+      "Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h": {
+        "before": "a41352b247b95ce9fee588eb0d387465ae7915bdbc0d36a081a444816d667e6b",
+        "after": "64828c1a1f1d2afb042ce44fc6a0a37000a7ae58f63e7ab56c749f52fb10314c"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp": {
         "before": "3a3fa5ae3b1249d21e2292d79a03c9387cf71dc39d60616983106a5866a88730",
-        "after": "fb042a761f3b0d5547084a71288c7e625b0b63369c26bdd4144363539c42db20"
+        "after": "936c3dff10415e76c22c395aa4ec08d353fdeec55c70077dd0cea9f08b761fff"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDL.h": {
         "before": "2fdfe907be5d670aba19f0a580fcc0a2b55c598b53c0bb5c82581ef0f10b40a3",
-        "after": "cc25fa0fc0632e0b45464f09d888dd34f54f951439c2652c5d417775417d04ae"
+        "after": "fa04461244a29f3976db9fef314b33e03284f3626234a42d47f798e20192540c"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.cpp": {
         "before": "53071f46498156098beb629e28d00c2901a546c1afab532bc39350ce7b1ac76f",
-        "after": "a22196f35cf07b5de1c28716b297a5af971f6d16bb80cdca3dbda2f15eeeb31d"
+        "after": "c5761215ea8e83dddc5d629f69a217e35199f3cda139ec95ca529ca9a8cbd4e9"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDLGamepad.h": {
         "before": "98b7141880f53a040febd2b5cb27196277f897662705d5c192396842c6b9cc11",

@@ -50,12 +50,20 @@ Open the assigned SDL controller's settings, choose **Choose Switch2Kit motion p
 
 Cemu receives fresh acceleration/gyro pairs through SDL and uses its existing Wii U motion processor. Integration uses correlated host receive timestamps, not SDL event delivery time, frame time or a guessed hardware clock. Gaps and sensor-policy changes reset the actual processor; absent data is not submitted as zero measurements. Multiple controller objects sharing one SDL device share enablement requests without disabling each other on teardown.
 
-See [profile format, calibration limits and timing](../../docs/switch2kit/motion-profiles.md). The corresponding Dolphin motion selection and per-report processing are not complete yet. A loaded numerical profile is not evidence of measured hardware scale or orientation.
+## Dolphin motion
+
+In Controller Settings, select **Choose Switch2Kit motion profile**. The file identifies the physical controller; the chosen path is saved in Dolphin's `Switch2Kit.ini` alongside (not instead of) existing physical assignments. **Find Switch 2 Controllers** explicitly reloads saved selections. **Remove Switch2Kit motion profile** removes only calibration. Invalid profile imports retain the preceding selection. Read failures do not overwrite the settings file.
+
+In the emulated Wii Remote's **Configure** window, select that physical SDL device as the default device. Under **Motion Input / Gyroscope**, enable **Calibrated Switch2Kit motion**. This mode uses paired motion directly from that device rather than separate IMU axis bindings, automatic gyro recalibration or the gyro dead zone. Ordinary button/trigger bindings and other input backends are unchanged. Existing Point settings (accelerometer influence, yaw range and Recenter) remain available.
+
+Each emulated Wii Remote consumes each new paired report at most once through Dolphin's existing cursor filter, using its receive interval. Missing motion and discontinuities reset that real processor; an event-free frame does not run it again. Multiple Wii Remotes can read one physical stream independently without stealing reports or disabling each other's sensor requests. The bounded stream refuses old events, missing reports and stalled-consumer backlogs.
+
+Both hosts report unavailable profile, invalid calibration, disabled sensors, waiting or active motion. See [profile format, calibration limits and timing](../../docs/switch2kit/motion-profiles.md). A loaded numerical profile is not evidence of measured hardware scale or orientation.
 
 ## Verification
 
 `tests/emulator-host` exercises the real Swift hub, C ABI, shared adapter, and unmodified SDL together. It covers concurrent enumeration, explicit start/discovery, status, physical identity, reconnect and terminal shutdown. The underlying SDL consumer also checks every model, all 256 trigger values, button edges, overload, rumble and inactive neutral rearming.
 
-With `S2K_CEMU_SOURCE` pointing to the pinned Cemu checkout, the host suite also compiles the real `WiiUMotionHandler`, Mahony and VPAD motion classes and checks the Swift hub/C ABI/SDL-to-emulator path. Those solver tests are distinct from a full application build.
+With `S2K_CEMU_SOURCE` pointing to the pinned Cemu checkout, the host suite compiles the real `WiiUMotionHandler`, Mahony and VPAD motion classes. With `S2K_DOLPHIN_SOURCE` pointing to the patched pinned Dolphin checkout, it compiles the real cursor filter, matrix math and INI parser. Both consumers exercise Swift hub → C ABI → shared adapter → real SDL → actual emulator motion processing. These component tests are distinct from full application builds.
 
 The emulator workflow applies the exact patches, builds the full macOS application targets, and inspects their Bluetooth descriptions and embedded native library. Controller radio behavior and gameplay still require a physical-controller run of the built application.

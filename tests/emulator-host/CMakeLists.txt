@@ -42,3 +42,35 @@ if(S2K_CEMU_SOURCE)
   add_test(NAME cemu-native-motion COMMAND cemu-native-motion)
   set_tests_properties(cemu-native-motion PROPERTIES TIMEOUT 30)
 endif()
+
+if(S2K_DOLPHIN_SOURCE)
+  if(NOT EXISTS "${S2K_DOLPHIN_SOURCE}/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp")
+    message(FATAL_ERROR "S2K_DOLPHIN_SOURCE must contain the patched pinned Dolphin source")
+  endif()
+  find_path(S2K_DOLPHIN_FMT_INCLUDE fmt/format.h REQUIRED)
+  add_executable(dolphin-native-motion dolphin-motion.cpp
+    "${S2K_DOLPHIN_SOURCE}/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp"
+    "${S2K_DOLPHIN_SOURCE}/Source/Core/Common/Matrix.cpp"
+    "${S2K_DOLPHIN_SOURCE}/Source/Core/Common/IniFile.cpp"
+    "${S2K_DOLPHIN_SOURCE}/Source/Core/Common/StringUtil.cpp")
+  # The pinned upstream StringUtil has a deliberate no-op parameter outside Windows.
+  # Keep the consumer and motion processor strict without editing unrelated upstream code.
+  set_source_files_properties("${S2K_DOLPHIN_SOURCE}/Source/Core/Common/StringUtil.cpp"
+    PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter")
+  target_compile_features(dolphin-native-motion PRIVATE cxx_std_23)
+  target_compile_definitions(dolphin-native-motion PRIVATE HAVE_SWITCH2KIT FMT_HEADER_ONLY)
+  target_compile_options(dolphin-native-motion PRIVATE -Wall -Wextra -Werror -UNDEBUG -ffunction-sections -fdata-sections)
+  # Link the actual motion processor, without pulling unrelated application methods
+  # from the same upstream translation unit. Full app builds test those methods.
+  if(APPLE)
+    target_link_options(dolphin-native-motion PRIVATE -Wl,-dead_strip)
+  else()
+    target_link_options(dolphin-native-motion PRIVATE -Wl,--gc-sections)
+  endif()
+  target_include_directories(dolphin-native-motion PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../Integrations/Emulators")
+  target_include_directories(dolphin-native-motion SYSTEM PRIVATE
+    "${S2K_DOLPHIN_SOURCE}/Source/Core" "${S2K_DOLPHIN_FMT_INCLUDE}")
+  target_link_libraries(dolphin-native-motion PRIVATE Switch2Kit::SDL3 S2KSDLFixture)
+  add_test(NAME dolphin-native-motion COMMAND dolphin-native-motion)
+  set_tests_properties(dolphin-native-motion PROPERTIES TIMEOUT 30)
+endif()

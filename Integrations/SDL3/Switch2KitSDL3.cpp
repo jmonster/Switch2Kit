@@ -555,6 +555,11 @@ SDL3MotionState SDL3Adapter::motionStateAt(SDL_JoystickID instance, Uint64 senso
     JoystickLock lock;
     auto state = motionState(instance);
     if (state.status != SDL3MotionStatus::Active) return state;
+    const auto now = SDL_GetTicksNS();
+    if (!sensorTimestamp || now < sensorTimestamp || now - sensorTimestamp > motionGapNS) {
+        state.status = SDL3MotionStatus::Waiting; state.timestampNS = state.sequence = 0;
+        return state; // A fresh latest report does not make an older queued event fresh.
+    }
     auto* joystick = SDL_GetJoystickFromID(instance);
     const auto* ledger = static_cast<const MotionLedger*>(SDL_GetPointerProperty(SDL_GetJoystickProperties(joystick), motionLedger, nullptr));
     if (ledger && sensorTimestamp > state.validSinceNS) {
