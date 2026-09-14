@@ -16,7 +16,7 @@ SCRIPT = ROOT / 'Integrations/Emulators/verify-bundle.py'
 
 
 class InspectionTests(unittest.TestCase):
-    def inspect(self, emulator, defect=None, script=SCRIPT, symlink=False):
+    def inspect(self, emulator, defect=None, script=SCRIPT, symlink=False, architecture="arm64", expected_architecture=None):
         calls = []
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -46,7 +46,7 @@ class InspectionTests(unittest.TestCase):
             def output(arguments):
                 calls.append(arguments)
                 if arguments == ['uname', '-m']:
-                    return 'arm64\n'
+                    return architecture + '\n'
                 if arguments[0] in ('otool', 'nm'):
                     # A PATH-shadowing tool must not be selected for Mach-O inspection.
                     return str(arguments[-1]) + ':\n'
@@ -75,7 +75,7 @@ class InspectionTests(unittest.TestCase):
                     self.assertIn(path, (exe, lib))
                     if ((defect == 'exe-architecture' and path == exe)
                             or (defect == 'lib-architecture' and path == lib)):
-                        return 'x86_64\n'
+                        return ('x86_64' if architecture == 'arm64' else 'arm64') + '\n'
                     return 'arm64 x86_64\n'
                 return ''
 
@@ -88,7 +88,12 @@ class InspectionTests(unittest.TestCase):
                 source_argument, build_argument = alias / 'source', alias / 'build'
             else:
                 source_argument, build_argument = source, build
-            with patch.object(sys, 'argv', [str(script), emulator, str(source_argument), str(build_argument)]), \
+            arguments = [str(script), emulator, str(source_argument), str(build_argument)]
+            if expected_architecture is not None:
+                arguments += ['--architecture', expected_architecture]
+            (build / 'integration-inspection.json').write_text('stale success')
+            (build / 'integration-app.zip').touch()
+            with patch.object(sys, 'argv', arguments), \
                     patch('subprocess.run', side_effect=run), \
                     patch('subprocess.check_output', side_effect=lambda arguments, **kw: output(arguments)), \
                     contextlib.redirect_stdout(io.StringIO()):
@@ -97,10 +102,18 @@ class InspectionTests(unittest.TestCase):
                     with self.assertRaises(expected):
                         runpy.run_path(str(script), run_name='__main__')
                     self.assertFalse(any(command[0] == 'ditto' for command in calls))
+                    self.assertFalse((build / 'integration-inspection.json').exists())
+                    self.assertFalse((build / 'integration-app.zip').exists())
                 else:
                     runpy.run_path(str(script), run_name='__main__')
                     self.assertTrue(any(command[0] == 'ditto' for command in calls))
                     self.assertTrue(any(command[:2] == ['xcrun', 'nm'] for command in calls))
+                    report = json.loads((build / 'integration-inspection.json').read_text())
+                    self.assertEqual(report['native_architecture'], architecture)
+                    self.assertEqual(len(report['binaries']), 2)
+                    for binary in report['binaries']:
+                        self.assertEqual(binary['architectures'], ['arm64', 'x86_64'])
+                    self.assertIn('lipo -archs', (build / 'integration-native-diagnostics.txt').read_text())
                 self.assertFalse(any(command[0] in ('otool', 'nm') for command in calls))
 
     def test_xcode_tools_are_used_for_both_emulators(self):
@@ -127,6 +140,15 @@ class InspectionTests(unittest.TestCase):
             for defect in ('exe-architecture', 'lib-architecture'):
                 with self.subTest(emulator=emulator, defect=defect):
                     self.inspect(emulator, defect)
+
+    def test_intel_native_inspection_and_missing_slices(self):
+        for emulator in ('dolphin', 'cemu'):
+            for defect in (None, 'exe-architecture', 'lib-architecture'):
+                with self.subTest(emulator=emulator, defect=defect):
+                    self.inspect(emulator, defect, architecture='x86_64', expected_architecture='x86_64')
+
+    def test_wrong_native_runner_is_rejected(self):
+        self.inspect('dolphin', 'runner-architecture', architecture='arm64', expected_architecture='x86_64')
 
     def test_corehid_dependency_is_rejected(self):
         self.inspect('cemu', 'corehid')
