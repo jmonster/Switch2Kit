@@ -1,4 +1,10 @@
 #include "Switch2KitSDL3.hpp"
+#include "MotionClock.hpp"
+
+// Private test builds replace only this read, never SDL or the controller engine.
+#ifndef S2K_MOTION_CONTINUOUS_NS
+#define S2K_MOTION_CONTINUOUS_NS ::Switch2Kit::Detail::continuousTimeNS
+#endif
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -25,6 +31,8 @@ constexpr const char* motionStatus = "Switch2Kit.motion.status";
 constexpr const char* motionEpoch = "Switch2Kit.motion.epoch";
 constexpr const char* motionFloor = "Switch2Kit.motion.valid-since-ns";
 constexpr const char* motionTime = "Switch2Kit.motion.receive-ns";
+constexpr const char* motionArrival = "Switch2Kit.motion.arrival-ns";
+constexpr const char* motionContinuous = "Switch2Kit.motion.continuous-ns";
 constexpr const char* motionSequence = "Switch2Kit.motion.sequence";
 constexpr const char* motionLedger = "Switch2Kit.motion.event-ledger";
 // Sequence metadata only, never sensor contents. This bounded lookup lets a host
@@ -45,23 +53,29 @@ void invalidateProperties(SDL_PropertiesID properties, SDL3MotionStatus status) 
     SDL_SetNumberProperty(properties, motionFloor, 0);
     SDL_SetNumberProperty(properties, motionTime, 0);
     SDL_SetNumberProperty(properties, motionSequence, 0);
+    SDL_SetNumberProperty(properties, motionArrival, 0);
+    SDL_SetNumberProperty(properties, motionContinuous, 0);
 }
 // Correlate clocks after reading the input batch. Do not cast uptime (or Unix time)
 // to SDL nanoseconds. Only a bounded recent receive-time delta is converted. A
-// slow bracket is unusable, and sleep/wake clock disagreement breaks continuity.
+// slow bracket is unusable. A third, suspend-aware clock detects sleep even
+// when BOTH receive uptime and SDL ticks pause; it never timestamps a sample.
 // The lower bracket is conservative: a receive timestamp cannot become future
 // delivery time due to midpoint estimation. A segment advances from one seed
 // using bounded receive deltas, so repeated correlations do not add clock jitter.
 struct ClockPair {
     double receive{};
-    Uint64 ticks{};
+    Uint64 ticks{}, continuous{};
     bool valid{};
     static ClockPair sample() {
         const auto before = SDL_GetTicksNS();
         const auto receive = s2k_monotonic_time();
+        const auto continuous = S2K_MOTION_CONTINUOUS_NS();
         const auto after = SDL_GetTicksNS();
-        return {receive, before,
-                std::isfinite(receive) && receive >= 0 && after >= before && after - before <= 1000000};
+        return {receive, before, continuous,
+                std::isfinite(receive) && receive >= 0 && continuous &&
+                continuous <= static_cast<Uint64>(SDL_MAX_SINT64) &&
+                after >= before && after - before <= 1000000};
     }
     bool map(double received, Uint64& result) const {
         if (!valid || !std::isfinite(received) || received < 0 || received > receive) return false;
@@ -73,6 +87,24 @@ struct ClockPair {
         return true;
     }
 };
+// Compare elapsed intervals, never epochs. Five milliseconds exceeds the
+// admitted clock-read bracket but detects resume even when awake time is frozen.
+bool suspendDisagreement(Uint64 previousSDL, Uint64 previousContinuous,
+                        Uint64 nowSDL, Uint64 nowContinuous) {
+    if (!previousContinuous || !nowContinuous || nowSDL < previousSDL ||
+        nowContinuous < previousContinuous) return true;
+    const auto awake = nowSDL - previousSDL;
+    const auto elapsed = nowContinuous - previousContinuous;
+    return (awake > elapsed ? awake - elapsed : elapsed - awake) > 5000000;
+}
+bool clockDiscontinuity(const ClockPair& previous, const ClockPair& current) {
+    if (!current.valid) return true;
+    if (!previous.valid) return false;
+    if (suspendDisagreement(previous.ticks, previous.continuous, current.ticks, current.continuous)) return true;
+    const double hostDelta = current.receive - previous.receive;
+    const double sdlDelta = (current.ticks - previous.ticks) / 1e9;
+    return hostDelta < 0 || std::abs(hostDelta - sdlDelta) > 0.005;
+}
 Sint16 axis(double value) {
     if (!std::isfinite(value)) return 0;
     value = std::clamp(value, -1.0, 1.0);
@@ -103,7 +135,7 @@ struct Control {
     std::mutex mutex;
     bool active = true;
     bool callbackCleaned = false; // Only accessed under SDL joystick lock.
-    Uint64 heartbeat{}, renewed{};
+    Uint64 heartbeat{}, heartbeatContinuous{}, renewed{};
     Uint16 strong{}, weak{};
     S2KResult error = S2K_OK;
     // These fields are accessed only under SDL's joystick lock, never on Bluetooth.
@@ -115,7 +147,10 @@ static bool SDLCALL rumble(void* data, Uint16 strong, Uint16 weak) {
     auto& c = **static_cast<SharedControl*>(data);
     std::lock_guard<std::mutex> lock(c.mutex);
     if (!c.context) return false;
-    if ((strong || weak) && (!c.active || SDL_GetTicksNS() - c.heartbeat > staleNS)) {
+    const auto now = SDL_GetTicksNS();
+    const auto continuous = S2K_MOTION_CONTINUOUS_NS();
+    if ((strong || weak) && (!c.active || now - c.heartbeat > staleNS ||
+            suspendDisagreement(c.heartbeat, c.heartbeatContinuous, now, continuous))) {
         c.error = S2K_BUSY; return false;
     }
     c.error = s2k_set_rumble(c.context, &c.id, &c.connection, strong / 65535.0, weak / 65535.0);
@@ -180,19 +215,20 @@ struct SDL3Adapter::Impl {
     Uint64 lastPump{};
     explicit Impl(S2KContext* value) : context(value) {}
 
-    void stopEffect(Device& d, bool active, Uint64 now) {
+    void stopEffect(Device& d, bool active, Uint64 now, Uint64 continuous) {
         // Cancel SDL's duration as well as native intent. SDL calls rumble with zero.
         if (d.capabilities & S2K_CAP_CONTINUOUS_RUMBLE) SDL_RumbleJoystick(d.joystick, 0, 0, 0);
         auto& c = *d.control;
         std::lock_guard<std::mutex> lock(c.mutex);
         if (c.context && (c.strong || c.weak))
             c.error = s2k_set_rumble(c.context, &c.id, &c.connection, 0, 0);
-        c.strong = c.weak = 0; c.active = active; c.heartbeat = now;
+        c.strong = c.weak = 0; c.active = active; c.heartbeat = now; c.heartbeatContinuous = continuous;
     }
     void remove(std::map<Key, Device>::iterator it) {
         auto& d = it->second;
         invalidate(d, SDL3MotionStatus::Waiting);
-        stopEffect(d, false, SDL_GetTicksNS());
+        const auto clock = ClockPair::sample();
+        stopEffect(d, false, clock.ticks, clock.continuous);
         { std::lock_guard<std::mutex> lock(d.control->mutex); d.control->context = nullptr; }
         SDL_CloseJoystick(d.joystick);
         if (SDL_IsJoystickVirtual(d.instance)) SDL_DetachVirtualJoystick(d.instance);
@@ -200,7 +236,7 @@ struct SDL3Adapter::Impl {
     }
     void clear() { JoystickLock lock; while (!devices.empty()) remove(devices.begin()); }
 
-    Device* ensure(const S2KController& c, bool active, Uint64 now) {
+    Device* ensure(const S2KController& c, bool active, Uint64 now, Uint64 continuous) {
         auto it = devices.find(key(c.id));
         if (it != devices.end()) {
             if (equal(it->second.control->connection, c.connection_id) && SDL_JoystickConnected(it->second.joystick))
@@ -212,7 +248,7 @@ struct SDL3Adapter::Impl {
         d.capabilities = c.capabilities; d.armed = active;
         d.control = std::make_shared<Control>();
         d.control->context = context; d.control->id = c.id; d.control->connection = c.connection_id;
-        d.control->heartbeat = now; d.control->active = active;
+        d.control->heartbeat = now; d.control->heartbeatContinuous = continuous; d.control->active = active;
         SDL_VirtualJoystickDesc desc{}; SDL_INIT_INTERFACE(&desc);
         const auto selected = profiles.find(key(c.id));
         if (selected != profiles.end()) {
@@ -365,6 +401,8 @@ struct SDL3Adapter::Impl {
             ledger->entries[ledger->next] = {timestamp, s.sequence};
             ledger->next = (ledger->next + 1) % ledger->entries.size();
             SDL_SetNumberProperty(d.control->motionProperties, motionTime, static_cast<Sint64>(timestamp));
+            SDL_SetNumberProperty(d.control->motionProperties, motionArrival, static_cast<Sint64>(clock.ticks));
+            SDL_SetNumberProperty(d.control->motionProperties, motionContinuous, static_cast<Sint64>(clock.continuous));
             SDL_SetNumberProperty(d.control->motionProperties, motionSequence, static_cast<Sint64>(std::min(s.sequence, static_cast<uint64_t>(SDL_MAX_SINT64))));
             SDL_SetNumberProperty(d.control->motionProperties, motionStatus, static_cast<Sint64>(SDL3MotionStatus::Active));
         }
@@ -385,16 +423,16 @@ struct SDL3Adapter::Impl {
         d.lastSequence = state.sequence;
         SDL_UpdateJoysticks(); // Commit this report BEFORE a subsequent release is staged.
     }
-    void reconcile(bool active, Uint64 now) {
+    void reconcile(bool active, Uint64 now, Uint64 continuous) {
         for (auto it = devices.begin(); it != devices.end();) {
             auto found = std::find_if(snapshot.controllers, snapshot.controllers + snapshot.count,
                 [&](const auto& c) { return key(c.id) == it->first && equal(c.connection_id, it->second.control->connection); });
             if (found == snapshot.controllers + snapshot.count) { auto old = it++; remove(old); }
-            else { stopEffect(it->second, active, now); ++it; }
+            else { stopEffect(it->second, active, now, continuous); ++it; }
         }
         for (uint32_t i = 0; i < snapshot.count; ++i) {
             const auto& c = snapshot.controllers[i];
-            if (auto* d = ensure(c, active, now)) {
+            if (auto* d = ensure(c, active, now, continuous)) {
                 if (d->hasProfile) invalidate(*d, enabledSensors(*d) ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
                 d->highSequence = std::max(d->highSequence, c.state.sequence);
                 if (std::isfinite(c.state.received_at) && c.state.received_at <= s2k_monotonic_time())
@@ -408,17 +446,20 @@ struct SDL3Adapter::Impl {
         pumping = true;
         struct Reset { bool& value; ~Reset() { value = false; } } reset{pumping};
         JoystickLock lock;
-        const auto now = SDL_GetTicksNS();
+        const auto startClock = ClockPair::sample();
+        const auto now = startClock.ticks;
+        const auto continuous = startClock.continuous;
+        const bool resumed = clockDiscontinuity(previousClock, startClock);
         error = S2K_OK;
         const bool stalled = lastPump && now - lastPump > staleNS;
         for (auto& [id, d] : devices) {
             (void)id;
-            if (stalled || active != wasActive) {
-                stopEffect(d, active, now);
+            if (stalled || resumed || active != wasActive) {
+                stopEffect(d, active, now, continuous);
                 if (d.hasProfile) invalidate(d, enabledSensors(d) ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
             }
             refreshSensors(d, active, now);
-            { std::lock_guard<std::mutex> guard(d.control->mutex); d.control->heartbeat = now; d.control->active = active; }
+            { std::lock_guard<std::mutex> guard(d.control->mutex); d.control->heartbeat = now; d.control->heartbeatContinuous = continuous; d.control->active = active; }
             if (!active || active != wasActive) { d.armed = false; apply(d, S2KState{}, false); d.armed = false; }
         }
         lastPump = now; wasActive = active;
@@ -430,15 +471,12 @@ struct SDL3Adapter::Impl {
                                      &snapshot, sizeof(snapshot), &flags);
         if (result != S2K_OK) { clear(); return error = result; }
         const auto clock = ClockPair::sample();
-        bool clockGap = !clock.valid;
-        if (previousClock.valid && clock.valid) {
-            const double hostDelta = clock.receive - previousClock.receive;
-            const double sdlDelta = clock.ticks >= previousClock.ticks ? (clock.ticks - previousClock.ticks) / 1e9 : -1;
-            clockGap = hostDelta < 0 || sdlDelta < 0 || std::abs(hostDelta - sdlDelta) > 0.005;
-        }
+        const bool clockGap = resumed || clockDiscontinuity(startClock, clock) ||
+                              clockDiscontinuity(previousClock, clock);
         previousClock = clock;
         if (clockGap) for (auto& [id, d] : devices) {
             (void)id;
+            stopEffect(d, active, clock.ticks, clock.continuous);
             if (d.hasProfile) invalidate(d, enabledSensors(d) ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
         }
         for (const auto& [id, unused] : replacements) {
@@ -448,7 +486,7 @@ struct SDL3Adapter::Impl {
         if (!replacements.empty()) {
             for (uint32_t i = 0; i < snapshot.count; ++i) {
                 const auto& c = snapshot.controllers[i];
-                if (replacements.count(key(c.id))) if (auto* d = ensure(c, active, now)) {
+                if (replacements.count(key(c.id))) if (auto* d = ensure(c, active, now, continuous)) {
                     d->highSequence = c.state.sequence;
                     if (std::isfinite(c.state.received_at) && c.state.received_at <= clock.receive) d->highReceive = c.state.received_at;
                     apply(*d, c.state, active);
@@ -456,11 +494,11 @@ struct SDL3Adapter::Impl {
             }
             replacements.clear();
         }
-        if (flags & S2K_READ_RESYNC) reconcile(active, now);
+        if (flags & S2K_READ_RESYNC) reconcile(active, now, continuous);
         else for (uint32_t i = 0; i < count; ++i) {
             const auto& event = events[i];
             if (event.kind == S2K_EVENT_CONNECTED || event.kind == S2K_EVENT_INPUT) {
-                if (auto* d = ensure(event.controller, active, now)) {
+                if (auto* d = ensure(event.controller, active, now, continuous)) {
                     if (event.kind == S2K_EVENT_INPUT && !clockGap) motion(*d, event.controller.state, active, clock);
                     apply(*d, event.controller.state, active);
                 }
@@ -546,9 +584,15 @@ SDL3MotionState SDL3Adapter::motionState(SDL_JoystickID instance) {
     state.sequence = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionSequence, 0));
     if (const auto* ledger = static_cast<const MotionLedger*>(SDL_GetPointerProperty(properties, motionLedger, nullptr)))
         state.validSinceSequence = ledger->floorSequence;
-    const auto now = SDL_GetTicksNS();
-    if (state.status == SDL3MotionStatus::Active && (!state.timestampNS || now < state.timestampNS || now - state.timestampNS > motionGapNS))
-        state.status = SDL3MotionStatus::Waiting;
+    if (state.status == SDL3MotionStatus::Active) {
+        const auto now = SDL_GetTicksNS();
+        const auto continuous = S2K_MOTION_CONTINUOUS_NS();
+        const auto arrival = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionArrival, 0));
+        const auto receipt = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionContinuous, 0));
+        if (!state.timestampNS || now < state.timestampNS || now - state.timestampNS > motionGapNS ||
+            suspendDisagreement(arrival, receipt, now, continuous))
+            state.status = SDL3MotionStatus::Waiting;
+    }
     return state;
 }
 SDL3MotionState SDL3Adapter::motionStateAt(SDL_JoystickID instance, Uint64 sensorTimestamp) {

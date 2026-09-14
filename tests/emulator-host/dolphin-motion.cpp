@@ -1,4 +1,5 @@
 #include "DolphinMotion.hpp"
+#include "../sdl-inprocess/Clock.hpp"
 #include "Core/HW/WiimoteEmu/Dynamics.h"
 #include <cassert>
 #include <cmath>
@@ -127,6 +128,20 @@ int main() {
         const auto corrected = imu.rotation;
         batch = reader.read(id, true); WiimoteEmu::EmulateSwitch2Motion(&imu, batch, 0.02f, 6.2831853f, false);
         equivalent(imu.rotation, corrected);
+        // A suspend-aware guard resets Dolphin's existing cursor even before
+        // its input pump resumes, while its SDL/receive clocks may both be paused.
+        const auto sleepEpoch = SDL3Adapter::motionState(id).epoch;
+        TestClock::suspend(30000000000ULL);
+        batch = reader.read(id, true); assert(batch.reset && !batch.count && !batch.latest);
+        WiimoteEmu::EmulateSwitch2Motion(&imu, batch, 0, 6.2831853f, false);
+        equivalent(imu.rotation, Common::Quaternion::Identity());
+        submit(); assert(drain().empty());
+        assert(SDL3Adapter::motionState(id).epoch != sleepEpoch);
+        submit(); assert(drain().empty());
+        submit(); assert(drain().size() == 2);
+        batch = reader.read(id, true); assert(batch.reset && batch.count == 1 && batch.latest);
+        WiimoteEmu::EmulateSwitch2Motion(&imu, batch, 0, 6.2831853f, false);
+        equivalent(imu.rotation, Common::Quaternion::RotateX(static_cast<float>(batch.samples[0].deltaSeconds)));
         reader.reset(); assert(SDL_GamepadSensorEnabled(pad, SDL_SENSOR_GYRO)); // Second reader still owns its request.
         second.reset(); assert(!SDL_GamepadSensorEnabled(pad, SDL_SENSOR_GYRO));
         reader.read(id, true); submit(); drain(); submit(); drain(); reader.read(id, true);
