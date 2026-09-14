@@ -28,19 +28,34 @@ jobs:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
         run: bash tests/emulator-host/verify.sh
   native:
-    runs-on: macos-15
-    timeout-minutes: 55
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
           - emulator: dolphin
+            os: macos-15
+            architecture: arm64
             repository: dolphin-emu/dolphin
             revision: c185d27ede09771fe93a3b520c576f646f937ed9
           - emulator: cemu
+            os: macos-15
+            architecture: arm64
+            repository: cemu-project/Cemu
+            revision: 3310f3b8b184d64a62b89fd59088c799432badf5
+          - emulator: dolphin
+            os: macos-15-intel
+            architecture: x86_64
+            repository: dolphin-emu/dolphin
+            revision: c185d27ede09771fe93a3b520c576f646f937ed9
+          - emulator: cemu
+            os: macos-15-intel
+            architecture: x86_64
             repository: cemu-project/Cemu
             revision: 3310f3b8b184d64a62b89fd59088c799432badf5
     env:
+      S2K_EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
       VCPKG_MAX_CONCURRENCY: 3
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/vcpkg-cache,readwrite
       S2K_BUILD_JOBS: 3
@@ -55,6 +70,24 @@ jobs:
           path: build/emulator-source
           submodules: recursive
           persist-credentials: false
+      - name: Check the native runner and retain the pinned source
+        env:
+          EMULATOR: ${{ matrix.emulator }}
+          REVISION: ${{ matrix.revision }}
+        run: |
+          test "$(uname -m)" = "$S2K_EXPECTED_ARCHITECTURE"
+          test "$(git -C build/emulator-source rev-parse HEAD)" = "$REVISION"
+          if [ "$S2K_EXPECTED_ARCHITECTURE" = arm64 ]; then
+            git -C build/emulator-source archive HEAD -o "$RUNNER_TEMP/$EMULATOR-source.zip"
+          fi
+      - name: Preserve the exact upstream source for patch reproductions
+        if: matrix.architecture == 'arm64'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.emulator }}-pinned-source
+          path: ${{ runner.temp }}/${{ matrix.emulator }}-source.zip
+          if-no-files-found: error
+          retention-days: 7
       - name: Install native build tools
         env:
           EMULATOR: ${{ matrix.emulator }}
@@ -72,7 +105,7 @@ jobs:
           EMULATOR: ${{ matrix.emulator }}
         run: |
           set -o pipefail
-          extra=()
+          extra=(-DCMAKE_OSX_ARCHITECTURES="$S2K_EXPECTED_ARCHITECTURE")
           if [ "$EMULATOR" = dolphin ]; then
             extra+=(-DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)" -DENABLE_VULKAN=OFF -DENABLE_TESTS=OFF -DPOSTPROCESS_BUNDLE=ON)
           else
@@ -84,15 +117,16 @@ jobs:
       - name: Inspect the app and embedded controller library
         env:
           EMULATOR: ${{ matrix.emulator }}
-        run: python3 Integrations/Emulators/verify-bundle.py "$EMULATOR" build/emulator-source build/emulator-build
+        run: python3 Integrations/Emulators/verify-bundle.py "$EMULATOR" build/emulator-source build/emulator-build --architecture "$S2K_EXPECTED_ARCHITECTURE"
       - name: Preserve native build diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ${{ matrix.emulator }}-integration-diagnostics
+          name: ${{ matrix.emulator }}-${{ matrix.architecture }}-integration-diagnostics
           path: |
             build/emulator-build.log
             build/emulator-build/integration-native-diagnostics.txt
+            build/emulator-build/integration-inspection.json
             build/emulator-build/build.ninja
             build/emulator-build/CMakeCache.txt
             build/emulator-build/compile_commands.json
@@ -104,7 +138,7 @@ jobs:
       - name: Preserve the built emulator
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ${{ matrix.emulator }}-switch2kit-app
+          name: ${{ matrix.emulator }}-${{ matrix.architecture }}-switch2kit-app
           path: build/emulator-build/integration-app.zip
           if-no-files-found: error
           retention-days: 7
