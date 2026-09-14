@@ -14,7 +14,7 @@ A source Swift package for **in-process Nintendo Switch 2 controller input on ma
 
 Switch 1 controllers and arbitrary HID devices are not admitted. Nintendo company ID, vendor ID and supported product ID must all validate; names alone never authorize a connection. Joy-Con pairs remain two physical controllers.
 
-The declared deployment minimum is **macOS 15**. Build source with **Swift 6.2 or newer**; the repository's Apple-SDK builds and framework wrapper use **Xcode 26 or newer**. The app's optional CoreHID output has separate availability/entitlement requirements that do not apply to this library.
+The declared deployment minimum is **macOS 15**. Build source with **Swift 6.2 or newer**; the repository's Apple-SDK builds use **Xcode 26 or newer**. The app's optional CoreHID output has separate availability/entitlement requirements that do not apply to this library.
 
 ## Install the source package
 
@@ -138,5 +138,5 @@ Switch2Kit does **not** make its devices appear as system `GCController` instanc
 
 ## Guides
 
-[SwiftUI](swiftui.md) · [AppKit](appkit.md) · [Bluetooth lifecycle](bluetooth-lifecycle.md) · [Navigation](navigation.md) · [API](api.md) · [Concurrency and logging](concurrency-and-logging.md) · [Troubleshooting](troubleshooting.md) · [XCFramework](xcframework.md) · [Architecture](architecture.md)
+[SwiftUI](swiftui.md) · [AppKit](appkit.md) · [Bluetooth lifecycle](bluetooth-lifecycle.md) · [Application actions](actions.md) · [Navigation](navigation.md) · [API](api.md) · [Concurrency and logging](concurrency-and-logging.md) · [Troubleshooting](troubleshooting.md) · [Swift distribution](xcframework.md) · [Architecture](architecture.md)
 
