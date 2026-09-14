@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(Switch2KitSDLConsumer LANGUAGES C CXX)
 enable_testing()
+find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
 if(NOT EXISTS "${S2K_SDL_SOURCE}/CMakeLists.txt")
   message(FATAL_ERROR "Set S2K_SDL_SOURCE to the pinned SDL3 source checkout")
 endif()
@@ -9,6 +10,8 @@ set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 if(NOT APPLE)
+  # These portable fixtures intentionally have no desktop video backend.
+  set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
   set(SDL_X11 OFF CACHE BOOL "" FORCE)
   set(SDL_WAYLAND OFF CACHE BOOL "" FORCE)
   set(SDL_ALSA OFF CACHE BOOL "" FORCE)
@@ -28,13 +31,15 @@ else()
   list(APPEND _args -Xlinker -soname -Xlinker "${CMAKE_SHARED_LIBRARY_PREFIX}S2KSDLFixture${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
 add_custom_command(OUTPUT "${_fixture}"
-  COMMAND "${SWITCH2KIT_SWIFTC}" -swift-version 6 -warnings-as-errors -emit-library
-    -package-name switch2kit -module-name S2KSDLFixture ${_args}
+  COMMAND "${Python3_EXECUTABLE}" "${_root}/tests/support/compile-fixture.py"
+    --description "${SWITCH2KIT_C_BINARY_DIR}/description.json"
+    --compiler "${SWITCH2KIT_SWIFTC}" -- -swift-version 6 -warnings-as-errors -emit-library
+    -module-name S2KSDLFixture ${_args}
     -I "${SWITCH2KIT_C_BINARY_DIR}/Modules" -I "${_root}/Sources/Switch2KitCABI/include"
     -L "${SWITCH2KIT_C_BINARY_DIR}" -lSwitch2KitC
     -Xlinker -rpath -Xlinker "${SWITCH2KIT_C_BINARY_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift" -o "${_fixture}"
-  DEPENDS Switch2KitCBuild "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift" VERBATIM)
+  DEPENDS Switch2KitCBuild "${_root}/tests/support/compile-fixture.py" "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift" VERBATIM)
 add_custom_target(S2KSDLFixtureBuild DEPENDS "${_fixture}")
 add_library(S2KSDLFixture SHARED IMPORTED GLOBAL)
 set_target_properties(S2KSDLFixture PROPERTIES IMPORTED_LOCATION "${_fixture}")

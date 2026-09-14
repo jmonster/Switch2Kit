@@ -26,16 +26,26 @@ file "$LIB"
 lipo "$LIB" -verify_arch arm64 x86_64
 if otool -L "$LIB" | grep -E 'CoreHID|Switch2KitApp'; then fail 'Unexpected application dependency.'; fi
 nm -gjU "$LIB" > "$WORK/exports"
-for symbol in s2k_create s2k_destroy s2k_read s2k_start s2k_stop s2k_play_feedback s2k_set_rumble; do
+for symbol in s2k_create s2k_destroy s2k_read s2k_start s2k_stop s2k_play_feedback s2k_set_rumble s2k_convert_motion; do
   grep -qx "_$symbol" "$WORK/exports" || fail "Missing C symbol: $symbol"
 done
 if grep -q s2k_fixture "$WORK/exports"; then fail 'Test fixture leaked into the library.'; fi
 # Pure C++ source: no Swift types, generated Swift header or compiled Swift module import.
 cat > "$WORK/main.cpp" <<'CPP'
 #include <Switch2KitC.h>
+#include <Switch2KitMotion.h>
 #include <cassert>
 int main() {
     assert(s2k_abi_version() == S2K_ABI_VERSION);
+    S2KState state{};
+    state.present = S2K_HAS_MOTION; state.accel[0] = 2;
+    S2KMotionCalibration profile{};
+    profile.version = S2K_MOTION_CALIBRATION_VERSION; profile.struct_size = sizeof(profile);
+    profile.acceleration = {{0, 0, 0}, {1, 1, 1}, {1, 2, 3}, 0};
+    profile.angular_velocity = profile.acceleration;
+    S2KCalibratedMotion motion{};
+    assert(s2k_convert_motion(&state, &profile, &motion, sizeof(motion)) == S2K_OK);
+    assert(motion.acceleration[0] == 2);
     S2KResult result{};
     auto *manager = s2k_create(nullptr, &result);
     assert(manager && result == S2K_OK);

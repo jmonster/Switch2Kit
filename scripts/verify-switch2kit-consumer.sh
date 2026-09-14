@@ -43,6 +43,17 @@ func checkActionEventAPI(_ event: Switch2ControllerEvent) {
     _ = router.receive(event, at: 0)
 }
 
+func checkMotionAPI(_ raw: Switch2Motion) throws -> Switch2CalibratedMotion {
+    // Synthetic calibration only: prove public source integration, not device gains.
+    let acceleration = try Switch2SensorCalibration(
+        negativeReference: .init(x: -1000, y: -2000, z: -3000),
+        positiveReference: .init(x: 1000, y: 2000, z: 3000), magnitude: 9.80665)
+    let gyro = try Switch2SensorCalibration(offset: .init(x: 1, y: 2, z: 3),
+        unitsPerCount: .init(x: 0.01, y: 0.01, z: 0.01),
+        xAxis: .negativeY, yAxis: .positiveZ, zAxis: .positiveX)
+    return Switch2MotionCalibration(acceleration: acceleration, angularVelocity: gyro).apply(to: raw)
+}
+
 @MainActor
 func checkConsumerAPI() throws {
     let manager = Switch2ControllerManager(configuration: .init(discoveryMode: .onDemand))
