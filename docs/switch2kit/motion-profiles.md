@@ -60,3 +60,19 @@ Six stationary acceleration poses can establish independent axis bias/gain. Stat
 The pinned [SDL Switch 2 driver](https://github.com/libsdl-org/SDL/blob/147a8ee32dbf9ac02f3794964490687b6bbda1bc/src/joystick/hidapi/SDL_hidapi_switch2.c) contains USB factory-flash reads and USB sensor conversion, but its Bluetooth initialization is explicitly unsupported. The USB feature setup and heuristic clock/scale selection are not proof that those coefficients apply to this Bluetooth engine. No new speculative Bluetooth factory reads, first-generation constants, or automatic model profiles are introduced here.
 
 Current automated evidence is mathematical conversion, synthetic profiles and fake controller boundaries feeding the actual hub, C ABI and pinned SDL. The Cemu- and Dolphin-facing consumers additionally compile and exercise the actual pinned emulator motion classes; this is not a full GUI application build or hardware qualification. Use the [explicit calibration tool](../../tools/motion-calibration/README.md) to capture, fit, validate and export a chosen profile. Full native application builds and bundled-library load checks are separate automated qualification; measured device profiles and physical acceptance remain distinct, and a green adapter or solver fixture is not gameplay qualification.
+
+Sleep/wake freshness uses a separate suspend-aware monotonic clock. The pinned
+SDL clock and host receive uptime can both pause while macOS sleeps; comparing
+only those two clocks cannot detect that gap. The adapter therefore compares
+**elapsed intervals**, and checks the same guard before exposing cached motion
+or accepting a rumble request. On resume, old sensor events and the wake-detection
+input batch are not integrated; fresh subsequent reports establish a new epoch.
+Button edges still pass through that batch, and pending rumble is stopped.
+
+This guard uses `mach_continuous_time` with checked tick scaling on macOS and
+`CLOCK_BOOTTIME` in Linux fixtures. It does not supply or relabel sensor timestamps,
+change the C receive-time ABI, or assume either clock has a Unix epoch. Apple's
+[clock declaration](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/mach/mach_time.h)
+distinguishes the sleep behavior. Simulated suspend tests exercise stale-event
+rejection and the actual Dolphin/Cemu processor resets; physical sleep/wake
+acceptance remains a separate controller test.

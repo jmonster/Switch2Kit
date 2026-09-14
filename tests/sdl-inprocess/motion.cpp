@@ -1,5 +1,6 @@
 #include <Switch2KitSDL3.hpp>
 #include "Clock.hpp"
+#include "../../Integrations/SDL3/MotionClock.hpp"
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -11,6 +12,7 @@ extern "C" {
 S2KContext* test_input_create();
 void test_input_report(S2KContext*, int32_t, uint32_t, const S2KState*);
 void test_input_retire(S2KContext*, int32_t);
+uint32_t test_input_rumble(S2KContext*, int32_t, double*, double*);
 }
 using Switch2Kit::SDL3Adapter;
 using Switch2Kit::SDL3MotionStatus;
@@ -39,6 +41,13 @@ static S2KMotionProfile synthetic(int index, uint32_t model) {
     return p;
 }
 int main() {
+    // The private freshness clock never wraps when converting native tick ratios.
+    assert(Switch2Kit::Detail::scaledTicksNS(24, 125, 3) == 1000);
+    assert(Switch2Kit::Detail::scaledTicksNS(UINT64_MAX, 1, 1) == 0);
+    assert(Switch2Kit::Detail::scaledTicksNS(UINT64_MAX, UINT32_MAX, UINT32_MAX) == 0);
+    assert(Switch2Kit::Detail::scaledTicksNS(1, 0, 1) == 0);
+    assert(Switch2Kit::Detail::scaledTicksNS(1, 1, 0) == 0);
+    assert(Switch2Kit::Detail::scaledTicksNS(INT64_MAX, 1, 1) == INT64_MAX);
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     assert(SDL_Init(SDL_INIT_GAMEPAD));
@@ -225,6 +234,39 @@ int main() {
         assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Active);
         std::puts("PASS scheduler-independent consumer stalls and explicit input-gap rearming");
         std::puts("PASS same-batch discontinuity floor, overflow snapshot exclusion, event-consumer stalls and 5000 bounded per-report sensor pairs");
+        // System sleep is NOT an SDL/receive-clock disagreement: both clocks
+        // can pause together. A separate suspend-aware clock must reject cached
+        // motion even before the input loop resumes, and retire the old effect.
+        const auto beforeSleep = SDL3Adapter::motionState(id);
+        assert(beforeSleep.status == SDL3MotionStatus::Active);
+        assert(SDL_RumbleGamepad(pads[0], 0x4444, 0x2222, 5000));
+        state[0].buttons = S2K_BUTTON_B; submit(0);
+        state[0].buttons = 0; submit(0); // Queued edges must survive wake recovery.
+        const auto pausedReceive = s2k_test_monotonic_time();
+        const auto pausedTicks = s2k_test_ticks_ns();
+        TestClock::suspend(30000000000ULL);
+        assert(s2k_test_monotonic_time() == pausedReceive);
+        assert(s2k_test_ticks_ns() == pausedTicks);
+        assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Waiting);
+        assert(SDL3Adapter::motionStateAt(id, beforeSleep.timestampNS).status == SDL3MotionStatus::Waiting);
+        assert(!SDL_RumbleGamepad(pads[0], 0x5555, 0x3333, 5000));
+        assert(adapter.pump() == S2K_OK); // Recovery sends a stop, clearing the failed request.
+        double strong{}, weak{};
+        assert(test_input_rumble(context, 0, &strong, &weak) >= 2 && strong == 0 && weak == 0);
+        assert(SDL3Adapter::motionState(id).epoch != beforeSleep.epoch);
+        int down = 0, up = 0;
+        SDL_Event wakeEvent{};
+        while (SDL_PollEvent(&wakeEvent)) {
+            assert(wakeEvent.type != SDL_EVENT_GAMEPAD_SENSOR_UPDATE);
+            if (wakeEvent.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && wakeEvent.gbutton.which == id &&
+                wakeEvent.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) ++down;
+            if (wakeEvent.type == SDL_EVENT_GAMEPAD_BUTTON_UP && wakeEvent.gbutton.which == id &&
+                wakeEvent.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) ++up;
+        }
+        assert(down == 1 && up == 1);
+        rearm(); // First post-wake report seeds; only the next one can integrate.
+        assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Active);
+        std::puts("PASS paused receive/SDL clocks: immediate stale rejection, wake rearming, retained button edges and rumble stop");
         // Measured reference signs differ from holding orientation. Apply a proper
         // rotation exactly once to both already-independent sensor calibrations.
         auto changed = synthetic(0, models[0]); changed.holding_axes[0] = -2; changed.holding_axes[1] = 1;

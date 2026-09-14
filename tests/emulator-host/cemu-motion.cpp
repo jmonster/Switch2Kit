@@ -21,6 +21,7 @@ using uint64 = uint64_t;
 using sint32 = int32_t;
 using DWORD = uint32_t;
 #include "CemuMotion.hpp"
+#include "../sdl-inprocess/Clock.hpp"
 extern "C" {
 S2KContext* test_input_create();
 void test_input_report(S2KContext*, int32_t, uint32_t, const S2KState*);
@@ -146,6 +147,24 @@ int main() {
         WiiUMotionHandler fresh;
         fresh.processMotionSample(static_cast<float>((renewed[0].sensor_timestamp - baseline) / 1e9), 1, -2, -3, 0, 1, 0);
         equivalent(consumer.snapshot(), fresh.getMotionSample());
+        // Both existing clocks can pause during system sleep. Reset the ACTUAL
+        // Mahony processor before the input pump runs; do not integrate old data.
+        assert(consumer.availableSample());
+        const auto sleepEpoch = SDL3Adapter::motionState(id).epoch;
+        TestClock::suspend(30000000000ULL);
+        consumer.synchronize(SDL3Adapter::motionState(id));
+        assert(!consumer.availableSample());
+        equivalent(consumer.snapshot(), MotionSample{});
+        submit(); assert(drain().empty()); // Wake-detection batch is not telemetry.
+        assert(SDL3Adapter::motionState(id).epoch != sleepEpoch);
+        submit(); assert(drain().empty()); // Fresh baseline in the new epoch.
+        const auto wakeBaseline = SDL3Adapter::motionState(id).validSinceNS;
+        submit(); const auto awake = drain(); assert(awake.size() == 2);
+        WiiUMotionHandler awakeReference;
+        awakeReference.processMotionSample(static_cast<float>((awake[0].sensor_timestamp - wakeBaseline) / 1e9),
+                                           1, -2, -3, 0, 1, 0);
+        assert(consumer.availableSample());
+        equivalent(consumer.snapshot(), awakeReference.getMotionSample());
         // Event-free inactivity resets the existing downstream solver immediately.
         SDL_Delay(110); consumer.synchronize(SDL3Adapter::motionState(id));
         assert(!consumer.availableSample());
