@@ -8,7 +8,8 @@ env:
   DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
 concurrency:
   group: emulator-integration-${{ github.ref }}
-  cancel-in-progress: false
+  # Validate the current PR head instead of queueing it behind superseded builds.
+  cancel-in-progress: true
 jobs:
   host:
     runs-on: macos-15-intel
@@ -136,6 +137,37 @@ jobs:
         env:
           EMULATOR: ${{ matrix.emulator }}
         run: python3 Integrations/Emulators/verify-bundle.py "$EMULATOR" build/emulator-source build/emulator-build --architecture "$S2K_EXPECTED_ARCHITECTURE"
+      - name: Configure without Switch2Kit and retain upstream deployment behavior
+        env:
+          EMULATOR: ${{ matrix.emulator }}
+        run: |
+          set -o pipefail
+          extra=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+                 -DCMAKE_OSX_ARCHITECTURES="$S2K_EXPECTED_ARCHITECTURE" -DENABLE_SDL=ON
+                 -DENABLE_SWITCH2KIT=OFF -DSWITCH2KIT_SOURCE_DIR=/must-not-be-used)
+          if [ "$EMULATOR" = dolphin ]; then
+            extra+=(-DENABLE_QT=ON -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
+                    -DENABLE_VULKAN=OFF -DENABLE_TESTS=OFF -DPOSTPROCESS_BUNDLE=OFF)
+          else
+            # Do not regenerate or overwrite the already inspected Cemu app bundle.
+            extra+=(-DMACOS_BUNDLE=OFF -DENABLE_VULKAN=ON)
+          fi
+          cmake -S "$PWD/build/emulator-source" -B "$PWD/build/emulator-disabled" \
+            "${extra[@]}" 2>&1 | tee build/emulator-disabled-configure.log
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          build = Path('build/emulator-disabled')
+          rows = json.loads((build / 'compile_commands.json').read_text())
+          assert rows and not any('HAVE_SWITCH2KIT' in row['command'] for row in rows)
+          assert not any('Switch2KitSDL3.cpp' in row['file'] for row in rows)
+          ninja = (build / 'build.ninja').read_text()
+          assert 'build Switch2KitCBuild:' not in ninja
+          filename, minimum = ('SDL.cpp', '11.0.0') if os.environ['EMULATOR'] == 'dolphin' else ('SDLController.cpp', '13.4')
+          commands = [row['command'] for row in rows if Path(row['file']).name == filename]
+          assert commands and all('-mmacosx-version-min=' + minimum in command for command in commands)
+          print('PASS disabled backend: no SDK target, original macOS deployment target ' + minimum)
+          PYTHON
       - name: Preserve native build diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -143,6 +175,9 @@ jobs:
           name: ${{ matrix.emulator }}-${{ matrix.architecture }}-integration-diagnostics
           path: |
             build/emulator-build.log
+            build/emulator-disabled-configure.log
+            build/emulator-disabled/CMakeCache.txt
+            build/emulator-disabled/compile_commands.json
             build/emulator-build/integration-native-diagnostics.txt
             build/emulator-build/integration-inspection.json
             build/emulator-build/build.ninja
