@@ -34,11 +34,14 @@ class InspectionTests(unittest.TestCase):
                 path.touch()
             (app / 'Contents/Info.plist').write_bytes(plistlib.dumps({
                 'CFBundleExecutable': executable,
+                'CFBundleIdentifier': 'changed' if defect == 'identity' else (
+                    'org.dolphin-emu.dolphin' if emulator == 'dolphin' else 'info.cemu.Cemu'),
                 'NSBluetoothAlwaysUsageDescription': 'Controller input',
                 'LSMinimumSystemVersion': '15.0',
             }))
-            filenames = ('SDL.cpp', 'SDLGamepad.cpp', 'ControllersPane.cpp') if emulator == 'dolphin' else (
-                'SDLControllerProvider.cpp', 'SDLController.cpp', 'ControllerFactory.cpp', 'InputAPIAddWindow.cpp')
+            filenames = ('SDL.cpp', 'SDLGamepad.cpp', 'ControllersPane.cpp', 'Dynamics.cpp', 'WiimoteEmu.cpp') if emulator == 'dolphin' else (
+                'SDLControllerProvider.cpp', 'SDLController.cpp', 'ControllerFactory.cpp', 'InputAPIAddWindow.cpp',
+                'DefaultControllerSettings.cpp', 'VPADController.cpp', 'WPADController.cpp')
             (build / 'compile_commands.json').write_text(json.dumps([
                 {'file': name, 'command': 'clang++ -DHAVE_SWITCH2KIT=1'} for name in filenames
             ]))
@@ -68,6 +71,21 @@ class InspectionTests(unittest.TestCase):
                     return str(lib) + ':\n\t' + (
                         '/System/Library/Frameworks/CoreHID.framework/CoreHID' if defect == 'corehid' else
                         '/System/Library/Frameworks/CoreBluetooth.framework/CoreBluetooth') + '\n'
+                if arguments[:3] == ['xcrun', 'otool', '-l']:
+                    path = Path(arguments[-1]).resolve()
+                    self.assertIn(path, (exe, lib))
+                    minimum = '16.0' if defect == 'deployment' else '15.0'
+                    platform = '2' if defect == 'platform' else '1'
+                    commands = ('Load command 0\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n'
+                                ' platform ' + platform + '\n    minos ' + minimum + '\n      sdk 26.2\n')
+                    if defect == 'missing-deployment':
+                        commands = ''
+                    search = '/Applications/Xcode Test.app/runtime' if defect == 'build-rpath' else '@loader_path'
+                    if defect == 'malformed-rpath':
+                        commands += 'Load command 1\n      cmd LC_RPATH\n  cmdsize 32\n'
+                    else:
+                        commands += 'Load command 1\n      cmd LC_RPATH\n  cmdsize 32\n     path ' + search + ' (offset 12)\n'
+                    return str(path) + ':\n' + commands
                 if arguments[:2] == ['xcrun', 'lipo']:
                     self.assertEqual(arguments[2], '-archs')
                     self.assertEqual(len(arguments), 4)
@@ -113,6 +131,8 @@ class InspectionTests(unittest.TestCase):
                     self.assertEqual(len(report['binaries']), 2)
                     for binary in report['binaries']:
                         self.assertEqual(binary['architectures'], ['arm64', 'x86_64'])
+                        self.assertEqual(binary['minimum_macos_versions'], ['15.0'])
+                        self.assertEqual(binary['runtime_search_paths'], ['@loader_path'])
                     self.assertIn('lipo -archs', (build / 'integration-native-diagnostics.txt').read_text())
                 self.assertFalse(any(command[0] in ('otool', 'nm') for command in calls))
 
@@ -152,6 +172,17 @@ class InspectionTests(unittest.TestCase):
 
     def test_corehid_dependency_is_rejected(self):
         self.inspect('cemu', 'corehid')
+
+    def test_binary_deployment_platform_and_bundle_identity_are_checked(self):
+        for emulator in ('dolphin', 'cemu'):
+            for defect in ('deployment', 'missing-deployment', 'platform', 'identity'):
+                with self.subTest(emulator=emulator, defect=defect):
+                    self.inspect(emulator, defect)
+
+    def test_build_machine_or_malformed_runtime_paths_are_rejected(self):
+        for defect in ('build-rpath', 'malformed-rpath'):
+            with self.subTest(defect=defect):
+                self.inspect('cemu', defect)
 
     def test_inspection_failure_does_not_package_an_app(self):
         self.inspect('dolphin', 'tool-failure')

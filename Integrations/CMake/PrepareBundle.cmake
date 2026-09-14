@@ -1,0 +1,37 @@
+# Run only on the copied library, before the host signs its completed bundle.
+if(NOT DEFINED S2K_BUNDLE_LIBRARY OR NOT EXISTS "${S2K_BUNDLE_LIBRARY}")
+  message(FATAL_ERROR "A copied Switch2Kit library is required")
+endif()
+execute_process(COMMAND xcrun otool -l "${S2K_BUNDLE_LIBRARY}"
+  OUTPUT_VARIABLE _commands RESULT_VARIABLE _result ERROR_VARIABLE _error)
+if(NOT _result EQUAL 0)
+  message(FATAL_ERROR "Cannot inspect the copied Switch2Kit library: ${_error}")
+endif()
+# Keep system and bundle-relative search paths. SwiftPM also emits the build
+# machine's Xcode runtime directory; that path does not belong in a host bundle.
+string(REGEX MATCHALL "cmd LC_RPATH" _tags "${_commands}")
+string(REGEX MATCHALL "cmd LC_RPATH[\r\n]+[ \t]*cmdsize [0-9]+[\r\n]+[ \t]*path [^\r\n]+" _entries "${_commands}")
+list(LENGTH _tags _tag_count)
+list(LENGTH _entries _entry_count)
+if(NOT _tag_count EQUAL _entry_count)
+  message(FATAL_ERROR "Unrecognized runtime search-path load command")
+endif()
+set(_paths "")
+foreach(_entry IN LISTS _entries)
+  if(NOT _entry MATCHES "[\r\n][ \t]*path (.*) [(]offset [0-9]+[)]$")
+    message(FATAL_ERROR "Unrecognized runtime search path")
+  endif()
+  set(_path "${CMAKE_MATCH_1}")
+  if(IS_ABSOLUTE "${_path}" AND NOT _path MATCHES "^(/usr/lib|/System/Library)(/|$)")
+    list(APPEND _paths "${_path}")
+  endif()
+endforeach()
+# A universal binary can list the same path in both slices; delete it once.
+list(REMOVE_DUPLICATES _paths)
+foreach(_path IN LISTS _paths)
+  execute_process(COMMAND xcrun install_name_tool -delete_rpath "${_path}" "${S2K_BUNDLE_LIBRARY}"
+    RESULT_VARIABLE _result ERROR_VARIABLE _error)
+  if(NOT _result EQUAL 0)
+    message(FATAL_ERROR "Cannot remove a build-machine runtime path: ${_error}")
+  endif()
+endforeach()
