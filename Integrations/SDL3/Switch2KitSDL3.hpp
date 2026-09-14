@@ -20,7 +20,7 @@ enum class SDL3MotionStatus { UnavailableProfile, Disabled, Waiting, Active, Inv
 struct SDL3MotionState {
     bool owned = false;
     SDL3MotionStatus status = SDL3MotionStatus::UnavailableProfile;
-    Uint64 epoch{}, validSinceNS{}, timestampNS{}, sequence{};
+    Uint64 epoch{}, validSinceNS{}, timestampNS{}, sequence{}, validSinceSequence{};
 };
 
 class SDL3Adapter final {
@@ -56,6 +56,10 @@ public:
      * Safe inside an SDL event handler; it does not enter the adapter or host mutex.
      * No identity, sensor contents or diagnostic history is returned. */
     static SDL3MotionState motionState(SDL_JoystickID instance);
+    /** Validate an actual SDL sensor event and recover its report sequence. At most
+     * 256 timestamps per device are retained, with no sensor contents. Missing,
+     * evicted or old-segment events return Waiting; hosts must reset, not interpolate. */
+    static SDL3MotionState motionStateAt(SDL_JoystickID instance, Uint64 sensorTimestamp);
     static const char* motionStatusText(SDL3MotionStatus status);
     /** Resolve SDL instance identity to a physical controller and connection.
      * Store physical id for persistent mappings, NEVER an enumeration ordinal.

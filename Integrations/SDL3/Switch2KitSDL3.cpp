@@ -26,7 +26,19 @@ constexpr const char* motionEpoch = "Switch2Kit.motion.epoch";
 constexpr const char* motionFloor = "Switch2Kit.motion.valid-since-ns";
 constexpr const char* motionTime = "Switch2Kit.motion.receive-ns";
 constexpr const char* motionSequence = "Switch2Kit.motion.sequence";
+constexpr const char* motionLedger = "Switch2Kit.motion.event-ledger";
+// Sequence metadata only, never sensor contents. This bounded lookup lets a host
+// detect SDL event loss as well as engine gaps after draining a multi-report batch.
+struct MotionLedger {
+    struct Entry { Uint64 timestamp{}, sequence{}; };
+    std::array<Entry, S2K_EVENT_CAPACITY> entries{};
+    size_t next{};
+    Uint64 floorSequence{};
+};
+void SDLCALL deleteMotionLedger(void*, void* value) { delete static_cast<MotionLedger*>(value); }
 void invalidateProperties(SDL_PropertiesID properties, SDL3MotionStatus status) {
+    if (auto* ledger = static_cast<MotionLedger*>(SDL_GetPointerProperty(properties, motionLedger, nullptr)))
+        *ledger = {};
     const auto previous = SDL_GetNumberProperty(properties, motionEpoch, 0);
     SDL_SetNumberProperty(properties, motionEpoch, previous == SDL_MAX_SINT64 ? 1 : previous + 1);
     SDL_SetNumberProperty(properties, motionStatus, static_cast<Sint64>(status));
@@ -224,7 +236,7 @@ struct SDL3Adapter::Impl {
         bits[SDL_GAMEPAD_BUTTON_GUIDE] = S2K_BUTTON_HOME;
         bits[SDL_GAMEPAD_BUTTON_START] = S2K_BUTTON_PLUS;
         if (c.capabilities & S2K_CAP_LEFT_STICK) bits[SDL_GAMEPAD_BUTTON_LEFT_STICK] = S2K_BUTTON_L_STICK;
-        if (c.capabilities & S2K_CAP_RIGHT_STICK) bits[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = S2K_BUTTON_RIGHT_STICK;
+        if (c.capabilities & S2K_CAP_RIGHT_STICK) bits[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = S2K_BUTTON_R_STICK;
         bits[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER] = S2K_BUTTON_L;
         bits[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = S2K_BUTTON_R;
         bits[SDL_GAMEPAD_BUTTON_DPAD_UP] = S2K_BUTTON_UP;
@@ -267,6 +279,12 @@ struct SDL3Adapter::Impl {
         d.joystick = SDL_OpenJoystick(d.instance);
         if (!d.joystick) { SDL_DetachVirtualJoystick(d.instance); error = S2K_INTERNAL_ERROR; return nullptr; }
         d.control->motionProperties = SDL_GetJoystickProperties(d.joystick);
+        if (d.hasProfile && !SDL_SetPointerPropertyWithCleanup(d.control->motionProperties, motionLedger,
+                new MotionLedger{}, deleteMotionLedger, nullptr)) {
+            // SDL invokes the cleanup callback even when setting the property fails.
+            SDL_CloseJoystick(d.joystick); SDL_DetachVirtualJoystick(d.instance);
+            error = S2K_INTERNAL_ERROR; return nullptr;
+        }
         SDL_SetBooleanProperty(d.control->motionProperties, motionOwner, true);
         invalidate(d, d.hasProfile ? SDL3MotionStatus::Disabled : selected == profiles.end() ?
                    SDL3MotionStatus::UnavailableProfile : SDL3MotionStatus::InvalidCalibration);
@@ -334,6 +352,8 @@ struct SDL3Adapter::Impl {
         if (!d.seeded) {
             d.seeded = true;
             SDL_SetNumberProperty(d.control->motionProperties, motionFloor, static_cast<Sint64>(timestamp));
+            auto* ledger = static_cast<MotionLedger*>(SDL_GetPointerProperty(d.control->motionProperties, motionLedger, nullptr));
+            ledger->floorSequence = s.sequence;
             return; // First report establishes a receive-time baseline; never integrate across a gap.
         }
         bool sent = true;
@@ -341,6 +361,9 @@ struct SDL3Adapter::Impl {
         if (sent && (d.sensorMask & 2)) sent = SDL_SendJoystickVirtualSensorData(d.joystick, SDL_SENSOR_GYRO, timestamp, gyro, 3);
         if (!sent) { fail(); error = S2K_INTERNAL_ERROR; }
         else {
+            auto* ledger = static_cast<MotionLedger*>(SDL_GetPointerProperty(d.control->motionProperties, motionLedger, nullptr));
+            ledger->entries[ledger->next] = {timestamp, s.sequence};
+            ledger->next = (ledger->next + 1) % ledger->entries.size();
             SDL_SetNumberProperty(d.control->motionProperties, motionTime, static_cast<Sint64>(timestamp));
             SDL_SetNumberProperty(d.control->motionProperties, motionSequence, static_cast<Sint64>(std::min(s.sequence, static_cast<uint64_t>(SDL_MAX_SINT64))));
             SDL_SetNumberProperty(d.control->motionProperties, motionStatus, static_cast<Sint64>(SDL3MotionStatus::Active));
@@ -512,7 +535,7 @@ SDL3MotionState SDL3Adapter::motionState(SDL_JoystickID instance) {
     JoystickLock lock;
     SDL3MotionState state{};
     auto* joystick = SDL_GetJoystickFromID(instance);
-    if (!joystick) return state;
+    if (!joystick || !SDL_JoystickConnected(joystick)) return state;
     const auto properties = SDL_GetJoystickProperties(joystick);
     state.owned = SDL_GetBooleanProperty(properties, motionOwner, false);
     if (!state.owned) return state;
@@ -521,10 +544,29 @@ SDL3MotionState SDL3Adapter::motionState(SDL_JoystickID instance) {
     state.validSinceNS = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionFloor, 0));
     state.timestampNS = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionTime, 0));
     state.sequence = static_cast<Uint64>(SDL_GetNumberProperty(properties, motionSequence, 0));
+    if (const auto* ledger = static_cast<const MotionLedger*>(SDL_GetPointerProperty(properties, motionLedger, nullptr)))
+        state.validSinceSequence = ledger->floorSequence;
     const auto now = SDL_GetTicksNS();
     if (state.status == SDL3MotionStatus::Active && (!state.timestampNS || now < state.timestampNS || now - state.timestampNS > motionGapNS))
         state.status = SDL3MotionStatus::Waiting;
     return state;
+}
+SDL3MotionState SDL3Adapter::motionStateAt(SDL_JoystickID instance, Uint64 sensorTimestamp) {
+    JoystickLock lock;
+    auto state = motionState(instance);
+    if (state.status != SDL3MotionStatus::Active) return state;
+    auto* joystick = SDL_GetJoystickFromID(instance);
+    const auto* ledger = static_cast<const MotionLedger*>(SDL_GetPointerProperty(SDL_GetJoystickProperties(joystick), motionLedger, nullptr));
+    if (ledger && sensorTimestamp > state.validSinceNS) {
+        const auto entry = std::find_if(ledger->entries.begin(), ledger->entries.end(),
+            [sensorTimestamp](const auto& value) { return value.timestamp == sensorTimestamp; });
+        if (entry != ledger->entries.end()) {
+            state.timestampNS = entry->timestamp; state.sequence = entry->sequence;
+            return state;
+        }
+    }
+    state.status = SDL3MotionStatus::Waiting; state.timestampNS = state.sequence = 0;
+    return state; // Unknown/evicted/old-epoch events are not measurements to integrate.
 }
 const char* SDL3Adapter::motionStatusText(SDL3MotionStatus status) {
     switch (status) {
