@@ -26,7 +26,7 @@ file "$LIB"
 lipo "$LIB" -verify_arch arm64 x86_64
 if otool -L "$LIB" | grep -E 'CoreHID|Switch2KitApp'; then fail 'Unexpected application dependency.'; fi
 nm -gjU "$LIB" > "$WORK/exports"
-for symbol in s2k_create s2k_destroy s2k_read s2k_start s2k_stop s2k_play_feedback s2k_set_rumble s2k_convert_motion; do
+for symbol in s2k_create s2k_destroy s2k_read s2k_start s2k_stop s2k_play_feedback s2k_set_rumble s2k_convert_motion s2k_decode_motion_profile s2k_motion_profile_calibration s2k_monotonic_time; do
   grep -qx "_$symbol" "$WORK/exports" || fail "Missing C symbol: $symbol"
 done
 if grep -q s2k_fixture "$WORK/exports"; then fail 'Test fixture leaked into the library.'; fi
@@ -34,6 +34,7 @@ if grep -q s2k_fixture "$WORK/exports"; then fail 'Test fixture leaked into the 
 cat > "$WORK/main.cpp" <<'CPP'
 #include <Switch2KitC.h>
 #include <Switch2KitMotion.h>
+#include <Switch2KitMotionProfile.h>
 #include <cassert>
 int main() {
     assert(s2k_abi_version() == S2K_ABI_VERSION);

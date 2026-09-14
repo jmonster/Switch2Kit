@@ -1,7 +1,7 @@
 import Switch2Kit
 import Switch2KitCABI
 
-private func sensorCalibration(_ value: S2KSensorCalibration) throws -> Switch2SensorCalibration {
+func sensorCalibration(_ value: S2KSensorCalibration) throws -> Switch2SensorCalibration {
     guard value.reserved == 0,
           let x = Switch2MotionAxis(rawValue: value.axes.0),
           let y = Switch2MotionAxis(rawValue: value.axes.1),
