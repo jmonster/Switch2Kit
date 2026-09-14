@@ -23,9 +23,18 @@ jobs:
           ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
           path: build/SDL
           persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: cemu-project/Cemu
+          ref: 3310f3b8b184d64a62b89fd59088c799432badf5
+          path: build/Cemu-motion
+          persist-credentials: false
+      - name: Install headers for the pinned Cemu motion consumer
+        run: brew install boost
       - name: Exercise application lifecycle and concurrent enumeration
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+          S2K_CEMU_SOURCE: ${{ github.workspace }}/build/Cemu-motion
         run: bash tests/emulator-host/verify.sh
   native:
     runs-on: ${{ matrix.os }}

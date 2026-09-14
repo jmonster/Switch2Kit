@@ -3,7 +3,10 @@
 #include <array>
 #include <algorithm>
 #include <mutex>
-#include <fstream>
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <map>
 #include <string>
 
@@ -79,44 +82,51 @@ public:
         Guard lock(mutex_);
         S2KID id{};
         if (!adapter_ || !adapter_->identity(instance, &id, nullptr)) return {};
-        static constexpr char hex[] = "0123456789abcdef";
-        std::string result = "s2k:";
-        for (const auto b : id.bytes) { result += hex[b >> 4]; result += hex[b & 15]; }
-        return result;
+        return physicalKey(id);
     }
     /** Resolve a saved physical key; never fall back to a different controller. */
     SDL_JoystickID instance(const std::string& identity) {
-        Guard lock(mutex_);
-        if (!adapter_ || identity.size() != 36 || identity.compare(0, 4, "s2k:") != 0) return 0;
         S2KID id{};
-        const auto digit = [](char c) -> int {
-            if (c >= '0' && c <= '9') return c - '0';
-            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-            return -1;
-        };
-        for (size_t i = 0; i != 16; ++i) {
-            const auto a = digit(identity[4 + 2 * i]), b = digit(identity[5 + 2 * i]);
-            if (a < 0 || b < 0) return 0;
-            id.bytes[i] = static_cast<uint8_t>(a * 16 + b);
-        }
-        return adapter_->instance(id);
+        if (!parseKey(identity, id)) return 0;
+        Guard lock(mutex_);
+        return adapter_ ? adapter_->instance(id) : 0;
     }
+
     /** Explicit user-selected file import. Read at most 4097 bytes outside the SDL
      * and host locks; no default directory, background watcher or library preference
      * store exists. The file chooses a physical device, never a player/SDL ordinal.
      * Hosts may persist the chosen path in their OWN settings and explicitly reload.
      * A malformed/oversized/unreadable file leaves the previous profile untouched. */
-    S2KResult loadMotionProfile(const std::string& path) {
-        std::ifstream stream(path, std::ios::binary);
-        if (!stream) return S2K_INVALID_ARGUMENT;
+    S2KResult loadMotionProfile(const std::string& path, const std::string& expectedPhysicalKey = {},
+                                S2KID* loadedPhysical = nullptr) {
+        if (path.empty() || path.size() > 4096 || path.find('\0') != std::string::npos)
+            return S2K_INVALID_ARGUMENT;
+        // Nonblocking open + descriptor metadata reject FIFOs/devices even through
+        // symlinks or a path replacement race. No file read occurs on the BT queue.
+        const int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) return S2K_INVALID_ARGUMENT;
+        struct Close { int fd; ~Close() { ::close(fd); } } close{fd};
+        struct stat info{};
+        if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size <= 0 ||
+            info.st_size > S2K_MOTION_PROFILE_MAX_BYTES) return S2K_INVALID_ARGUMENT;
         std::array<uint8_t, S2K_MOTION_PROFILE_MAX_BYTES + 1> bytes{};
-        stream.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
-        if (stream.bad()) return S2K_INVALID_ARGUMENT;
-        const auto count = stream.gcount();
-        if (count <= 0 || count > S2K_MOTION_PROFILE_MAX_BYTES) return S2K_INVALID_ARGUMENT;
+        size_t count = 0;
+        for (unsigned attempts = 0; attempts < 16; ++attempts) {
+            const auto n = ::read(fd, bytes.data() + count, bytes.size() - count);
+            if (n < 0) { if (errno == EINTR) continue; return S2K_INVALID_ARGUMENT; }
+            if (n == 0) break;
+            count += static_cast<size_t>(n);
+            if (count > S2K_MOTION_PROFILE_MAX_BYTES) return S2K_INVALID_ARGUMENT;
+        }
+        if (count != static_cast<size_t>(info.st_size)) return S2K_INVALID_ARGUMENT;
         S2KMotionProfile profile{};
         const auto result = s2k_decode_motion_profile(bytes.data(), static_cast<uint32_t>(count), &profile, sizeof(profile));
-        return result == S2K_OK ? installMotionProfile(profile) : result;
+        if (result != S2K_OK) return result;
+        if (!expectedPhysicalKey.empty() && physicalKey(profile.device) != expectedPhysicalKey)
+            return S2K_INVALID_ARGUMENT;
+        const auto installed = installMotionProfile(profile);
+        if (installed == S2K_OK && loadedPhysical) *loadedPhysical = profile.device;
+        return installed;
     }
     /** Host-owned bounded in-memory selection, also usable without a filesystem. */
     S2KResult installMotionProfile(const S2KMotionProfile& profile) {
@@ -138,6 +148,10 @@ public:
         profiles_.erase(id);
         if (adapter_) adapter_->removeMotionProfile(physical);
     }
+    void removeMotionProfile(const std::string& physicalKey) {
+        S2KID id{};
+        if (parseKey(physicalKey, id)) removeMotionProfile(id);
+    }
     void clearMotionProfiles() {
         Guard lock(mutex_);
         if (adapter_) for (const auto& [id, profile] : profiles_) { (void)id; adapter_->removeMotionProfile(profile.device); }
@@ -156,6 +170,26 @@ public:
         return error_ = s2k_play_feedback(context_, &id, &connection, intensity);
     }
 private:
+    static std::string physicalKey(const S2KID& id) {
+        static constexpr char hex[] = "0123456789abcdef";
+        std::string result = "s2k:";
+        for (const auto b : id.bytes) { result += hex[b >> 4]; result += hex[b & 15]; }
+        return result;
+    }
+    static bool parseKey(const std::string& identity, S2KID& id) {
+        if (identity.size() != 36 || identity.compare(0, 4, "s2k:") != 0) return false;
+        const auto digit = [](char c) -> int {
+            if (c >= '0' && c <= '9') return c - '0';
+            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+            return -1;
+        };
+        for (size_t i = 0; i != 16; ++i) {
+            const auto a = digit(identity[4 + 2 * i]), b = digit(identity[5 + 2 * i]);
+            if (a < 0 || b < 0) return false;
+            id.bytes[i] = static_cast<uint8_t>(a * 16 + b);
+        }
+        return true;
+    }
     // SDL callbacks take SDL's joystick lock first. Keep the same order for all
     // accesses so an emulator's enumeration thread cannot deadlock its input loop.
     struct Guard {
