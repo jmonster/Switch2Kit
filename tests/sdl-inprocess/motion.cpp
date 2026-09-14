@@ -93,6 +93,10 @@ int main() {
             assert(std::abs(event.data[0] - (event.sensor == SDL_SENSOR_GYRO ? 1.0f : 0.0f)) < 1e-6);
             assert(std::abs(event.data[1] - (event.sensor == SDL_SENSOR_ACCEL ? 9.80665f : 0.0f)) < 1e-6);
             assert(event.data[2] == 0);
+            const auto timing = SDL3Adapter::motionStateAt(event.which, event.sensor_timestamp);
+            assert(timing.status == SDL3MotionStatus::Active && timing.sequence == state[index].sequence);
+            assert(timing.validSinceSequence + 1 == timing.sequence);
+            assert(SDL3Adapter::motionStateAt(event.which, event.sensor_timestamp - 1).status == SDL3MotionStatus::Waiting);
         }
         std::puts("PASS four independent physical profiles: exact real-SDL SI/gravity/positive-rotation payloads and receive clocks");
         pump(); assert(events().empty()); // No replay on host frame/pump.
@@ -156,6 +160,8 @@ int main() {
         const auto final = SDL3Adapter::motionState(id);
         assert(final.status == SDL3MotionStatus::Active && final.epoch != meta.epoch);
         assert(received.size() == 4 && received[0].sensor_timestamp < final.validSinceNS && received[2].sensor_timestamp > final.validSinceNS);
+        assert(SDL3Adapter::motionStateAt(id, received[0].sensor_timestamp).status == SDL3MotionStatus::Waiting);
+        assert(SDL3Adapter::motionStateAt(id, received[2].sensor_timestamp).sequence == state[0].sequence);
         assert(oldReceive < state[0].received_at);
         // A native overflow snapshot only reconciles controls; it is not 256 new motion samples.
         for (int n = 0; n < 300; ++n) submit(0);

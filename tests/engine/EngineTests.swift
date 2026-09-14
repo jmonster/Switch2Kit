@@ -13,9 +13,13 @@ private final class InputCounter: Sendable {
     static func main() {
         let engine = BridgeEngine.fixture()
         let deliveredInputs = InputCounter()
+        let inputDelivered = DispatchSemaphore(value: 0)
         let outputQueue = DispatchQueue(label: "test.transport.observer")
         let observation = try! engine.hub.observe(queue: outputQueue, capacity: 256) { event in
-            if case .input = event { deliveredInputs.value.withLock { $0 += 1 } }
+            if case .input = event {
+                deliveredInputs.value.withLock { $0 += 1 }
+                inputDelivered.signal()
+            }
         }
         defer { observation.cancel() }
         engine.btQueue.sync {
@@ -38,7 +42,9 @@ private final class InputCounter: Sendable {
             precondition(engine.idleSweepTimer != nil, "A ready session requires a watchdog")
             let callback = replacement.onState
             callback?(0, ControllerState())
-            outputQueue.sync {}
+            // Mailbox drains use asyncAfter, which is not fenced by queue.sync.
+            // Await actual delivery, not an assumption about scheduler ordering.
+            precondition(inputDelivered.wait(timeout: .now() + 2) == .success)
             precondition(deliveredInputs.value.withLock { $0 } == 1)
             engine.retire(replacement, cancel: true)
             precondition(replacement.isRetired && engine.sessions[1] === other)
@@ -48,7 +54,8 @@ private final class InputCounter: Sendable {
             engine.connecting[newest.peripheral.identifier] = (newest, 0)
             engine.sessionReady(newest)
             callback?(0, ControllerState())
-            outputQueue.sync {}
+            precondition(inputDelivered.wait(timeout: .now() + 0.05) == .timedOut,
+                         "Retired input callback must not schedule another delivery")
             precondition(deliveredInputs.value.withLock { $0 } == 1, "Old input closure reached replacement output")
             engine.sessionFailed(replacement, reason: "late failure")
             engine.sessionDidUpdateState(replacement)
