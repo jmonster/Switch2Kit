@@ -1,4 +1,5 @@
 #include <Switch2KitSDL3.hpp>
+#include "Clock.hpp"
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -48,10 +49,18 @@ int main() {
         std::array<S2KState, 4> state{};
         std::array<SDL_Gamepad*, 4> pads{};
         const auto submit = [&](int index, bool fresh = true) {
-            if (fresh) { ++state[index].sequence; state[index].received_at = s2k_monotonic_time(); }
+            if (fresh) {
+                TestClock::advance(1000000); // Distinct deterministic report times after start().
+                ++state[index].sequence; state[index].received_at = s2k_test_monotonic_time();
+            }
             test_input_report(context, index, models[index], &state[index]);
         };
-        const auto pump = [&] { assert(adapter.pump() == S2K_OK); };
+        const auto pump = [&] {
+            assert(adapter.pump() == S2K_OK);
+            // Explicit processing time, separate from receive intervals. The
+            // integer-nanosecond correlation rounds sub-nanosecond fractions.
+            TestClock::advance(1000);
+        };
         for (int i = 0; i < 4; ++i) {
             state[i].present = S2K_HAS_MOTION;
             for (int a = 0; a < 3; ++a) { state[i].accel[a] = static_cast<int16_t>(a + 10); state[i].gyro[a] = static_cast<int16_t>(a + 20); }
@@ -103,6 +112,15 @@ int main() {
         const auto id = adapter.instance(physical(0));
         auto meta = SDL3Adapter::motionState(id); assert(meta.status == SDL3MotionStatus::Active);
         assert(meta.timestampNS == times[0] && meta.validSinceNS < meta.timestampNS && meta.sequence == state[0].sequence);
+        // The preceding checks use real receive/SDL clocks and real SDL event
+        // timestamps. Policy tests below control only the adapter's clock inputs:
+        // OS scheduling must not turn a consumer-only delay into an input gap.
+        TestClock::start();
+        assert(adapter.pump(false) == S2K_OK); pump(); assert(events().empty());
+        for (int i = 0; i < 4; ++i) submit(i);
+        pump(); assert(events().empty());
+        for (int i = 0; i < 4; ++i) submit(i);
+        pump(); assert(events().size() == 8);
         // Identical install is a no-op; malformed replacement leaves both profile and device intact.
         assert(adapter.installMotionProfile(synthetic(0, models[0])) == S2K_OK); pump();
         assert(adapter.instance(physical(0)) == id);
@@ -131,13 +149,13 @@ int main() {
         // Duplicates/out-of-order/time faults invalidate. Lower sequences cannot seed a stale stream.
         submit(0, false); pump(); assert(events().empty());
         const auto sequence = state[0].sequence;
-        state[0].sequence -= 2; state[0].received_at = s2k_monotonic_time();
+        state[0].sequence -= 2; state[0].received_at = s2k_test_monotonic_time();
         submit(0, false); pump(); assert(events().empty());
         state[0].sequence = sequence; rearm();
         for (double timestamp : {state[0].received_at, state[0].received_at - 0.01, -1.0,
                                  std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN(),
-                                 std::numeric_limits<double>::max(), s2k_monotonic_time() - 0.2,
-                                 s2k_monotonic_time() + 1000}) {
+                                 std::numeric_limits<double>::max(), s2k_test_monotonic_time() - 0.2,
+                                 s2k_test_monotonic_time() + 1000}) {
             ++state[0].sequence; state[0].received_at = timestamp; submit(0, false); pump();
             assert(events().empty()); rearm();
         }
@@ -147,7 +165,7 @@ int main() {
         state[0].present = S2K_HAS_MOTION; rearm();
         state[0].gyro[0] = 32767; submit(0); pump(); assert(events().empty());
         state[0].gyro[0] = 1020; rearm();
-        SDL_Delay(110); // Inactivity does not leave cached active telemetry available to an emulator.
+        TestClock::advance(110000000); // Inactivity does not leave cached active telemetry available to an emulator.
         assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Waiting);
         pump(); assert(events().empty()); rearm();
         assert(adapter.pump(false) == S2K_OK); assert(events().empty());
@@ -181,12 +199,31 @@ int main() {
         // An event-consumer stall is independent of the engine/adapter input loop.
         // Keep fresh reports flowing while allowing older SDL events to age out.
         submit(0); pump(); const auto delayed = SDL3Adapter::motionState(id).timestampNS;
-        for (int i = 0; i < 12; ++i) { SDL_Delay(10); submit(0); pump(); }
+        const auto continuousEpoch = SDL3Adapter::motionState(id).epoch;
+        for (int i = 0; i < 12; ++i) {
+            // Regression: even a real scheduler pause cannot change this test's
+            // claimed input cadence. The old SDL_Delay(10) loop failed here when
+            // its last sleep overshot the production 100 ms gap bound.
+            if (i == 11) SDL_Delay(150);
+            TestClock::advance(10000000); submit(0); pump();
+        }
         const auto recent = SDL3Adapter::motionState(id);
         assert(recent.status == SDL3MotionStatus::Active);
+        assert(recent.epoch == continuousEpoch);
         assert(SDL3Adapter::motionStateAt(id, delayed).status == SDL3MotionStatus::Waiting);
         assert(SDL3Adapter::motionStateAt(id, recent.timestampNS).status == SDL3MotionStatus::Active);
         events();
+        // Conversely an actual input gap MUST invalidate, not be hidden by a
+        // relaxed timeout/retry. The first new report seeds, the next activates.
+        TestClock::advance(150000000);
+        assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Waiting);
+        submit(0); pump(); assert(events().empty());
+        assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Waiting);
+        assert(SDL3Adapter::motionState(id).epoch != continuousEpoch);
+        assert(SDL3Adapter::motionStateAt(id, recent.timestampNS).status == SDL3MotionStatus::Waiting);
+        submit(0); pump(); assert(events().size() == 2);
+        assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Active);
+        std::puts("PASS scheduler-independent consumer stalls and explicit input-gap rearming");
         std::puts("PASS same-batch discontinuity floor, overflow snapshot exclusion, event-consumer stalls and 5000 bounded per-report sensor pairs");
         // Measured reference signs differ from holding orientation. Apply a proper
         // rotation exactly once to both already-independent sensor calibrations.
