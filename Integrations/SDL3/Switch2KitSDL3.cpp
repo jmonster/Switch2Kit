@@ -499,7 +499,15 @@ struct SDL3Adapter::Impl {
             const auto& event = events[i];
             if (event.kind == S2K_EVENT_CONNECTED || event.kind == S2K_EVENT_INPUT) {
                 if (auto* d = ensure(event.controller, active, now, continuous)) {
-                    if (event.kind == S2K_EVENT_INPUT && !clockGap) motion(*d, event.controller.state, active, clock);
+                    if (event.kind == S2K_EVENT_INPUT) {
+                        if (clockGap) {
+                            // These reports were observed, but are not fresh baselines.
+                            // A duplicate of the discarded wake batch must not rearm.
+                            d->highSequence = std::max(d->highSequence, event.controller.state.sequence);
+                            if (std::isfinite(event.controller.state.received_at) && event.controller.state.received_at <= clock.receive)
+                                d->highReceive = std::max(d->highReceive, event.controller.state.received_at);
+                        } else motion(*d, event.controller.state, active, clock);
+                    }
                     apply(*d, event.controller.state, active);
                 }
             } else if (event.kind == S2K_EVENT_DISCONNECTED) {

@@ -264,6 +264,9 @@ int main() {
                 wakeEvent.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) ++up;
         }
         assert(down == 1 && up == 1);
+        // Replaying the discarded wake batch must not establish a fresh baseline.
+        submit(0, false); pump(); assert(events().empty());
+        assert(SDL3Adapter::motionState(id).validSinceNS == 0);
         rearm(); // First post-wake report seeds; only the next one can integrate.
         assert(SDL3Adapter::motionState(id).status == SDL3MotionStatus::Active);
         std::puts("PASS paused receive/SDL clocks: immediate stale rejection, wake rearming, retained button edges and rumble stop");
