@@ -11,9 +11,14 @@ The source's `///` comments document public declarations, including field units 
 | Input | `Switch2ControllerState`, `Switch2Buttons`, `Switch2Stick`, `Switch2Trigger`, `Switch2Battery`, `Switch2Motion`, `Switch2RawVector3`, `Switch2OpticalState`, `Switch2Color` |
 | Explicit motion conversion | `Switch2Vector3`, `Switch2MotionAxis`, `Switch2SensorCalibration`, `Switch2MotionCalibration`, `Switch2CalibratedMotion` |
 | Lifecycle | `Switch2BluetoothState`, `Switch2DiscoveryState`, `Switch2DiscoveryMode`, `Switch2ConnectionState`, `Switch2DisconnectionReason`, `Switch2ControllerEvent`, `Switch2KitError` |
+| Application actions | `Switch2ActionRouter`, `Switch2ActionBinding`, `Switch2ActionControl`, `Switch2ActionAxis`, `Switch2ActionSource`, `Switch2ActionEvent`, `Switch2NavigationAction` |
 | Diagnostics | `Switch2LogLevel`, `Switch2LogCategory`, `Switch2LogRecord`, `Switch2LogHandler` |
 
 The manager provides `start`, both async and callback `stop`, `discover(for:)`, `configureDiscovery`, `useOnlyConnectedControllersForDiscovery`, `observe`, `disconnect`, `forget`, `playRumble`, `setRumble`, `pulseRumble`, `setPlayerNumber`, `setPlayerLEDPattern` and `requestSignalStrength`. It exposes the main-actor presentation snapshot and an immediate thread-safe snapshot. There is no singleton requirement.
+
+The public action router turns controller input and already-mapped local keyboard or external-provider input into host-defined pressed, released and repeated actions. `Switch2ActionRouter<Switch2NavigationAction>.navigation()` provides the optional navigation preset. Hosts own focus, timing and command execution, and must process returned releases on deactivation, source removal and rebinding. See [application actions](actions.md) for bindings, ownership and release guarantees, and [navigation](navigation.md) for the preset.
+
+Application actions run in-process in the library. System keyboard/mouse injection, dashboard gesture handling and other external outputs are optional adapters, not requirements for an integrating application. Swift consumers use [SwiftPM source integration](README.md); [native C/C++ packaging and validation](cpp.md) remain supported separately.
 
 ## Input values
 
