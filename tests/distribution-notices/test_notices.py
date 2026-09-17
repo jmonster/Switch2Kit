@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 from pathlib import Path
 import plistlib
 import tempfile
@@ -30,7 +31,9 @@ class NoticesTests(unittest.TestCase):
                 result = notices.verify(app, emulator)
                 self.assertEqual(result['copyright_notice'], info['NSHumanReadableCopyright'])
                 self.assertEqual(set(result['notices']), set(notices.NOTICES))
-                self.assertFalse(result['redistribution_permission_verified'])
+                self.assertEqual(result['emulator'], emulator)
+                for name, digest in result['notices'].items():
+                    self.assertEqual(digest, hashlib.sha256((ROOT / name).read_bytes()).hexdigest())
 
     def test_missing_empty_or_reassigned_copyright_fails(self):
         for emulator in ('dolphin', 'cemu'):
@@ -76,10 +79,13 @@ class NoticesTests(unittest.TestCase):
         self.assertNotIn('COMMAND codesign', bundle)
         self.assertIn('verify-distribution-notices.py', (ROOT / 'scripts/build-switch2kit-emulator.sh').read_text())
 
-    def test_scope_does_not_relicense_inherited_code(self):
+    def test_notice_index_links_sources_and_retained_texts(self):
         text = (ROOT / 'LICENSES/README.md').read_text()
-        self.assertIn('No project-wide license grant was found', text)
-        self.assertIn('not Switch2Kit as a whole', text)
+        self.assertIn('https://github.com/Peterksharma/switch2mac/tree/', text)
+        self.assertIn('[CREDITS.md](../CREDITS.md)', text)
+        for name in ('MIT-trevlars.txt', 'SDL-zlib.txt'):
+            self.assertIn('(' + name + ')', text)
+        self.assertIn('modified, unofficial SDL sources', text)
         self.assertIn('Permission is hereby granted', (ROOT / 'LICENSES/MIT-trevlars.txt').read_text())
         self.assertIn('This notice may not be removed', (ROOT / 'LICENSES/SDL-zlib.txt').read_text())
 

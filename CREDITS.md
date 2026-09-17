@@ -6,4 +6,4 @@
 - ndeadly, Nadeflore, coffincolors, trevlars, darthcloud, and the controller research community: protocol research.
 - Sam Lantinga and the SDL contributors: SDL.
 
-License scope and retained notices: [LICENSES/README.md](LICENSES/README.md).
+License notices: [LICENSES/README.md](LICENSES/README.md).

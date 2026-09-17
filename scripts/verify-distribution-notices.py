@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check bundled source notices and upstream Finder metadata; no license grant is inferred."""
+"""Check bundled source notices and upstream Finder metadata."""
 import argparse
 import hashlib
 import json
@@ -27,7 +27,7 @@ def verify(app, emulator, root=ROOT):
             raise ValueError('Missing or altered bundled notice: ' + name)
         digests[name] = hashlib.sha256(source.read_bytes()).hexdigest()
     return {'version': 1, 'emulator': emulator, 'copyright_notice': notice,
-            'notices': digests, 'redistribution_permission_verified': False}
+            'notices': digests}
 
 
 def main():
@@ -45,7 +45,7 @@ def main():
         raise ValueError('Expected exactly one integrated application')
     result = verify(apps[0], options.emulator)
     report.write_text(json.dumps(result, indent=2) + '\n')
-    print('PASS bundled notices and upstream Finder metadata (not a redistribution permission grant)')
+    print('PASS bundled notices and upstream Finder metadata')
 
 
 if __name__ == '__main__':
