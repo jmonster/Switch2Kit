@@ -8,7 +8,7 @@ bash sdl/build-sdl.sh /tmp/SDL
 bash sdl/make-gopher64-both.sh
 ```
 
-The build script exports exact commit 147a8ee32dbf9ac02f3794964490687b6bbda1bc,
+The build script exports its pinned SDL revision,
 applies the four patches listed in sdl/build-sdl.sh, and writes
 build/sdl/libSDL3.0.dylib without modifying the source checkout.
 The Gopher64 wrapper defaults to that rebuilt library and refuses to proceed
@@ -22,7 +22,7 @@ is read. The test sends complete button taps and analog-trigger excursions
 between updates through actual localhost UDP sockets and SDL event APIs.
 The CI negative control must fail with exit 42 before the correction; other
 errors are not accepted as a reproduced defect. The same executable must
-then pass via SDL3_DYNAMIC_API using the documented script's rebuilt library.
+then pass against the documented script's rebuilt library.
 
 Nintendo BLE commands, bonding, keep-alives and report decoding are untouched.
 This does not recover datagrams lost before receipt, nor guarantee that a

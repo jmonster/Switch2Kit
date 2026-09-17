@@ -3,6 +3,14 @@
     "repository": "dolphin-emu/dolphin",
     "revision": "c185d27ede09771fe93a3b520c576f646f937ed9",
     "files": {
+      "CMakeLists.txt": {
+        "before": "f221c08e1b7d4b3b4ae3b720947e5d4bb65c1d50c6eeab8d4e3d755e9702b6ef",
+        "after": "ef7c110c6e5a6a7b19ef6dfb54e43be17598232e0df00c33ee98a9e29357683d"
+      },
+      "Externals/SDL/CMakeLists.txt": {
+        "before": "39a06e89e801490937802eb40737947f57b3a50010be2704cddda1899a584474",
+        "after": "997f64930363133469f098855254dc3922e4c7b11cfb8dbaa7b878b2610dce27"
+      },
       "Source/Core/Common/IniFile.cpp": {
         "before": "2a21485e089cae8ea748332a54bba18b8af5a3c20f9c765daa7dcc09148bed79",
         "after": "af7c128c6cb1199dd90febe370a610f0dd92292f24ff3fbd2c5dca409b9367cc"
@@ -79,7 +87,7 @@
     "files": {
       "CMakeLists.txt": {
         "before": "919e665f6870584b28842c464fa9b109f8ee73d76d38462d81c98c89c0f466b6",
-        "after": "9464bc067dfe13959c65b23929b6c73954577e1ec3915a144b9229d5a0d2ee3c"
+        "after": "c641f58ff6710d7ff073db32a36cf25b0740a3cb67f4a6b30901c68b73d95375"
       },
       "src/CMakeLists.txt": {
         "before": "20c43274c1b987d5da11e895ba8138735ed90f5cacf609344f98a2a476bd834f",
@@ -152,6 +160,10 @@
       "src/resource/MacOSXBundleInfo.plist.in": {
         "before": "72c342af8246b92139dcb652df402261845688401fe4c90026e1cdda935ea350",
         "after": "2c3c01882ead71e6767bb79149a0ec408d66d06bc208514cdda2ba58c717e9e6"
+      },
+      "vcpkg.json": {
+        "before": "ff3b6c02d5a0a524a6d3abc5350e4ab57d9938e4896cbb31ca805a86779622f6",
+        "after": "95a5edff0d1e923cb3731ebc9a152621ad6b34b7e72b578f5835cf1a11d5d7bc"
       }
     }
   }

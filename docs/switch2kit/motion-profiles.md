@@ -51,7 +51,7 @@ Dolphin's existing event thread feeds a per-device 256-pair ring. Each emulated 
 
 SDL's aggregate `SetSensorsEnabled` callback runs under its joystick lock for first-enable/last-disable. The adapter additionally queries per-type state on each report/pump; it cannot infer an off/on transition of one type occurring entirely between pumps while another type remains enabled. Hosts changing motion policy should disable both sensors before reenabling. Each report flushes at most two virtual-sensor records through the host's existing SDL instance; no extra worker, unbounded sensor queue, fusion framework or Bluetooth callback workload is introduced.
 
-The pinned public API and implementation are the authority: [virtual sensor submission](https://wiki.libsdl.org/SDL3/SDL_SendJoystickVirtualSensorData), [sensor descriptor](https://wiki.libsdl.org/SDL3/SDL_VirtualJoystickSensorDesc), [sensor enablement](https://wiki.libsdl.org/SDL3/SDL_SetGamepadSensorEnabled), and [sensor event timestamps](https://wiki.libsdl.org/SDL3/SDL_GamepadSensorEvent). Tests use SDL commit `147a8ee32dbf9ac02f3794964490687b6bbda1bc`.
+The pinned public API and implementation are the authority: [virtual sensor submission](https://wiki.libsdl.org/SDL3/SDL_SendJoystickVirtualSensorData), [sensor descriptor](https://wiki.libsdl.org/SDL3/SDL_VirtualJoystickSensorDesc), [sensor enablement](https://wiki.libsdl.org/SDL3/SDL_SetGamepadSensorEnabled), and [sensor event timestamps](https://wiki.libsdl.org/SDL3/SDL_GamepadSensorEvent).
 
 ## Measurement status
 

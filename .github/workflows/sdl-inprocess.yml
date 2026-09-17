@@ -42,6 +42,7 @@ jobs:
       - name: Verify native consumers across checkout names from outside the repository
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+          S2K_EXPECT_SDL_VERSION: 3004016
         run: |
           work=$(mktemp -d)
           trap 'rm -rf "$work"' EXIT

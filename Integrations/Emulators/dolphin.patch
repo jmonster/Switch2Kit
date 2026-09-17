@@ -1,3 +1,42 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8f62d7f..361fa75 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -701,7 +701,11 @@ if(NOT ANDROID)
+ endif()
+
+ if(ENABLE_SDL)
+-  dolphin_find_optional_system_library(SDL3 Externals/SDL 3.2.0)
++  if(ENABLE_SWITCH2KIT)
++    add_subdirectory(Externals/SDL)
++  else()
++    dolphin_find_optional_system_library(SDL3 Externals/SDL 3.2.0)
++  endif()
+   add_definitions(-DHAVE_SDL3)
+ endif()
+
+diff --git a/Externals/SDL/CMakeLists.txt b/Externals/SDL/CMakeLists.txt
+index 6bdd630..ea8f250 100644
+--- a/Externals/SDL/CMakeLists.txt
++++ b/Externals/SDL/CMakeLists.txt
+@@ -25,7 +25,16 @@ if(LibUSB_TYPE STREQUAL Bundled)
+   set(SDL_HIDAPI_LIBUSB_SHARED OFF)
+ endif()
+
+-add_subdirectory(SDL)
++if(ENABLE_SWITCH2KIT)
++  include(FetchContent)
++  FetchContent_Declare(switch2kit_sdl
++    URL https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz
++    URL_HASH SHA256=7322236cd12090c3eb40b9728be4d49c76f66ad17d04369584d4ecad5cf77c68
++    DOWNLOAD_EXTRACT_TIMESTAMP FALSE)
++  FetchContent_MakeAvailable(switch2kit_sdl)
++else()
++  add_subdirectory(SDL)
++endif()
+
+ if (TARGET SDL3)
+   dolphin_disable_warnings(SDL3)
 diff --git a/Source/Core/Common/IniFile.cpp b/Source/Core/Common/IniFile.cpp
 index 6e6749c..e4852eb 100644
 --- a/Source/Core/Common/IniFile.cpp

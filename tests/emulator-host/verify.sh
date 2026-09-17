@@ -4,7 +4,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 : "${S2K_SDL_SOURCE:?Set S2K_SDL_SOURCE to the pinned SDL source checkout}"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-args=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-fno-exceptions "-DS2K_SDL_SOURCE=$S2K_SDL_SOURCE")
+args=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-fno-exceptions "-DS2K_SDL_SOURCE=$S2K_SDL_SOURCE" "-DS2K_EXPECT_SDL_VERSION=${S2K_EXPECT_SDL_VERSION:-}")
 if [ -n "${S2K_CEMU_SOURCE:-}" ]; then args+=("-DS2K_CEMU_SOURCE=$S2K_CEMU_SOURCE"); fi
 if [ -n "${S2K_DOLPHIN_SOURCE:-}" ]; then args+=("-DS2K_DOLPHIN_SOURCE=$S2K_DOLPHIN_SOURCE"); fi
 if [ "$(uname -s)" = Darwin ]; then

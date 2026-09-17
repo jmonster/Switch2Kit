@@ -9,11 +9,10 @@ establish compatibility with every game. RetroArch and Chromium have
 
 Build SDL from the pinned source before using this integration.
 
-The current build uses pinned SDL commit
-`147a8ee32dbf9ac02f3794964490687b6bbda1bc` (`release-3.4.14`) plus all four
-patches applied by [build-sdl.sh](build-sdl.sh). To build on macOS, install
+The build uses the SDL revision and four patches selected by
+[build-sdl.sh](build-sdl.sh). To build on macOS, install
 the required C/C++ build tools, CMake, and libusb, then provide an SDL git
-checkout containing that commit:
+checkout containing the selected revision:
 
 ```sh
 git clone https://github.com/libsdl-org/SDL.git /path/to/SDL
