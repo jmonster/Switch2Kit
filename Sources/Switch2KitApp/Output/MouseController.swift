@@ -50,11 +50,14 @@ final class MouseController: @unchecked Sendable {
         defer { units[serial] = unit }
         let dx = Self.wrapDiff(state.mouseX, unit.lastX), dy = Self.wrapDiff(state.mouseY, unit.lastY)
         unit.lastX = state.mouseX; unit.lastY = state.mouseY
-        guard unit.primed else { unit.primed = true; return false }
         guard state.liftDistance != 0 && state.liftDistance < 1000 && state.surfaceQuality < 4000 else {
+            // Lost tracking breaks the counter baseline as well as fractional motion.
+            // Reacquisition may jump/wrap counters; its first usable report is not a delta.
+            unit.primed = false
             unit.residualX = 0; unit.residualY = 0
             return false
         }
+        guard unit.primed else { unit.primed = true; return false }
         let scale = 0.35 * configuration.mouseSensitivity
         let x = Double(dx) * scale + unit.residualX, y = Double(dy) * scale + unit.residualY
         let moveX = x.rounded(.towardZero), moveY = y.rounded(.towardZero)
