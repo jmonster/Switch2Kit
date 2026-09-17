@@ -77,6 +77,32 @@ def child_environment(home, tmp):
             "TMPDIR": str(tmp) + "/", "LANG": "en_US.UTF-8"}
 
 
+def seed_startup_settings(emulator, user):
+    """Use empty, offline CI settings instead of unattended first-use dialogs.
+
+    These are host settings, not motion profiles or macOS privacy grants. Only a
+    just-created disposable user directory is accepted; existing files survive.
+    Keys match the pinned upstream Cemu/Dolphin configuration readers.
+    """
+    if emulator == "dolphin":
+        config = user / "Config"
+        config.mkdir(exist_ok=False)
+        path = config / "Dolphin.ini"
+        content = "[Analytics]\nEnabled = False\nPermissionAsked = True\n"
+    elif emulator == "cemu":
+        path = user / "settings.xml"
+        content = ("<?xml version=\"1.0\"?>\n<content>\n"
+                   "  <check_update>false</check_update>\n"
+                   "  <use_discord_presence>false</use_discord_presence>\n"
+                   "</content>\n")
+    else:
+        raise LaunchFailure("Unknown startup settings fixture")
+    with path.open("x", encoding="utf-8") as stream:
+        stream.write(content)
+    path.chmod(0o600)
+    return {"fixture": "empty-offline-v1", "sha256": hashlib.sha256(content.encode()).hexdigest()}
+
+
 def sandbox_profile(blocked):
     # Quoted JSON strings are also valid SBPL strings; no shell/Scheme interpolation.
     if not blocked or any(not str(p).startswith("/") for p in blocked):
@@ -103,6 +129,7 @@ def run(emulator, original, helper, output):
               "macos": platform.mac_ver()[0], "source_revision": os.environ.get("GITHUB_SHA"),
               "scope": "fresh-CI full-GUI launch with build-dependency reads denied",
               "physical_controller_tested": False, "stock_clean_mac_tested": False,
+              "pristine_first_run_tested": False,
               "runs": [], "status": "failed"}
     try:
         with tempfile.TemporaryDirectory(prefix="s2k launch ") as temporary:
@@ -119,6 +146,7 @@ def run(emulator, original, helper, output):
             home, tmp = root / "home", root / "tmp"
             for directory in (user, home, tmp):
                 directory.mkdir()
+            record["startup_settings"] = seed_startup_settings(emulator, user)
             blocked = [Path("/Applications"), Path("/Library/Developer"), Path("/opt/homebrew"),
                        Path("/usr/local"), Path(os.environ["GITHUB_WORKSPACE"]).resolve()]
             if any(root == p or p in root.parents for p in blocked):
@@ -141,7 +169,7 @@ def run(emulator, original, helper, output):
                 raise LaunchFailure("No dependency restriction negative control ran")
             args = [str(executable)] + (["--user", str(user)] if emulator == "dolphin" else [])
             env = child_environment(home, tmp)
-            for phase in ("first-launch", "repeat-launch"):
+            for phase in ("configured-launch", "repeat-launch"):
                 # Bound CI-only startup logging. An excessive writer fails, not truncates to success.
                 def limit_log():
                     resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
