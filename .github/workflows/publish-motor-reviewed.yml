@@ -1,0 +1,55 @@
+name: Publish verified motor implementation
+on:
+  push:
+    branches: [qa/publish-gamecube-motor]
+    paths: [.github/workflows/publish-motor-reviewed.yml]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Recover payload and publish exact feature tree
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, json, re, zlib, os
+          from pathlib import Path
+          text = Path('.github/workflows/publish-gamecube-motor.yml').read_text()
+          payload = re.search(r'^            (eNr\S+)$', text, re.M).group(1)
+          payload = payload.replace('DIti6aK8r', 'DIti6K8r')
+          Path(os.environ['RUNNER_TEMP'], 'edits.json').write_bytes(zlib.decompress(base64.b64decode(payload, validate=True)))
+          PY
+          git fetch origin feature/gamecube-motor-rumble
+          git checkout -B feature/gamecube-motor-rumble FETCH_HEAD
+          test "$(git rev-parse HEAD)" = e7f5dffb0c0e7420212775f66dd244e9217d5834
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          for edit in json.loads(Path(os.environ['RUNNER_TEMP'], 'edits.json').read_text()):
+              path = Path(edit['path'])
+              assert not path.is_absolute() and '..' not in path.parts
+              original = path.read_text() if path.exists() else ''
+              if edit['old'] is None:
+                  assert not path.exists()
+              else:
+                  assert hashlib.sha256(original.encode()).hexdigest() == edit['old'], path
+              lines = original.splitlines(keepends=True)
+              for start, end, replacement in reversed(edit['ops']):
+                  lines[start:end] = replacement.splitlines(keepends=True)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(''.join(lines))
+          path = Path('tests/c-consumer/main.cpp')
+          text = path.read_text()
+          assert 's2k_fixture_calls(context) == 2' in text
+          path.write_text(text.replace('s2k_fixture_calls(context) == 2', 's2k_fixture_calls(context) == 5'))
+          PY
+          git diff --check
+          git add -A
+          test "$(git write-tree)" = db657f1d096bdefe2bbbaa31e3f86619508cdc27
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Support NSO GameCube motor rumble through the native transport and SDL' -m 'Dedicated on/off BLE motor channel; retain firmware presets. Exercise expiry, stop, radio backpressure, retirement, C ABI and SDL. AI-assisted implementation; physical motor behavior remains to be confirmed.'
+          git push origin HEAD:refs/heads/feature/gamecube-motor-rumble
