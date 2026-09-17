@@ -1,5 +1,10 @@
 """Failure-oriented tests at the process/window boundary, without GUI or Bluetooth."""
 import importlib.util
+import configparser
+import hashlib
+import stat
+import tempfile
+import xml.etree.ElementTree as ET
 import json
 from pathlib import Path
 import subprocess
@@ -116,6 +121,70 @@ class Tests(unittest.TestCase):
         self.assertIn('(deny file-read*', result)
         with self.assertRaises(ValueError):
             launch.sandbox_profile(['relative'])
+
+    def test_transient_window_loss_is_not_a_continuous_startup(self):
+        result = self.supervise(lambda: {"matched": True, "finished": True,
+                                        "windows": int(not 1 <= self.clock.value < 3)})
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(self.process.killed)
+        self.assertEqual(self.quit_calls, 0)
+
+    def test_dolphin_fixture_declines_analytics_in_private_host_settings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            user = Path(temporary)
+            record = launch.seed_startup_settings("dolphin", user)
+            path = user / "Config/Dolphin.ini"
+            parser = configparser.ConfigParser()
+            parser.read(path)
+            self.assertFalse(parser.getboolean("Analytics", "Enabled"))
+            self.assertTrue(parser.getboolean("Analytics", "PermissionAsked"))
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            self.assertEqual(record["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(parser.sections(), ["Analytics"])
+
+    def test_cemu_fixture_is_valid_offline_empty_library_not_a_motion_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            user = Path(temporary)
+            record = launch.seed_startup_settings("cemu", user)
+            path = user / "settings.xml"
+            xml = ET.parse(path).getroot()
+            self.assertEqual(xml.tag, "content")
+            self.assertEqual({node.tag: node.text for node in xml},
+                             {"check_update": "false", "use_discord_presence": "false"})
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            self.assertEqual(record["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_settings_seed_refuses_existing_data_and_does_not_overwrite(self):
+        for emulator in ("dolphin", "cemu"):
+            with self.subTest(emulator=emulator), tempfile.TemporaryDirectory() as temporary:
+                user = Path(temporary)
+                sentinel = user / "keep"
+                sentinel.write_text("unmodified")
+                with self.assertRaises(launch.LaunchFailure):
+                    launch.seed_startup_settings(emulator, user)
+                self.assertEqual(list(user.iterdir()), [sentinel])
+                self.assertEqual(sentinel.read_text(), "unmodified")
+
+    def test_settings_seed_refuses_symlink_and_missing_user_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "target"
+            target.mkdir()
+            link = root / "link"
+            link.symlink_to(target, target_is_directory=True)
+            for emulator in ("dolphin", "cemu"):
+                for user in (link, root / "missing"):
+                    with self.subTest(emulator=emulator, user=user):
+                        with self.assertRaises(launch.LaunchFailure):
+                            launch.seed_startup_settings(emulator, user)
+            self.assertEqual(list(target.iterdir()), [])
+
+    def test_unknown_settings_fixture_has_no_side_effect(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            user = Path(temporary)
+            with self.assertRaises(launch.LaunchFailure):
+                launch.seed_startup_settings("unknown", user)
+            self.assertEqual(list(user.iterdir()), [])
 
     def test_personal_machine_is_not_an_unattended_ci_target(self):
         from unittest.mock import patch

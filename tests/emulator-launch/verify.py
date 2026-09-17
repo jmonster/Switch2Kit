@@ -41,6 +41,9 @@ def supervise(process, inspect, quit_app, now=time.monotonic, sleep=time.sleep):
         while now() < deadline:
             if process.poll() is not None:
                 raise LaunchFailure("Application exited during the GUI observation interval")
+            state = inspect()
+            if not (state.get("matched") and state.get("finished") and state.get("windows", 0) > 0):
+                raise LaunchFailure("Application lost its window during observation")
             sleep(0.2)
         state = inspect()
         if not (state.get("matched") and state.get("finished") and state.get("windows", 0) > 0):
@@ -84,6 +87,8 @@ def seed_startup_settings(emulator, user):
     just-created disposable user directory is accepted; existing files survive.
     Keys match the pinned upstream Cemu/Dolphin configuration readers.
     """
+    if user.is_symlink() or not user.is_dir() or any(user.iterdir()):
+        raise LaunchFailure("Startup settings require an empty owned user directory")
     if emulator == "dolphin":
         config = user / "Config"
         config.mkdir(exist_ok=False)
@@ -97,9 +102,9 @@ def seed_startup_settings(emulator, user):
                    "</content>\n")
     else:
         raise LaunchFailure("Unknown startup settings fixture")
-    with path.open("x", encoding="utf-8") as stream:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         stream.write(content)
-    path.chmod(0o600)
     return {"fixture": "empty-offline-v1", "sha256": hashlib.sha256(content.encode()).hexdigest()}
 
 
