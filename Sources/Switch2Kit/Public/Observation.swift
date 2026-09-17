@@ -40,15 +40,74 @@ package protocol EventSink: Sendable {
     func cancel()
 }
 
+// FIFO specialized for the hub's monotonically numbered envelopes. Storage grows
+// lazily up to the observation's existing bound. Popping releases the envelope
+// immediately without shifting the rest of the backlog under a producer lock.
+struct PendingControllerEvents: Sendable {
+    private let capacity: Int
+    private var storage: [EventEnvelope?] = []
+    private var head = 0
+    private(set) var count = 0
+    var isEmpty: Bool { count == 0 }
+    var allocatedCount: Int { storage.count }
+
+    init(capacity: Int) {
+        precondition((1...4096).contains(capacity))
+        self.capacity = capacity
+    }
+    mutating func append(_ event: EventEnvelope) {
+        precondition(count < capacity)
+        if count == storage.count {
+            var grown = [EventEnvelope?](repeating: nil,
+                count: min(capacity, max(1, storage.count * 2)))
+            for index in 0..<count { grown[index] = storage[(head + index) % storage.count] }
+            storage = grown; head = 0
+        }
+        storage[(head + count) % storage.count] = event
+        count += 1
+    }
+    mutating func popFirst() -> EventEnvelope? {
+        guard count != 0 else { return nil }
+        let event = storage[head]
+        storage[head] = nil
+        head = (head + 1) % storage.count
+        count -= 1
+        return event
+    }
+    mutating func takeFirst(_ maximum: Int) -> [EventEnvelope] {
+        var result: [EventEnvelope] = []
+        result.reserveCapacity(min(maximum, count))
+        for _ in 0..<min(maximum, count) {
+            if let event = popFirst() { result.append(event) }
+        }
+        return result
+    }
+    mutating func discard(through sequence: UInt64) {
+        // Only resynchronization may advance past queued input. Since the hub
+        // publishes in order, obsolete envelopes form a prefix, not a full scan.
+        while count != 0, let first = storage[head], first.sequence <= sequence {
+            _ = popFirst()
+        }
+    }
+    mutating func removeAll(keepingCapacity: Bool = false) {
+        if keepingCapacity {
+            while popFirst() != nil {}
+        } else {
+            storage.removeAll(); count = 0
+        }
+        head = 0
+    }
+}
+
 package final class EventMailbox: EventSink {
     private struct State: Sendable {
-        var pending: [EventEnvelope] = []
+        var pending: PendingControllerEvents
         var overflow = false
         var scheduled = false
         var cancelled = false
         var delivered: UInt64 = 0
     }
-    private let state = Mutex(State())
+    private let state: Mutex<State>
     private let capacity: Int
     private let queue: DispatchQueue
     private let interval: TimeInterval
@@ -58,6 +117,7 @@ package final class EventMailbox: EventSink {
                  current: @escaping @Sendable () -> EventEnvelope,
                  handler: @escaping @Sendable (Switch2ControllerEvent) -> Void) {
         self.capacity = min(4096, max(1, capacity)); self.queue = queue
+        self.state = Mutex(State(pending: PendingControllerEvents(capacity: self.capacity)))
         self.interval = interval; self.current = current; self.handler = handler
     }
     package func enqueue(_ event: EventEnvelope) {
@@ -79,7 +139,7 @@ package final class EventMailbox: EventSink {
                 guard !value.cancelled else { return (false, nil) }
                 if value.overflow { value.overflow = false; return (true, nil) }
                 guard !value.pending.isEmpty else { return (false, nil) }
-                return (false, value.pending.removeFirst())
+                return (false, value.pending.popFirst())
             }
             var envelope: EventEnvelope
             if next.0 { envelope = current() }
@@ -93,7 +153,7 @@ package final class EventMailbox: EventSink {
             let deliver = state.withLock { value in
                 guard !value.cancelled, envelope.sequence > value.delivered else { return false }
                 value.delivered = envelope.sequence
-                value.pending.removeAll { $0.sequence <= value.delivered }
+                value.pending.discard(through: value.delivered)
                 return true
             }
             if deliver { handler(envelope.event) }
@@ -209,18 +269,19 @@ package final class ControllerEventHub: Sendable {
 // The only producer is ControllerEventHub; one host thread drains each reader.
 package final class ControllerEventReader: EventSink {
     private struct State: Sendable {
-        var pending: [EventEnvelope] = []
+        var pending: PendingControllerEvents
         var overflow = true
         var cancelled = false
         var delivered: UInt64 = 0
     }
-    private let state = Mutex(State())
+    private let state: Mutex<State>
     private let capacity: Int
     private let current: @Sendable () -> EventEnvelope
     private let remove: @Sendable () -> Void
     package init(capacity: Int, current: @escaping @Sendable () -> EventEnvelope,
                  remove: @escaping @Sendable () -> Void) {
         self.capacity = capacity; self.current = current; self.remove = remove
+        self.state = Mutex(State(pending: PendingControllerEvents(capacity: capacity)))
     }
     package func enqueue(_ event: EventEnvelope) {
         state.withLock { value in
@@ -237,8 +298,7 @@ package final class ControllerEventReader: EventSink {
         let picked: (events: [EventEnvelope], resync: Bool) = state.withLock { value in
             guard !value.cancelled, maximum > 0 else { return ([], false) }
             if value.overflow { value.overflow = false; return ([], true) }
-            let events = Array(value.pending.prefix(maximum))
-            value.pending.removeFirst(events.count)
+            let events = value.pending.takeFirst(maximum)
             return (events, events.contains { $0.lifetime?.isActive == false || $0.snapshotLifetimes.contains { !$0.isActive } })
         }
         let now = current()
@@ -251,7 +311,7 @@ package final class ControllerEventReader: EventSink {
             guard !value.cancelled else { return ([], snapshot, false, false) }
             if resync {
                 value.delivered = max(value.delivered, now.sequence)
-                value.pending.removeAll { $0.sequence <= value.delivered }
+                value.pending.discard(through: value.delivered)
                 // A concurrent producer may have overflowed after current() was read.
                 // Keep that overflow bit, forcing another authoritative snapshot next read.
                 return ([], snapshot, true, value.overflow || !value.pending.isEmpty)
