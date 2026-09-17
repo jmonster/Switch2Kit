@@ -26,7 +26,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 dbus libsystemd0 nodejs
       - name: Preserve the exact source under test
-        run: git archive HEAD -o "$RUNNER_TEMP/switch2kit-tested-source.zip"
+        run: git -c safe.directory="$PWD" archive HEAD -o "$RUNNER_TEMP/switch2kit-tested-source.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: linux-tested-source
