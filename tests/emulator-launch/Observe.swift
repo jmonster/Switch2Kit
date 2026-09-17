@@ -21,7 +21,7 @@ func observe() throws {
         // This is a request, not proof of termination. The parent waits for exit.
         result["quit_requested"] = app.terminate()
     } else {
-        guard let windows = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements],
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
                                                        kCGNullWindowID) as? [[String: Any]] else {
             throw NSError(domain: "LaunchObserver", code: 2)
         }

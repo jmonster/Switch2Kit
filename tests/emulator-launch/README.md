@@ -2,7 +2,7 @@
 
 The `launch` jobs in the emulator integration workflow download the complete application artifacts into fresh macOS runners. They do not rebuild the emulator or install its dependencies. The small AppKit observer is compiled separately with the selected Xcode; it is not linked into either application.
 
-Each job copies the application outside the checkout, creates private, empty host-owned user settings, and runs its actual GUI executable twice. A pass requires matching process/executable registration, a layer-zero window at least 100×100 observed throughout a five-second interval, and an ordinary quit request followed by exit zero. A process that exits successfully without opening a window, crashes, loses its window, refuses to quit, or requires forced cleanup fails. The window observer does not establish gameplay or completion of interactive setup.
+Each job copies the application outside the checkout, creates private, empty host-owned user settings, and runs its actual GUI executable twice. A pass requires matching process/executable registration, an onscreen layer-zero window at least 100×100 observed throughout a five-second interval, and an ordinary quit request followed by exit zero. A process that exits successfully without opening a window, crashes, loses its window, refuses to quit, or requires forced cleanup fails. The window observer does not establish gameplay or completion of interactive setup.
 
 ## Configured startup, not unattended first-use interaction
 
