@@ -12,7 +12,7 @@ target_link_libraries(your_emulator PRIVATE Switch2Kit::SDL3)
 switch2kit_embed(your_emulator) # macOS application bundle; host signs it afterward
 ```
 
-The source dependency builds through the [C binding](cpp.md). Enable it only for macOS 15+ hosts. The adapter itself is portable for fake-boundary tests; physical Bluetooth remains macOS-only. CI tests unmodified SDL at commit `147a8ee32dbf9ac02f3794964490687b6bbda1bc`.
+The source dependency builds through the [C binding](cpp.md). Enable it only for macOS 15+ hosts. The adapter itself is portable for fake-boundary tests; physical Bluetooth remains macOS-only. The native-consumer CI uses unmodified SDL 3.4.16 at commit `fa2c02bb6e21974a89ea9824bc53c9932abe5f9c`. The adapter links the host's existing SDL target; this test pin does not replace an emulator's own SDL dependency.
 
 ## Ownership and input loop
 
@@ -34,7 +34,7 @@ if (input && s2k_start(input) == S2K_OK) {
         // Existing emulator SDL processing.
     }
 
-    // Keep using adapter in the input loop. Destroy it before the context and SDL.
+    // Keep the main run loop active until shutdown.
 }
 s2k_destroy(input);
 ```

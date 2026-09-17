@@ -24,12 +24,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: libsdl-org/SDL
-          ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
+          ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
           path: build/SDL
           persist-credentials: false
       - name: Record exact input dependency
         if: matrix.os == 'macos-26'
-        run: git -C build/SDL archive HEAD -o "$RUNNER_TEMP/sdl-source.zip"
+        run: |
+          test "$(git -C build/SDL rev-parse HEAD)" = fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
+          git -C build/SDL archive HEAD -o "$RUNNER_TEMP/sdl-source.zip"
       - name: Preserve pinned SDL source for reproductions
         if: matrix.os == 'macos-26'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
