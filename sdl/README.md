@@ -84,4 +84,4 @@ firmware coverage, or every controller's rumble behavior.
 
 ## SDL source
 
-The build script fetches the pinned SDL release and applies the patches in this directory. SDL's license is included in that source checkout.
+The build script exports the pinned SDL revision and applies the patches in this directory. SDL's license is included in that source checkout.

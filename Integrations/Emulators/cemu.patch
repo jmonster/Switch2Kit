@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 644032c..2e531d4 100644
+index 644032c..ac2d18c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -1,6 +1,8 @@
@@ -22,12 +22,16 @@ index 644032c..2e531d4 100644
  endif()
 
  if (UNIX AND NOT APPLE)
-@@ -164,10 +168,23 @@ find_package(fmt 12.1 REQUIRED)
+@@ -164,10 +168,27 @@ find_package(fmt 12.1 REQUIRED)
  find_package(PNG REQUIRED)
 
  if(ENABLE_SDL)
 -	find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
-+	find_package(SDL3 3.4.16 REQUIRED CONFIG COMPONENTS SDL3)
++    if(ENABLE_SWITCH2KIT)
++        find_package(SDL3 3.4.16 REQUIRED CONFIG COMPONENTS SDL3)
++    else()
++        find_package(SDL3 REQUIRED CONFIG COMPONENTS SDL3)
++    endif()
  	add_compile_definitions(HAS_SDL)
  endif()
 
