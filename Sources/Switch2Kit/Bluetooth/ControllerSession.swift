@@ -172,6 +172,16 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
 
     package func teardown() {
         guard !ended else { return }
+        // Best effort while the radio is writable. Do not enqueue a stop (or any
+        // command) that could run after retirement or on a replacement connection.
+        if rumbleActive || pendingMotor != nil,
+           peripheral.canSendWriteWithoutResponse,
+           let characteristic = chars[Switch2.GATT.vibration(for: model)] {
+            let stop = Switch2.motorPacket(.stopped, packetID: vibrationPacketID, model: model)
+            if stop.count <= peripheral.maximumWriteValueLength(for: .withoutResponse) {
+                peripheral.writeValue(stop, for: characteristic, type: .withoutResponse)
+            }
+        }
         ended = true
         lifetime.retire()
         peripheral.delegate = nil
@@ -611,7 +621,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     package func applyRumblePulse(strong: Double, weak: Double, duration: Double) {
         guard !ended, duration.isFinite else { return }
         applyRumble(strong: strong, weak: weak)
-        guard model.hasHDRumble, rumbleTarget.strong > 0.001 || rumbleTarget.weak > 0.001 else { return }
+        guard model.capabilities.contains(.continuousRumble), rumbleTarget.strong > 0.001 || rumbleTarget.weak > 0.001 else { return }
         let delay = max(0, min(5, duration))
         rumbleStopDeadline = ProcessInfo.processInfo.systemUptime + delay
         rumbleStopGeneration = rumbleGeneration
@@ -662,9 +672,9 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         // can never leave the motor running.
         if now - rumbleSetAt > 0.5 { strong = 0; weakMag = 0 }
 
-        // The GameCube model explicitly lacks this motor protocol. Do not
-        // suppress its LED keep-alive when an unsupported rumble is requested.
-        if model.hasHDRumble && (strong > 0.001 || weakMag > 0.001 || rumbleActive) {
+        // The packet encoder selects HD waveforms or GameCube motor on/off.
+        // Both share replacement, backpressure, and stale-intent stop behavior.
+        if model.capabilities.contains(.continuousRumble) && (strong > 0.001 || weakMag > 0.001 || rumbleActive) {
             let active = strong > 0.001 || weakMag > 0.001
             if writeMotor(Switch2.MotorVibration.waveform(strong: strong, weak: weakMag, model: model)) {
                 rumbleActive = active
@@ -687,7 +697,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
 
     @discardableResult
     private func writeMotor(_ motors: Switch2.MotorVibration) -> Bool {
-        guard !ended, model.hasHDRumble else { return false }
+        guard !ended, model.capabilities.contains(.continuousRumble) else { return false }
         let size = Switch2.motorPacket(motors, packetID: 0, model: model).count
         guard chars[Switch2.GATT.vibration(for: model)] != nil,
               size <= peripheral.maximumWriteValueLength(for: .withoutResponse) else {

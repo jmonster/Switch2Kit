@@ -116,8 +116,8 @@ public final class Switch2ControllerManager: ObservableObject {
         transport.submitRumble(id, strong: intensity, weak: 0, duration: nil, feedback: true)
     }
 
-    /// Sets normalized HD-rumble intent: each channel is 0...1. Pro uses strong=left, weak=right;
-    /// a Joy-Con mixes the channels into its single actuator. GameCube is rejected with a typed event.
+    /// Sets normalized motor intent: each channel is 0...1. Pro uses strong=left, weak=right;
+    /// a Joy-Con mixes the channels. GameCube runs its on/off motor when either channel is nonzero.
     /// Zero stops rumble. A 500 ms failsafe stops an intent unless renewed; this protects stalled hosts.
     /// Repeated intents coalesce in a bounded inbox. Values must be finite and in range.
     public nonisolated func setRumble(for id: Switch2ControllerID, strong: Double, weak: Double = 0) throws {
@@ -127,7 +127,7 @@ public final class Switch2ControllerManager: ObservableObject {
         transport.submitRumble(id, strong: strong, weak: weak, duration: nil)
     }
 
-    /// Plays a bounded 0.01...0.5 second HD-rumble pulse. A later pulse/intent replaces it;
+    /// Plays a bounded 0.01...0.5 second motor pulse. A later pulse/intent replaces it;
     /// generation checks prevent an old stop callback from cancelling newer rumble.
     /// The channel mapping and model restrictions are the same as `setRumble`.
     public nonisolated func pulseRumble(for id: Switch2ControllerID, strong: Double = 0.5,

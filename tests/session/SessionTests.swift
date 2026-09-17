@@ -21,7 +21,8 @@ enum SessionTests {
         let p = CBPeripheral(), q = DispatchQueue(label: "session-test"), d = Delegate()
         let s = ControllerSession(peripheral: p, slot: 0, wasPairingMode: false, queue: q, delegate: d)
         for uuid in [Switch2.GATT.commandWrite, Switch2.GATT.commandResponse, Switch2.GATT.inputReport,
-                     Switch2.GATT.vibrationPro, Switch2.GATT.vibrationJoyConL, Switch2.GATT.vibrationJoyConR] {
+                     Switch2.GATT.vibrationPro, Switch2.GATT.vibrationJoyConL, Switch2.GATT.vibrationJoyConR,
+                     Switch2.GATT.vibrationGameCube] {
             s.chars[uuid] = CBCharacteristic(uuid)
         }
         return (s, p, q, d)
@@ -103,12 +104,10 @@ enum SessionTests {
                 s.setRumble(strong: 1, weak: 0)
                 q.sync { s.maintainTick() }
                 let motors = p.writes.filter { $0.1.uuid.uuidString == Switch2.GATT.vibration(for: model).uuidString }
-                precondition(motors.isEmpty == !model.hasHDRumble, "GameCube must not receive unsupported HD motor writes")
-                if !model.hasHDRumble {
-                    precondition(p.writes.contains { $0.0.first == Switch2.Command.leds }, "Unsupported rumble must not suppress keep-alive")
-                    let count = p.writes.count
-                    s.writeMotor(.tone(freqHz: 200, amp: 1))
-                    precondition(p.writes.count == count, "Direct motor calls must obey capability")
+                precondition(!motors.isEmpty)
+                if model == .nsoGameCube {
+                    precondition(motors.allSatisfy { $0.0.count == 5 && $0.0[2] == 1 })
+                    precondition(!p.writes.contains { $0.1.uuid.uuidString == Switch2.GATT.vibrationPro.uuidString })
                 }
             }
         }

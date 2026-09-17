@@ -26,6 +26,7 @@ package enum Switch2 {
         package static let inputReport = UUID(uuidString: "AB7DE9BE-89FE-49AD-828F-118F09DF7FD2")!
         package static let commandWrite = UUID(uuidString: "649D4AC9-8EB7-4E6C-AF44-1EA54FE5F005")!
         package static let commandResponse = UUID(uuidString: "C765A961-D9D8-4D36-A20A-5315B111836A")!
+        package static let vibrationGameCube = UUID(uuidString: "3F8FB670-AB25-45BF-B540-38C72834D064")!
         package static let vibrationPro = UUID(uuidString: "CC483F51-9258-427D-A939-630C31F72B05")!
         package static let vibrationJoyConR = UUID(uuidString: "FA19B0FB-CD1F-46A7-84A1-BBB09E00C149")!
         package static let vibrationJoyConL = UUID(uuidString: "289326CB-A471-485D-A8F4-240C14F18241")!
@@ -34,7 +35,8 @@ package enum Switch2 {
             switch model {
             case .joyCon2Left: return vibrationJoyConL
             case .joyCon2Right: return vibrationJoyConR
-            default: return vibrationPro  // Pro 2 and GameCube share it
+            case .nsoGameCube: return vibrationGameCube
+            case .proController2: return vibrationPro
             }
         }
     }
@@ -465,9 +467,21 @@ package enum Switch2 {
         motorPacket(MotorVibration(vib), packetID: packetID, model: model)
     }
 
-    /// Three identical sub-frames per motor; Pro has separate L then R blocks.
+    /// NSO GameCube uses a single on/off motor, not the HD waveform encoding.
+    /// BLE report byte 0 is zero; the four-byte motor block carries sequence and state.
+    /// References and the unverified physical-hardware boundary are in docs/rumble.md.
+    package static func gameCubeMotorPacket(isRunning: Bool, packetID: UInt8) -> Data {
+        Data([0x00, 0x50 | (packetID & 0x0F), isRunning ? 0x01 : 0x00, 0x00, 0x00])
+    }
+
+    /// Three identical sub-frames per HD motor; Pro has separate L then R blocks.
     /// The sequence nibble belongs to the whole write and wraps modulo 16.
     package static func motorPacket(_ motors: MotorVibration, packetID: UInt8, model: Model) -> Data {
+        if model == .nsoGameCube {
+            let active = motors.left.lfAmp != 0 || motors.left.hfAmp != 0 ||
+                         motors.right.lfAmp != 0 || motors.right.hfAmp != 0
+            return gameCubeMotorPacket(isRunning: active, packetID: packetID)
+        }
         func block(_ sample: Vibration) -> Data {
             var data = Data([0x50 | (packetID & 0x0F)])
             let packed = sample.packed()

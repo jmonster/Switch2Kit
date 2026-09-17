@@ -60,7 +60,7 @@ Physical `id` persists locally, while `connection_id` changes on every reconnect
 
 Sticks are normalized `-1...1`, right/up positive. GameCube trigger travel is `0...1` and independent of digital ZL/ZR clicks. Missing fields are identified by `present`; zero does not mean missing. Buttons retain Nintendo report positions, including the extra controls. Do not reinterpret them as an Xbox button layout. Raw motion is explicitly not scaled to SDL sensor units; do not advertise a calibrated sensor from these raw values.
 
-Use `s2k_play_feedback` for a short action on every model. Use `s2k_set_rumble` for Pro/Joy-Con game effects, renewing an active intent before 500 ms and sending zero on stop. `s2k_pulse_rumble` accepts 0.01...0.5 seconds. GameCube firmware clips cannot be cancelled or assigned an arbitrary duration; `S2K_CAP_RUMBLE_PRESETS` is separate from `S2K_CAP_CONTINUOUS_RUMBLE`. See [rumble](../rumble.md).
+Use `s2k_play_feedback` for a short action on every model. Use `s2k_set_rumble` for game effects (Pro/Joy-Con amplitude or GameCube motor on/off), renewing an active intent before 500 ms and sending zero on stop. `s2k_pulse_rumble` accepts 0.01...0.5 seconds. GameCube firmware clips cannot be cancelled or assigned an arbitrary duration; `S2K_CAP_RUMBLE_PRESETS` is separate from `S2K_CAP_CONTINUOUS_RUMBLE`. See [rumble](../rumble.md).
 
 Malformed arguments return a synchronous `S2KResult`. Transport, radio and command failures arrive as `S2K_EVENT_ERROR`. Neither successful submission nor a protocol acknowledgement measures physical feedback.
 

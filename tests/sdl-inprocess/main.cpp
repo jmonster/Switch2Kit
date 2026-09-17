@@ -90,7 +90,11 @@ int main() {
         assert(SDL_RumbleGamepad(pads[0], 30000, 20000, 20));
         SDL_Delay(40); assert(adapter.pump() == S2K_OK);
         test_input_rumble(context, 0, &strong, &weak); assert(strong == 0 && weak == 0);
-        assert(!SDL_GetBooleanProperty(SDL_GetGamepadProperties(pads[1]), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false));
+        assert(SDL_GetBooleanProperty(SDL_GetGamepadProperties(pads[1]), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false));
+        assert(SDL_RumbleGamepad(pads[1], 30000, 0, 20));
+        test_input_rumble(context, 1, &strong, &weak); assert(strong > 0 && weak == 0);
+        SDL_Delay(40); assert(adapter.pump() == S2K_OK);
+        test_input_rumble(context, 1, &strong, &weak); assert(strong == 0 && weak == 0);
         auto gc = adapter.snapshot().controllers[1];
         assert(s2k_play_feedback(context, &gc.id, &gc.connection_id, 0.25) == S2K_OK);
         std::puts("PASS sustained effect renewal, SDL duration expiry, stalled-host stop and distinct GameCube feedback capability");
