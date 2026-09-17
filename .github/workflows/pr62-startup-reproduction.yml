@@ -1,0 +1,61 @@
+name: PR62 startup reproduction
+on:
+  push:
+    branches: [test/pr62-startup-check-20260917]
+permissions:
+  contents: read
+  actions: read
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+jobs:
+  launch:
+    # A different runner: application build dependencies must not leak from native.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - emulator: dolphin
+            architecture: arm64
+            os: macos-15
+          - emulator: cemu
+            architecture: arm64
+            os: macos-15
+          - emulator: dolphin
+            architecture: x86_64
+            os: macos-15-intel
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: 35159688755
+          name: ${{ matrix.emulator }}-${{ matrix.architecture }}-switch2kit-app
+          path: build/launch-download
+      - name: Build the external window observer, not the emulator
+        run: |
+          xcrun swiftc -swift-version 6 -warnings-as-errors \
+            tests/emulator-launch/Observe.swift -o "$RUNNER_TEMP/s2k-window-observer"
+      - name: Launch the complete application with build dependencies inaccessible
+        env:
+          EMULATOR: ${{ matrix.emulator }}
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+          mkdir -p build/launch-extracted
+          ditto -x -k build/launch-download/integration-app.zip build/launch-extracted
+          apps=(build/launch-extracted/*.app)
+          test "${#apps[@]}" -eq 1
+          python3 tests/emulator-launch/verify.py "$EMULATOR" "${apps[0]}" \
+            "$RUNNER_TEMP/s2k-window-observer" build/launch-result
+      - name: Preserve observed launch and shutdown results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.emulator }}-${{ matrix.architecture }}-gui-launch
+          path: build/launch-result
+          if-no-files-found: error
+          retention-days: 7
