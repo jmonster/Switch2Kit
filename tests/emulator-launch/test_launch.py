@@ -186,6 +186,13 @@ class Tests(unittest.TestCase):
                 launch.seed_startup_settings("unknown", user)
             self.assertEqual(list(user.iterdir()), [])
 
+    def test_native_observer_does_not_count_offscreen_windows(self):
+        # Source-policy guard for the Apple API unavailable on Linux; the actual
+        # observer is compiled and exercised against both GUIs by macOS CI.
+        source = Path(__file__).with_name("Observe.swift").read_text()
+        self.assertIn("[.optionOnScreenOnly, .excludeDesktopElements]", source)
+        self.assertNotIn(".optionAll", source)
+
     def test_personal_machine_is_not_an_unattended_ci_target(self):
         from unittest.mock import patch
         with patch.dict('os.environ', {}, clear=True):
