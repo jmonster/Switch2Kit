@@ -57,7 +57,7 @@ The adapter exposes `identity(SDL_JoystickID, ...)` and `instance(S2KID)` so an 
 
 SDL duration-controlled rumble uses Pro/Joy-Con's continuous capability. The SDL callback starts the effect; subsequent input updates renew active intent at 200 ms intervals. SDL's own expiration is processed before renewal. Zero stops, newer effects replace older effects, and a gap of 500 ms in adapter updates cancels renewal rather than extending a stale effect. There is no timer that keeps buzzing when the host input loop is frozen.
 
-GameCube's soft/strong firmware feedback remains available through `s2k_play_feedback`. The adapter does not advertise it as cancellable SDL game rumble, because firmware clips cannot implement SDL's arbitrary duration and immediate stop contract. It never advertises raw counts as calibrated motion. With no valid physical-device profile, basic input remains available and no SDL motion sensors are registered. Explicit profiles, sensor delivery, clock correlation and the downstream reset contract are described in [Motion profiles](motion-profiles.md). Raw motion remains accessible through the C binding.
+GameCube exposes cancellable on/off SDL game rumble through its dedicated motor channel. Its separate soft/strong firmware feedback remains available through `s2k_play_feedback`; those preset clips are not used to implement SDL duration/stop. It never advertises raw counts as calibrated motion. With no valid physical-device profile, basic input remains available and no SDL motion sensors are registered. Explicit profiles, sensor delivery, clock correlation and the downstream reset contract are described in [Motion profiles](motion-profiles.md). Raw motion remains accessible through the C binding.
 
 ## Tests
 

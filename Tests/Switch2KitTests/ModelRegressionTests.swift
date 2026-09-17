@@ -12,7 +12,7 @@ final class ModelRegressionTests: XCTestCase {
             XCTAssertEqual(model.capabilities.contains(.rightStick), model != .joyCon2Left)
             XCTAssertEqual(model.capabilities.contains(.analogTriggers), model == .nsoGameCube)
             XCTAssertTrue(model.capabilities.contains(.rumble))
-            XCTAssertEqual(model.capabilities.contains(.continuousRumble), model != .nsoGameCube)
+            XCTAssertTrue(model.capabilities.contains(.continuousRumble))
             XCTAssertEqual(model.capabilities.contains(.rumblePresets), model == .nsoGameCube)
             XCTAssertEqual(model.capabilities.contains(.opticalSensor), model == .joyCon2Left || model == .joyCon2Right)
         }

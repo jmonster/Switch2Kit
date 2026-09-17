@@ -115,6 +115,20 @@ private final class RumbleErrors: Sendable {
         }
         drain()
         engine.btQueue.sync { precondition(replacement.peripheral.writes.isEmpty) }
+        errors.values.withLock { $0.removeAll() }
+        engine.submitRumble(id, strong: 1, weak: 0, duration: 0.2); drain()
+        engine.btQueue.sync {
+            precondition(replacement.peripheral.writes.last!.0 == Data([0, 0x50, 1, 0, 0]))
+            precondition(replacement.rumbleStopTimer != nil)
+        }
+        engine.submitRumble(id, strong: 0, weak: 0, duration: nil); drain()
+        engine.btQueue.sync {
+            precondition(replacement.peripheral.writes.last!.0 == Data([0, 0x51, 0, 0, 0]))
+            precondition(replacement.rumbleStopDeadline == nil)
+            replacement.peripheral.writes.removeAll()
+        }
+        precondition(errors.values.withLock { $0.isEmpty })
+        print("PASS GameCube motor pulse and explicit stop traverse the production transport")
         engine.stop(); drain()
         engine.submitRumble(id, strong: 1, weak: 0, duration: nil, feedback: true); drain()
         precondition(errors.values.withLock { $0.contains(.controllerNotReady) })

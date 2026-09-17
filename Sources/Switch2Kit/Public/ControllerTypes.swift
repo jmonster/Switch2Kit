@@ -38,7 +38,7 @@ public enum Switch2ControllerModel: UInt16, CaseIterable, Codable, Sendable {
         case .joyCon2Left: result.formUnion([.leftStick, .opticalSensor, .continuousRumble])
         case .joyCon2Right: result.formUnion([.rightStick, .opticalSensor, .continuousRumble])
         case .proController2: result.formUnion([.leftStick, .rightStick, .continuousRumble])
-        case .nsoGameCube: result.formUnion([.leftStick, .rightStick, .analogTriggers, .rumblePresets])
+        case .nsoGameCube: result.formUnion([.leftStick, .rightStick, .analogTriggers, .rumblePresets, .continuousRumble])
         }
         return result
     }
@@ -71,7 +71,8 @@ public struct Switch2ControllerCapabilities: OptionSet, Hashable, Sendable {
     public static let rumble = Self(rawValue: 1 << 7)
     /// Four player indicator lights; this does not assign a logical player.
     public static let playerLEDs = Self(rawValue: 1 << 8)
-    /// Amplitude-controlled HD effects through `setRumble` and duration-controlled `pulseRumble`.
+    /// Cancellable effects through `setRumble` and duration-controlled `pulseRumble`.
+    /// Pro/Joy-Con support amplitude; GameCube combines the channels into motor on/off.
     public static let continuousRumble = Self(rawValue: 1 << 9)
     /// Device-timed soft/strong firmware clips, selected by `playRumble` intensity.
     public static let rumblePresets = Self(rawValue: 1 << 10)

@@ -13,3 +13,6 @@ swiftc -swift-version 5 "${kit_flags[@]}" "${kit_session_sources[@]}" \
 swiftc -swift-version 5 "${kit_flags[@]}" "${kit_session_sources[@]}" \
   tests/rumble/SchedulingTests.swift -o "$work/scheduling"
 "$work/scheduling"
+swiftc -swift-version 5 "${kit_flags[@]}" "${kit_session_sources[@]}" \
+  tests/rumble/GameCubeMotorTests.swift -o "$work/gamecube-motor"
+"$work/gamecube-motor"

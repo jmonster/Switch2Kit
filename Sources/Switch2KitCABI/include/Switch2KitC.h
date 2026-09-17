@@ -158,10 +158,11 @@ S2KResult s2k_disconnect(S2KContext *context, const S2KID *id, const S2KID *conn
 /** Short feedback, intensity 0..1. Pro/Joy-Con: 400 ms HD pulse; GameCube: device-timed clip.
  * GameCube clips cannot be cancelled or assigned arbitrary duration. */
 S2KResult s2k_play_feedback(S2KContext *context, const S2KID *id, const S2KID *connection_id, double intensity);
-/** HD intent, normalized channels 0..1; zero stops. Renew before 500 ms to sustain.
- * GameCube returns UNSUPPORTED_OPERATION. Call only while the host's input loop is live. */
+/** Motor intent, normalized channels 0..1; zero stops. Renew before 500 ms to sustain.
+ * Pro/Joy-Con support amplitude; GameCube combines channels into motor on/off.
+ * Call only while the host's input loop is live. */
 S2KResult s2k_set_rumble(S2KContext *context, const S2KID *id, const S2KID *connection_id, double strong, double weak);
-/** HD pulse of 0.01..0.5 seconds; replaced by later intent. GameCube is unsupported. */
+/** Motor pulse of 0.01..0.5 seconds; replaced by later intent. GameCube is on/off. */
 S2KResult s2k_pulse_rumble(S2KContext *context, const S2KID *id, const S2KID *connection_id,
                          double strong, double weak, double seconds);
 /** Set the physical controller's 1..8 player-light pattern; no logical grouping is implied. */

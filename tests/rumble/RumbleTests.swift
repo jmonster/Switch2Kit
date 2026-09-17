@@ -255,16 +255,17 @@ private final class RumbleDelegate: ControllerSessionDelegate {
             engine.testRumble(serial: old.serialNumber); drain(q)
             q.sync { precondition(oldP.writes.isEmpty && newP.writes.isEmpty) }
         }
-        test("GameCube game requests remain guarded and keep-alives remain intact") {
+        test("GameCube game requests use its dedicated on/off motor channel") {
             let q = DispatchQueue(label: "rumble-gc-game")
             let (s, p, d) = fixture(.nsoGameCube, queue: q)
             defer { q.sync { s.teardown() }; _ = d }
             q.sync { s.lastWriteAt = 0 }
             s.setRumble(strong: 1, weak: 1); drain(q)
             q.sync {
-                precondition(p.writes.count == 1 && p.writes[0].0[0] == Switch2.Command.leds)
-                precondition(motorWrites(p, model: .nsoGameCube).isEmpty)
-                reply(s)
+                precondition(p.writes.count == 1)
+                precondition(motorWrites(p, model: .nsoGameCube).first == Data([0, 0x50, 1, 0, 0]))
+                s.applyRumble(strong: 0, weak: 0)
+                precondition(motorWrites(p, model: .nsoGameCube).last == Data([0, 0x51, 0, 0, 0]))
             }
         }
     }

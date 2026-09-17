@@ -109,7 +109,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
                 }
                 continue
             }
-            guard session.model.hasHDRumble else { failure(id, .unsupportedOperation); continue }
+            guard session.model.capabilities.contains(.continuousRumble) else { failure(id, .unsupportedOperation); continue }
             if let duration = intent.duration {
                 session.applyRumblePulse(strong: intent.strong, weak: intent.weak, duration: duration)
             } else { session.applyRumble(strong: intent.strong, weak: intent.weak) }
