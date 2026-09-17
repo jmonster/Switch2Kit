@@ -1,12 +1,12 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 644032c..8b2256f 100644
+index 644032c..6d4a088 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -1,6 +1,8 @@
  cmake_minimum_required(VERSION 3.21.1)
  
  option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
-+option(ENABLE_SWITCH2KIT "Use in-process Switch2Kit controllers on macOS 15+" OFF)
++option(ENABLE_SWITCH2KIT "Use in-process Switch2Kit controllers on macOS 15+ or Linux/BlueZ" OFF)
 +set(SWITCH2KIT_SOURCE_DIR "" CACHE PATH "Switch2Kit source checkout")
  option(MACOS_BUNDLE "The executable when built on macOS will be created as an application bundle" OFF)
  option(ALLOW_PORTABLE "Allow Cemu to be run in portable mode" ON)
@@ -27,8 +27,8 @@ index 644032c..8b2256f 100644
  endif()
  
 +if(ENABLE_SWITCH2KIT)
-+    if(NOT APPLE OR NOT ENABLE_SDL OR NOT MACOS_BUNDLE)
-+        message(FATAL_ERROR "Switch2Kit requires macOS, ENABLE_SDL and MACOS_BUNDLE")
++    if((NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux") OR NOT ENABLE_SDL OR (APPLE AND NOT MACOS_BUNDLE))
++        message(FATAL_ERROR "Switch2Kit requires macOS or Linux, ENABLE_SDL, and MACOS_BUNDLE on macOS")
 +    endif()
 +    if(NOT EXISTS "${SWITCH2KIT_SOURCE_DIR}/Integrations/SDL3/CMakeLists.txt")
 +        message(FATAL_ERROR "Set SWITCH2KIT_SOURCE_DIR to the SDK source checkout")
@@ -43,7 +43,7 @@ index 644032c..8b2256f 100644
  if (NOT TARGET glslang::SPIRV AND TARGET SPIRV)
  	add_library(glslang::SPIRV ALIAS SPIRV)
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index d8378c3..991ff98 100644
+index d8378c3..e444cf3 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -110,7 +110,7 @@ if (MACOS_BUNDLE)
@@ -66,6 +66,14 @@ index d8378c3..991ff98 100644
  	set(FOLDERS gameProfiles resources)
  	foreach(folder ${FOLDERS})
  		add_custom_command (TARGET CemuBin POST_BUILD
+@@ -231,1 +235,7 @@ if (BSD)
+ endif()
++
++if(ENABLE_SWITCH2KIT AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
++  include(GNUInstallDirs)
++  switch2kit_install_linux(CemuBin)
++  install(TARGETS CemuBin RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
++endif()
 diff --git a/src/gui/wxgui/input/InputAPIAddWindow.cpp b/src/gui/wxgui/input/InputAPIAddWindow.cpp
 index b10a2c7..9b1ef9c 100644
 --- a/src/gui/wxgui/input/InputAPIAddWindow.cpp
@@ -528,7 +536,7 @@ index 1a4dd8d..86d5bc0 100644
  	SDL_JoystickID m_diid = -1;
  
 diff --git a/src/input/api/SDL/SDLControllerProvider.cpp b/src/input/api/SDL/SDLControllerProvider.cpp
-index 3aa146a..fb5fcba 100644
+index 3aa146a..f3b2b91 100644
 --- a/src/input/api/SDL/SDLControllerProvider.cpp
 +++ b/src/input/api/SDL/SDLControllerProvider.cpp
 @@ -5,6 +5,71 @@
@@ -697,6 +705,31 @@ index 3aa146a..fb5fcba 100644
  			auto& tracking = state.tracking;
  
  			if (event.gsensor.sensor == SDL_SENSOR_ACCEL)
+@@ -293,8 +404,16 @@ void SDLControllerProvider::event_thread()
+-	while (s_running.load(std::memory_order_relaxed))
+-	{
+-		SDL_Event event{};
+-		SDL_WaitEvent(&event);
+-		HandleSDLEvent(event);
+-	}
+-	ShutdownSDL();
+-}
++    while (s_running.load(std::memory_order_relaxed))
++    {
++        SDL_Event event{};
++#ifdef HAVE_SWITCH2KIT
++        // Reuse this live input thread. A bounded wait admits newly connected
++        // native devices even when SDL has no event yet; no extra worker is used.
++        nativeControllers().pump();
++        if (SDL_WaitEventTimeout(&event, 8))
++            HandleSDLEvent(event);
++#else
++        SDL_WaitEvent(&event);
++        HandleSDLEvent(event);
++#endif
++    }
++    ShutdownSDL();
++}
 diff --git a/src/input/api/SDL/SDLControllerProvider.h b/src/input/api/SDL/SDLControllerProvider.h
 index e67eb06..8804ee8 100644
 --- a/src/input/api/SDL/SDLControllerProvider.h

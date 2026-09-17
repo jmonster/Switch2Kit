@@ -1,6 +1,6 @@
 # C and C++ hosts
 
-The optional `Switch2KitC` binding exposes the same controller engine through `Switch2KitC.h`. It uses caller-owned C structs and a bounded polling reader, not Objective-C objects or Swift collections. The source `Switch2Kit` product is unchanged for Swift hosts. Bluetooth requires macOS 15+, Swift 6.2+, and Xcode 26+; Linux builds exercise the ABI and fake boundaries but do not open controllers.
+The optional `Switch2KitC` binding exposes the same controller engine through `Switch2KitC.h`. It uses caller-owned C structs and a bounded polling reader, not Objective-C objects or Swift collections. The source `Switch2Kit` product is unchanged for Swift hosts. Bluetooth requires macOS 15+ with Swift 6.2+/Xcode 26+, or the experimental [Linux/BlueZ backend](linux.md) with Swift 6.2+ and its runtime dependencies. Linux uses the same live factory, event hub and session engine; Windows and Android remain unsupported.
 
 ## Build with CMake
 
@@ -11,13 +11,13 @@ target_link_libraries(your_emulator PRIVATE Switch2Kit::C)
 switch2kit_embed(your_emulator)
 ```
 
-Use a CMake build directory owned by your project. The integration builds SwiftPM sources in that directory, respecting `CMAKE_OSX_ARCHITECTURES`. Explicitly select a deployment target of 15.0 or newer when enabling this backend. An emulator supporting older macOS versions should keep the backend optional rather than silently changing its minimum. The host supplies its Bluetooth usage description and, when sandboxed, Bluetooth entitlement. `switch2kit_embed` copies the binding and required Swift runtime libraries; the host's normal final signing step signs the bundle. No signing identity or application entitlements are supplied by the binding.
+Use a CMake build directory owned by your project. The integration builds SwiftPM sources in that directory, respecting `CMAKE_OSX_ARCHITECTURES`. On macOS, explicitly select a deployment target of 15.0 or newer when enabling this backend. An emulator supporting older macOS versions should keep the backend optional rather than silently changing its minimum. The macOS host supplies its Bluetooth usage description and, when sandboxed, Bluetooth entitlement. Linux uses normal BlueZ/system-bus permissions and `switch2kit_install_linux` rather than macOS bundle embedding; see [Linux installation](linux.md). `switch2kit_embed` copies the binding and required Swift runtime libraries; the host's normal final signing step signs the bundle. No signing identity or application entitlements are supplied by the binding.
 
 `bash scripts/build-switch2kit-c.sh` builds and inspects a universal `build/Switch2KitC.xcframework` and compiles a fresh C++ consumer for each architecture. The C distribution has a fixed-layout C ABI. Swift consumers use the SwiftPM source package; the standalone Swift XCFramework pipeline is retired (see [Swift distribution](xcframework.md)). Do not link both implementations into one process. The C binding already includes the controller engine.
 
 ## Lifecycle and input
 
-Create the handle on the macOS main thread, before starting support. Do not call the creation function from an emulator's render thread. Keep the application's main run loop active. Subsequent operations are thread-safe, except that each handle has one logical event reader and the owner must stop all API calls before destruction.
+Create the handle on the main thread, before starting support. Do not call the creation function from an emulator's render thread. On macOS, keep the application's main run loop active. The Linux C polling API does not require a GUI event loop. Subsequent operations are thread-safe, except that each handle has one logical event reader and the owner must stop all API calls before destruction.
 
 ```cpp
 #include <Switch2KitC.h>

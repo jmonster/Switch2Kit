@@ -1,4 +1,4 @@
-#if canImport(CoreBluetooth)
+#if canImport(CoreBluetooth) || os(Linux)
 // ControllerSession.swift
 // One connected Switch 2 controller: GATT handshake, command serialization,
 // input decoding, keep-alive, and rumble.
@@ -18,7 +18,9 @@
 // callbacks execute on this queue.
 
 import Foundation
+#if canImport(CoreBluetooth)
 import CoreBluetooth
+#endif
 
 /// Called on the Bluetooth queue.
 package protocol ControllerSessionDelegate: AnyObject {
@@ -320,8 +322,16 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         }
     }
 
+    private var hostAddressBytesLE: Data? {
+        #if os(Linux) && !S2K_RADIO_FIXTURE
+        return peripheral.hostAddressBytesLE
+        #else
+        return HostBluetooth.macAddressBytesLE
+        #endif
+    }
+
     private func stepBond(_ done: @escaping (Bool) -> Void) {
-        guard wasPairingMode, let mac = HostBluetooth.macAddressBytesLE else {
+        guard wasPairingMode, let mac = hostAddressBytesLE else {
             done(true)  // nothing to do (button-wake) or MAC unknown
             return
         }
@@ -893,6 +903,7 @@ extension ControllerSession: CBPeripheralDelegate {
 
 // MARK: - Host Bluetooth adapter address
 
+#if canImport(CoreBluetooth) || S2K_RADIO_FIXTURE
 import IOBluetooth
 
 enum HostBluetooth {
@@ -909,4 +920,5 @@ enum HostBluetooth {
     }
 }
 
+#endif
 #endif

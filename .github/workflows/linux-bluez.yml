@@ -1,0 +1,72 @@
+name: Linux BlueZ and native hosts
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: linux-bluez-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    container: swift:6.2.1-noble
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install test dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build g++ python3 dbus libsystemd0 nodejs
+      - name: Package, Linux radio and retained portable regressions
+        run: |
+          swift --version
+          swift test -Xswiftc -warnings-as-errors
+          bash tests/linux-bluez/run.sh
+          bash tests/run.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: libsdl-org/SDL
+          ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
+          path: build/SDL
+          persist-credentials: false
+      - name: Real SDL consumer on Linux
+        env:
+          S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+        run: bash tests/sdl-inprocess/verify.sh
+  dolphin:
+    runs-on: ubuntu-24.04
+    container: swift:6.2.1-noble
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: dolphin-emu/dolphin
+          ref: c185d27ede09771fe93a3b520c576f646f937ed9
+          path: build/dolphin-source
+          submodules: recursive
+          persist-credentials: false
+      - name: Install Dolphin build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential cmake ninja-build python3 pkg-config \
+            qt6-base-dev qt6-base-private-dev qt6-svg-dev libbluetooth-dev libevdev-dev libudev-dev \
+            libusb-1.0-0-dev libasound2-dev libpulse-dev libx11-dev libxi-dev libxrandr-dev \
+            libegl1-mesa-dev libgl1-mesa-dev libsystemd0
+      - name: Build actual Linux Dolphin with Switch2Kit
+        run: |
+          python3 Integrations/Emulators/apply.py dolphin build/dolphin-source
+          bash scripts/build-switch2kit-emulator.sh dolphin build/dolphin-source build/dolphin-build \
+            -DENABLE_TESTS=OFF -DENABLE_VULKAN=OFF -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF \
+            -DUSE_DISCORD_PRESENCE=OFF
+      - name: Inspect and install the native application
+        run: |
+          readelf -d build/dolphin-build/Binaries/dolphin-emu | grep 'libSwitch2KitC.so'
+          cmake --install build/dolphin-build --prefix "$PWD/build/linux-install"
+          test -f build/linux-install/share/Switch2KitNotices/CREDITS.md
+          find build/linux-install -name libSwitch2KitC.so -print -quit | grep .
