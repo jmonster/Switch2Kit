@@ -23,7 +23,14 @@ case "$emulator" in
   *) echo 'Unknown emulator' >&2; exit 2 ;;
 esac
 cmake -S "$source" -B "$build" "${args[@]}" "$@"
-cmake --build "$build" --target "$target" --parallel "${S2K_BUILD_JOBS:-4}"
+# A Linux install includes all enabled upstream targets (for example Dolphin's
+# command-line tools), not just the GUI executable. Build them before advertising
+# cmake --install. macOS retains its existing targeted bundle workflow.
+if [ "$platform" = Linux ]; then
+  cmake --build "$build" --parallel "${S2K_BUILD_JOBS:-4}"
+else
+  cmake --build "$build" --target "$target" --parallel "${S2K_BUILD_JOBS:-4}"
+fi
 if [ "$platform" = Darwin ]; then
   python3 "$root/scripts/verify-distribution-notices.py" "$emulator" "$source" "$build"
 else

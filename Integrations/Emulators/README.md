@@ -68,4 +68,4 @@ With `S2K_CEMU_SOURCE` pointing to the pinned Cemu checkout, the host suite comp
 
 The emulator workflow applies the exact patches, builds the full macOS application targets, and inspects their Bluetooth descriptions and embedded native library. Controller radio behavior and gameplay still require a physical-controller run of the built application.
 
-The separate Linux workflow exercises the real BlueZ adapter on a private synthetic bus, runs native C/SDL tests, and builds the full pinned Dolphin target. Linux Cemu full-application and physical-controller qualification remain separate; enabling its source patch is not a claim of a completed gameplay test.
+The separate Linux workflow exercises the real BlueZ adapter on a private synthetic bus, runs native C/SDL tests, and builds and inspects both full pinned Linux applications after installation and relocation. GUI/gameplay and physical-controller qualification remain separate; enabling its source patch is not a claim of a completed gameplay test.

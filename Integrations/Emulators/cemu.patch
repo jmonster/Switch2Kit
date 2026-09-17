@@ -66,13 +66,15 @@ index d8378c3..e444cf3 100644
  	set(FOLDERS gameProfiles resources)
  	foreach(folder ${FOLDERS})
  		add_custom_command (TARGET CemuBin POST_BUILD
-@@ -231,1 +235,7 @@ if (BSD)
+@@ -231,1 +235,9 @@ if (BSD)
  endif()
 +
 +if(ENABLE_SWITCH2KIT AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 +  include(GNUInstallDirs)
 +  switch2kit_install_linux(CemuBin)
 +  install(TARGETS CemuBin RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
++  install(DIRECTORY "${CMAKE_SOURCE_DIR}/bin/gameProfiles" "${CMAKE_SOURCE_DIR}/bin/resources"
++    DESTINATION "${CMAKE_INSTALL_DATADIR}/Cemu")
 +endif()
 diff --git a/src/gui/wxgui/input/InputAPIAddWindow.cpp b/src/gui/wxgui/input/InputAPIAddWindow.cpp
 index b10a2c7..9b1ef9c 100644
@@ -570,9 +572,9 @@ index 3aa146a..f3b2b91 100644
 +{
 +    const auto state = nativeControllers().snapshot();
 +    if (!state.running) return "Select Find, then hold the controller Sync button.";
-+    if (state.bluetooth == S2K_BT_UNAUTHORIZED) return "Allow Cemu Bluetooth access in System Settings.";
-+    if (state.bluetooth == S2K_BT_OFF) return "Turn on Bluetooth in System Settings.";
-+    if (state.bluetooth == S2K_BT_UNSUPPORTED) return "Bluetooth is unavailable on this Mac.";
++    if (state.bluetooth == S2K_BT_UNAUTHORIZED) return "Bluetooth access is denied. Check your operating system permissions.";
++    if (state.bluetooth == S2K_BT_OFF) return "Turn on your Bluetooth adapter.";
++    if (state.bluetooth == S2K_BT_UNSUPPORTED) return "Bluetooth is unavailable. Check the Bluetooth service and adapter.";
 +    return std::to_string(state.count) + " connected; " +
 +        (state.discovery == S2K_DISCOVERY_SCANNING ? "searching" : "discovery idle");
 +}

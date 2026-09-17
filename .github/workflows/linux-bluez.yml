@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
+env:
+  DEBIAN_FRONTEND: noninteractive
 concurrency:
   group: linux-bluez-${{ github.ref }}
   cancel-in-progress: true
@@ -19,13 +24,28 @@ jobs:
       - name: Install test dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends cmake ninja-build g++ python3 dbus libsystemd0 nodejs
+          apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 dbus libsystemd0 nodejs
+      - name: Preserve the exact source under test
+        run: git archive HEAD -o "$RUNNER_TEMP/switch2kit-tested-source.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-tested-source
+          path: ${{ runner.temp }}/switch2kit-tested-source.zip
+          retention-days: 7
+          if-no-files-found: error
       - name: Package, Linux radio and retained portable regressions
         run: |
           swift --version
           swift test -Xswiftc -warnings-as-errors
           bash tests/linux-bluez/run.sh
           bash tests/run.sh
+      - name: Release package tests
+        run: swift test -c release -Xswiftc -warnings-as-errors
+      - name: Relocated native facade and real C++ consumers
+        run: |
+          python3 tests/linux-runtime/test_build_helper.py
+          python3 tests/linux-runtime/verify.py
+          python3 tests/linux-runtime/verify.py --libdir lib64
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: libsdl-org/SDL
@@ -65,8 +85,91 @@ jobs:
             -DENABLE_TESTS=OFF -DENABLE_VULKAN=OFF -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF \
             -DUSE_DISCORD_PRESENCE=OFF
       - name: Inspect and install the native application
+        shell: bash
         run: |
+          set -euo pipefail
           readelf -d build/dolphin-build/Binaries/dolphin-emu | grep 'libSwitch2KitC.so'
           cmake --install build/dolphin-build --prefix "$PWD/build/linux-install"
           test -f build/linux-install/share/Switch2KitNotices/CREDITS.md
           find build/linux-install -name libSwitch2KitC.so -print -quit | grep .
+          # Make the original build-library location unavailable before checking
+          # the moved installation. Merely finding an installed .so is insufficient.
+          test ! -e build/relocated-linux-install
+          test ! -e build/dolphin-build.unavailable
+          mv build/linux-install build/relocated-linux-install
+          mv build/dolphin-build build/dolphin-build.unavailable
+          trap 'mv build/dolphin-build.unavailable build/dolphin-build' EXIT
+          for executable in build/relocated-linux-install/bin/*; do
+            if readelf -d "$executable" | grep -q 'libSwitch2KitC.so'; then
+              python3 tests/linux-runtime/inspect.py "$executable" build/relocated-linux-install
+            fi
+          done | tee build/linux-installed-runtime.txt
+          grep 'PASS:.*dolphin-emu resolves installed facade' build/linux-installed-runtime.txt
+      - name: Preserve native diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-dolphin-runtime-diagnostics
+          path: build/linux-installed-runtime.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+  cemu:
+    runs-on: ubuntu-24.04
+    container: swift:6.2.1-noble
+    timeout-minutes: 90
+    env:
+      S2K_BUILD_JOBS: 3
+      VCPKG_MAX_CONCURRENCY: 3
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/vcpkg-cache,readwrite
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: cemu-project/Cemu
+          ref: 3310f3b8b184d64a62b89fd59088c799432badf5
+          path: build/cemu-source
+          submodules: recursive
+          persist-credentials: false
+      - name: Install Cemu build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential cmake ninja-build python3 pkg-config \
+            curl zip unzip tar nasm autoconf automake libtool libtool-bin gettext \
+            libgtk-3-dev libpulse-dev libsecret-1-dev libsystemd-dev libudev-dev libbluetooth-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libx11-xcb-dev libwayland-dev wayland-protocols extra-cmake-modules
+          mkdir -p build/vcpkg-cache
+          bash build/cemu-source/dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+      - name: Build actual Linux Cemu with Switch2Kit
+        run: |
+          python3 Integrations/Emulators/apply.py cemu build/cemu-source
+          bash scripts/build-switch2kit-emulator.sh cemu build/cemu-source build/cemu-build \
+            -DENABLE_VULKAN=ON 2>&1 | tee build/linux-cemu-build.log
+      - name: Install and inspect the relocated native application
+        run: |
+          readelf -d build/cemu-source/bin/Cemu_release | grep 'libSwitch2KitC.so'
+          cmake --install build/cemu-build --prefix "$PWD/build/cemu-install"
+          test -f build/cemu-install/share/Switch2KitNotices/CREDITS.md
+          test -d build/cemu-install/share/Cemu/gameProfiles
+          test -d build/cemu-install/share/Cemu/resources
+          mv build/cemu-install build/cemu-relocated-install
+          mv build/cemu-build build/cemu-build.unavailable
+          trap 'mv build/cemu-build.unavailable build/cemu-build' EXIT
+          python3 tests/linux-runtime/inspect.py \
+            build/cemu-relocated-install/bin/Cemu_release build/cemu-relocated-install \
+            | tee build/linux-cemu-runtime.txt
+      - name: Preserve Cemu native diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-cemu-native-diagnostics
+          path: |
+            build/linux-cemu-build.log
+            build/linux-cemu-runtime.txt
+            build/cemu-build/CMakeCache.txt
+            build/cemu-build/CMakeFiles/CMakeConfigureLog.yaml
+            build/cemu-build/vcpkg-manifest-install.log
+          if-no-files-found: warn
+          retention-days: 7
