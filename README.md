@@ -12,7 +12,7 @@ Nintendo Switch 2 controller support for applications and emulators. Embed the c
 | Linux | Portable library components, C ABI, and synthetic integration tests. No live Bluetooth controller backend. |
 | Windows and Android | No supported Switch2Kit controller backend or host build. |
 
-Dolphin itself is [cross-platform](https://dolphin-emu.org/docs/faq/), but its [optional Switch2Kit backend](Integrations/Emulators/dolphin.patch) currently requires macOS with SDL and Qt. The [C API implementation](Sources/SwitchKitC/Exports.swift) still requires CoreBluetooth: without it, `s2k_create` returns a null handle and reports `S2K_UNSUPPORTED_PLATFORM`. Linux builds exercise shared code and test fixtures, not controller discovery or gameplay. Supporting additional operating systems requires a platform-specific Bluetooth transport and corresponding host/build integration, not just a C/C++ binding or SDL adapter.
+Dolphin itself is [cross-platform](https://dolphin-emu.org/docs/faq/), but its [optional Switch2Kit backend](Integrations/Emulators/dolphin.patch) currently requires macOS with SDL and Qt. The [C API implementation](Sources/Switch2KitC/Exports.swift) still requires CoreBluetooth: without it, `s2k_create` returns a null handle and reports `S2K_UNSUPPORTED_PLATFORM`. Linux builds exercise shared code and test fixtures, not controller discovery or gameplay. Supporting additional operating systems requires a platform-specific Bluetooth transport and corresponding host/build integration, not just a C/C++ binding or SDL adapter.
 
 ## C/C++ integration
 
