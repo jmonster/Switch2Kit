@@ -17,3 +17,4 @@ case "$emulator" in
 esac
 cmake -S "$source" -B "$build" "${args[@]}" "$@"
 cmake --build "$build" --target "$target" --parallel "${S2K_BUILD_JOBS:-4}"
+python3 "$root/scripts/verify-distribution-notices.py" "$emulator" "$source" "$build"
