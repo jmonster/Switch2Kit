@@ -9,7 +9,7 @@ The source's `///` comments document public declarations, including field units 
 | Ownership and observation | `Switch2ControllerManager`, `Switch2ControllerObservation`, `Switch2ControllerConfiguration`, `Switch2ManagerSnapshot` |
 | Physical controllers | `Switch2ControllerID`, `Switch2Controller`, `Switch2ControllerModel`, `Switch2ControllerCapabilities` |
 | Input | `Switch2ControllerState`, `Switch2Buttons`, `Switch2Stick`, `Switch2Trigger`, `Switch2Battery`, `Switch2Motion`, `Switch2RawVector3`, `Switch2OpticalState`, `Switch2Color` |
-| Explicit motion conversion | `Switch2Vector3`, `Switch2MotionAxis`, `Switch2SensorCalibration`, `Switch2MotionCalibration`, `Switch2CalibratedMotion` |
+| Explicit motion conversion and profiles | `Switch2Vector3`, `Switch2MotionAxis`, `Switch2SensorCalibration`, `Switch2MotionCalibration`, `Switch2CalibratedMotion`, `Switch2MotionProfile` |
 | Lifecycle | `Switch2BluetoothState`, `Switch2DiscoveryState`, `Switch2DiscoveryMode`, `Switch2ConnectionState`, `Switch2DisconnectionReason`, `Switch2ControllerEvent`, `Switch2KitError` |
 | Application actions | `Switch2ActionRouter`, `Switch2ActionBinding`, `Switch2ActionControl`, `Switch2ActionAxis`, `Switch2ActionSource`, `Switch2ActionEvent`, `Switch2NavigationAction` |
 | Diagnostics | `Switch2LogLevel`, `Switch2LogCategory`, `Switch2LogRecord`, `Switch2LogHandler` |
@@ -24,7 +24,7 @@ Application actions run in-process in the library. System keyboard/mouse injecti
 
 `buttons` is a 32-bit option set containing A/B/X/Y, D-pad, L/R/ZL/ZR, stick clicks, Plus/Minus/Home/Capture/C, GL/GR and handed Joy-Con SL/SR controls. Unknown bits survive value construction. Opposing D-pad bits may coexist; cancellation/remapping is host policy.
 
-`leftStick` and `rightStick` are optional named two-dimensional vectors. Absence means no such physical stick, not `(0,0)`. Values are calibrated and normalized/clamped to `-1...1`, with positive x right and positive y up; no application dead zone or Joy-Con grouping rotation is applied. Calibration chooses the retained validated user/factory data and preserves the protocol's handed stick placement. Public constructors clamp finite coordinates and replace non-finite coordinates with zero.
+`leftStick` and `rightStick` are optional named two-dimensional vectors. Absence means no such physical stick, not `(0,0)`. Values are calibrated and normalized/clamped to `-1...1`, with positive x right and positive y up; no application dead zone or Joy-Con grouping rotation is applied. Calibration chooses the retained validated user/factory data and preserves the protocol's handed stick placement. Public constructors clamp finite coordinates and replace non-finite ones with zero.
 
 Each `Switch2Trigger` separates `isPressed` (ZL/ZR report bit) from optional analog `travel`. Only GameCube supplies travel; it is the retained raw byte divided by 255, in `0...1`. Travel and click are independent. Do not infer a click from a nonzero travel value, and do not silently turn nil travel into a claim of an analog sensor.
 
@@ -32,7 +32,7 @@ Each `Switch2Trigger` separates `isPressed` (ZL/ZR report bit) from optional ana
 
 `Switch2Motion` exposes named accelerometer/gyroscope/magnetometer `Switch2RawVector3` values in signed 16-bit sensor-native counts. These are **not** calibrated acceleration, angular velocity, gravity-removed motion, world axes or orientation quaternions. Model/physical orientation determines axes. Retained research associates magnetometer counts with 0.15 µT/count, but the API deliberately exposes raw counts. IMU die temperature is the existing `25 + raw/127` Celsius estimate, not ambient temperature. A present all-zero sample does not prove that hardware sensing is active. Motion is nil when the selected configuration does not request it.
 
-[Explicit motion calibration](motion.md) converts raw counts using host-supplied measured bias, gain and signed axis order. Acceleration output is in m/s² and retains gravity; angular velocity is in rad/s. No model-specific coefficients, sample timing, orientation fusion or SDL sensor registration are inferred. Raw state remains unchanged.
+[Explicit motion calibration](motion.md) converts raw counts using host-supplied measured bias, gain and signed axis order. Acceleration output is in m/s² and retains gravity; angular velocity is in rad/s. No model-specific coefficients, sample timing, orientation fusion or SDL sensor registration are inferred. Raw state remains unchanged. The separate [physical profile and SDL adapter path](motion-profiles.md) performs explicit selection and sensor registration; a converter alone does not establish physical calibration.
 
 Joy-Con optical telemetry exposes UInt16 absolute x/y counters wrapping modulo 65536 and raw surface-quality/lift counts. These are not cursor pixels or millimeters. Compute wrap-aware deltas, interpret orientation in the host, and treat gaps/reconnects as a reset rather than a large pointer jump.
 

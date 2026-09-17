@@ -39,6 +39,16 @@ class RepositoryTests(unittest.TestCase):
                 with self.subTest(file=str(file.relative_to(ROOT)), link=link):
                     self.assertTrue((file.parent / unquote(link)).exists(), f"Missing link: {link}")
 
+    def test_documented_rail_bits_match_public_api(self):
+        source = (ROOT / "Sources/Switch2Kit/Public/ControllerTypes.swift").read_text()
+        bits = {name: int(value.replace("_", ""), 16) for name, value in re.findall(
+            r"public static let (s[rl][LR]) = Self\(rawValue: (0x[0-9a-fA-F_]+)\)", source)}
+        notes = (ROOT / "docs/protocol.md").read_text()
+        documented = {label: int(value, 16) for value, label in re.findall(
+            r"(0x[0-9a-fA-F]{8})\s+(S[LR] \([LR]\))", notes)}
+        self.assertEqual(documented, {"SL (L)": bits["slL"], "SR (L)": bits["srL"],
+                                      "SL (R)": bits["slR"], "SR (R)": bits["srR"]})
+
     def test_source_only_tree(self):
         tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
         for path in filter(None, tracked):

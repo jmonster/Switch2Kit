@@ -42,9 +42,11 @@ The host provides `NSBluetoothAlwaysUsageDescription` and, when sandboxed, `com.
 
 | Controller | Input | Rumble |
 | --- | --- | --- |
-| Switch 2 Pro Controller | Buttons, two sticks, motion, battery | Independent HD motors |
-| Joy-Con 2, left or right | Buttons, stick, motion, optical sensor, battery | Single HD motor per unit |
-| NSO GameCube | Buttons, two sticks, analog trigger travel and digital clicks, motion, battery | Soft/strong firmware clips |
+| Switch 2 Pro Controller | Buttons, two sticks, raw motion, battery | Independent HD motors |
+| Joy-Con 2, left or right | Buttons, stick, raw motion, optical counters, battery | Single HD motor per unit |
+| NSO GameCube | Buttons, two sticks, analog trigger travel and digital clicks, raw motion, battery | Soft/strong firmware clips |
+
+Calibrated SDL motion requires an explicitly selected [physical motion profile](docs/switch2kit/motion-profiles.md). No measured built-in profiles are supplied. See [controller and feature coverage](docs/switch2kit/coverage.md) for transport, output and physical-qualification boundaries.
 
 [Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
 
