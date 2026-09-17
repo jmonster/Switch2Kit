@@ -23,6 +23,6 @@
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>Switch2Kit talks to your Nintendo Switch 2 controllers over Bluetooth so games on this Mac can use them.</string>
     <key>NSHumanReadableCopyright</key>
-    <string>© 2026 Peter Sharma. Protocol research by the Switch 2 controller community.</string>
+    <string>© 2026 Peter Sharma and Switch2Kit contributors.</string>
 </dict>
 </plist>

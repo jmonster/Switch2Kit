@@ -41,12 +41,17 @@ if [ -f Resources/AppIcon.icns ]; then
         "$OUT/Contents/Info.plist" 2>/dev/null || true
 fi
 
+# Keep the compact source notices in the bundle before any signature is applied.
+mkdir -p "$OUT/Contents/Resources/Switch2KitNotices"
+cp CREDITS.md "$OUT/Contents/Resources/Switch2KitNotices/"
+cp -R LICENSES "$OUT/Contents/Resources/Switch2KitNotices/"
+
 # Keep setup resources with the binary; never install the extension automatically.
 mkdir -p "$OUT/Contents/Resources/BrowserExtension"
 cp browser/extension/manifest.json browser/extension/*.js "$OUT/Contents/Resources/BrowserExtension/"
 REVISION=$(git rev-parse HEAD)
 DIRTY=false
-[ -z "$(git status --porcelain --untracked-files=normal -- Sources Resources browser/extension scripts Package.swift)" ] || DIRTY=true
+[ -z "$(git status --porcelain --untracked-files=normal -- Sources Resources browser/extension scripts Package.swift CREDITS.md LICENSES)" ] || DIRTY=true
 /usr/libexec/PlistBuddy -c "Add :Switch2KitSourceRevision string $REVISION" "$OUT/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :Switch2KitSourceDirty bool $DIRTY" "$OUT/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :Switch2KitBuildArchitecture string $(uname -m)" "$OUT/Contents/Info.plist"
