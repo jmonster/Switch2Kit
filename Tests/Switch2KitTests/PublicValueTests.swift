@@ -8,7 +8,7 @@ final class PublicValueTests: XCTestCase {
             XCTAssertTrue(model.capabilities.contains(.buttons))
             XCTAssertEqual(model.capabilities.contains(.analogTriggers), model == .nsoGameCube)
             XCTAssertTrue(model.capabilities.contains(.rumble))
-            XCTAssertEqual(model.capabilities.contains(.continuousRumble), model != .nsoGameCube)
+            XCTAssertTrue(model.capabilities.contains(.continuousRumble))
             XCTAssertEqual(model.capabilities.contains(.rumblePresets), model == .nsoGameCube)
         }
     }

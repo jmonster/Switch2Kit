@@ -115,12 +115,12 @@ final class BridgeTests: XCTestCase {
         let (source, _, handle) = try make(); defer { destroyContext(handle) }
         _ = startContext(handle); source.emit(model: .nsoGameCube)
         var c = read(handle).0.controllers.0
-        XCTAssertEqual(setRumble(handle, &c.id, &c.connection_id, 1, 0), 7)
-        XCTAssertEqual(pulseRumble(handle, &c.id, &c.connection_id, 1, 0, 0.2), 7)
+        XCTAssertEqual(setRumble(handle, &c.id, &c.connection_id, 1, 0), 0)
+        XCTAssertEqual(pulseRumble(handle, &c.id, &c.connection_id, 1, 0, 0.2), 0)
         XCTAssertEqual(playFeedback(handle, &c.id, &c.connection_id, .infinity), 1)
         XCTAssertEqual(setPlayer(handle, &c.id, &c.connection_id, 9), 1)
         XCTAssertEqual(playFeedback(handle, &c.id, &c.connection_id, 0.5), 0)
-        XCTAssertEqual(source.state.withLock { $0.calls }, ["feedback"])
+        XCTAssertEqual(source.state.withLock { $0.calls }, ["rumble", "rumble", "feedback"])
     }
     func testReaderAdmissionAndCancellationReleaseSlots() throws {
         let hub = ControllerEventHub()
