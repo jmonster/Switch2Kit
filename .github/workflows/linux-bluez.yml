@@ -141,16 +141,29 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends build-essential cmake ninja-build python3 pkg-config \
-            curl zip unzip tar nasm autoconf automake libtool libtool-bin gettext \
+            curl zip unzip tar zstd nasm autoconf automake libtool libtool-bin gettext \
+            freeglut3-dev libgcrypt20-dev libglm-dev \
             libgtk-3-dev libpulse-dev libsecret-1-dev libsystemd-dev libudev-dev libbluetooth-dev \
             libgl1-mesa-dev libglu1-mesa-dev libx11-xcb-dev libwayland-dev wayland-protocols extra-cmake-modules
           mkdir -p build/vcpkg-cache
           bash build/cemu-source/dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+      - name: Restore Cemu dependency cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809
+        with:
+          path: build/vcpkg-cache
+          key: cemu-linux-x64-swift621-noble-3310f3b8-${{ hashFiles('build/cemu-source/vcpkg.json', 'build/cemu-source/vcpkg-configuration.json', 'build/cemu-source/dependencies/vcpkg_overlay_ports*/**') }}
       - name: Build actual Linux Cemu with Switch2Kit
         run: |
           python3 Integrations/Emulators/apply.py cemu build/cemu-source
           bash scripts/build-switch2kit-emulator.sh cemu build/cemu-source build/cemu-build \
             -DENABLE_VULKAN=ON 2>&1 | tee build/linux-cemu-build.log
+      - name: Save built Cemu dependencies for subsequent validation
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true' && steps.vcpkg-cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
+        with:
+          path: build/vcpkg-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
       - name: Install and inspect the relocated native application
         run: |
           readelf -d build/cemu-source/bin/Cemu_release | grep 'libSwitch2KitC.so'
