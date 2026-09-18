@@ -44,4 +44,4 @@ targets += [
                       swiftSettings: [.swiftLanguageMode(.v6)])
 ]
 #endif
-let package = Package(name: "Switch2Kit", platforms: [.macOS(.v15)], products: products, targets: targets, cxxLanguageStandard: .cxx17)
+let package = Package(name: "Switch2Kit", platforms: [.macOS(.v15)], products: products, targets: targets, cxxLanguageStandard: .cxx20)
