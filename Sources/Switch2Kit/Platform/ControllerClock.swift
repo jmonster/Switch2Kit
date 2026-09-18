@@ -10,14 +10,14 @@ package enum ControllerClock {
 #if os(Windows)
     private static let frequency: Double = {
         var value = LARGE_INTEGER()
-        guard QueryPerformanceFrequency(&value) != 0, value.QuadPart > 0 else { return .nan }
+        guard QueryPerformanceFrequency(&value), value.QuadPart > 0 else { return .nan }
         return Double(value.QuadPart)
     }()
 #endif
     package static var now: TimeInterval {
 #if os(Windows)
         var value = LARGE_INTEGER()
-        guard QueryPerformanceCounter(&value) != 0, value.QuadPart >= 0 else { return .nan }
+        guard QueryPerformanceCounter(&value), value.QuadPart >= 0 else { return .nan }
         return Double(value.QuadPart) / frequency
 #else
         return ProcessInfo.processInfo.systemUptime
