@@ -32,7 +32,14 @@ elseif(_s2k_compiler_version MATCHES "Swift version 6\\.3\\.3([ (]|$)")
 endif()
 set(SWITCH2KIT_RUNTIME_ICU_LICENSE "" CACHE FILEPATH
     "Explicit ICU license/third-party notices for a different Swift runtime distribution")
+set(_s2k_system_paths)
 if(WIN32)
+  # OS libraries are prerequisites, not part of the Swift redistribution.
+  file(TO_CMAKE_PATH "$ENV{SystemRoot}" _s2k_windows_root)
+  if(NOT IS_DIRECTORY "${_s2k_windows_root}/System32")
+    message(FATAL_ERROR "SystemRoot must identify the Windows installation")
+  endif()
+  set(_s2k_system_paths "${_s2k_windows_root}/System32" "${_s2k_windows_root}")
   find_program(_s2k_inspector dumpbin REQUIRED)
   set(_s2k_platform "windows+pe")
   set(_s2k_inspector_kind dumpbin)
@@ -46,6 +53,7 @@ set(SWITCH2KIT_RUNTIME_CONFIG "${CMAKE_CURRENT_BINARY_DIR}/Switch2KitRuntimePath
     CACHE INTERNAL "Build-only Swift runtime deployment inputs")
 file(CONFIGURE OUTPUT "${SWITCH2KIT_RUNTIME_CONFIG}" CONTENT [=[
 set(S2K_RUNTIME_DIRS [==[@_s2k_runtime_paths@]==])
+set(S2K_SYSTEM_RUNTIME_DIRS [==[@_s2k_system_paths@]==])
 set(S2K_SWIFT_LICENSE [==[@SWITCH2KIT_SWIFT_LICENSE@]==])
 set(CMAKE_GET_RUNTIME_DEPENDENCIES_PLATFORM "@_s2k_platform@")
 set(CMAKE_GET_RUNTIME_DEPENDENCIES_TOOL "@_s2k_inspector_kind@")
