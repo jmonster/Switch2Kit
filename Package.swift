@@ -16,7 +16,7 @@ var targets: [Target] = [
     // Compile the actual native SDL fixture during swift test, not just its separate CMake build.
     .testTarget(name: "Switch2KitSDLFixtureTests", dependencies: ["Switch2Kit", "Switch2KitC", "Switch2KitCABI"],
                 path: "tests/sdl-inprocess",
-                exclude: ["CMakeLists.txt", "Clock.cpp", "Clock.hpp", "main.cpp", "motion.cpp", "verify.sh"],
+                exclude: ["CMakeLists.txt", "Clock.cpp", "Clock.hpp", "main.cpp", "motion.cpp", "verify.sh", "run.sh", "version_test.py"],
                 sources: ["Fixture.swift", "FixtureTests.swift"],
                 swiftSettings: [.swiftLanguageMode(.v6)]),
     .target(name: "Switch2Kit", dependencies: radioDependencies, path: "Sources/Switch2Kit", swiftSettings: [.swiftLanguageMode(.v6)]),
