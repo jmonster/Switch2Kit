@@ -66,3 +66,6 @@ if(WIN32)
   add_custom_command(TARGET c-consumer POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_fixture}" "$<TARGET_FILE_DIR:c-consumer>" VERBATIM)
 endif()
+
+# Compile the production settings/profile reader on every native consumer host.
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../host-file" host-file)
