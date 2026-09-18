@@ -9,6 +9,7 @@ package protocol ControllerSource: Sendable {
     func start()
     func stop(completion: @escaping @Sendable () -> Void)
     func discover(seconds: Double)
+    func setAutomaticDiscovery(_ enabled: Bool)
     func disconnect(id: Switch2ControllerID, connection: UUID, forget: Bool)
     func rumble(id: Switch2ControllerID, connection: UUID, strong: Double, weak: Double, duration: Double?, feedback: Bool)
     func player(id: Switch2ControllerID, connection: UUID, number: Int)
@@ -17,7 +18,12 @@ package protocol ControllerSource: Sendable {
 // All mutable ownership/lifecycle state is mutex protected. Read has a single
 // logical host reader; start/stop/control calls can arrive from other threads.
 package final class CContext: Sendable {
-    private struct Lifecycle: Sendable { var running = false; var stopping = false; var closed = false }
+    private struct Lifecycle: Sendable {
+        var running = false
+        var stopping = false
+        var closed = false
+        var automaticDiscovery = false
+    }
     private let lifecycle = Mutex(Lifecycle())
     package let source: any ControllerSource
     private let reader: ControllerEventReader
@@ -47,6 +53,18 @@ package final class CContext: Sendable {
         reader.cancel()
     }
     deinit { reader.cancel() }
+    package func setAutomaticDiscovery(_ enabled: Bool) -> Int32 {
+        lifecycle.withLock { value in
+            guard !value.closed else { return 1 }
+            guard !value.stopping else { return 5 }
+            guard value.automaticDiscovery != enabled else { return 0 }
+            // Configuration only: never start a stopped source, consume input,
+            // or disturb ready sessions. The source enqueues on its radio queue.
+            value.automaticDiscovery = enabled
+            source.setAutomaticDiscovery(enabled)
+            return 0
+        }
+    }
     package func discover(_ seconds: Double) -> Int32 {
         guard seconds.isFinite, (0.1...300).contains(seconds) else { return 1 }
         return lifecycle.withLock { value in
