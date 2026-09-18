@@ -1,0 +1,59 @@
+name: SDLHost automatic-discovery regressions
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sdlhost-autoconnect-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-host:
+    runs-on: ubuntu-24.04
+    container: swift:6.2.1-noble
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: libsdl-org/SDL
+          ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
+          path: build/SDL
+          persist-credentials: false
+      - name: Preserve the exact SDL input for reproduction
+        run: |
+          git config --global --add safe.directory "$PWD/build/SDL"
+          test "$(git -C build/SDL rev-parse HEAD)" = fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
+          git -C build/SDL archive HEAD -o "$RUNNER_TEMP/sdl-source.zip"
+      - name: Retain pinned SDL source
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdlhost-pinned-source
+          path: ${{ runner.temp }}/sdl-source.zip
+          retention-days: 3
+      - name: Install native build tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 libsystemd0
+      - name: Execute real host, C facade and SDL consumers
+        env:
+          S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+          S2K_EXPECT_SDL_VERSION: 3004016
+        run: |
+          set -o pipefail
+          bash tests/emulator-host/verify.sh 2>&1 | tee native-host.log
+      - name: Native host diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdlhost-autoconnect-diagnostics
+          path: native-host.log
+          if-no-files-found: warn
+          retention-days: 7
