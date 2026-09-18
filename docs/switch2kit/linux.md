@@ -1,6 +1,6 @@
 # Linux / BlueZ
 
-The experimental Linux backend runs the existing Switch2Kit controller engine against BlueZ's system D-Bus GATT API. Swift hosts use `Switch2ControllerManager`; native hosts use the same `Switch2KitC` ABI and in-process SDL3 adapter as on macOS. It is a real radio implementation, not a fixture-only factory or a network bridge. Windows and Android are not implemented by this backend.
+The experimental Linux backend runs the existing Switch2Kit controller engine against BlueZ's system D-Bus GATT API. Swift hosts use `Switch2ControllerManager`; native hosts use the same `Switch2KitC` ABI and in-process SDL3 adapter as on macOS. It is a real radio implementation, not a fixture-only factory or a network bridge. Windows has a separate [WinRT backend](windows.md); Android has no backend.
 
 ## Requirements and connection
 
@@ -29,7 +29,9 @@ Writes are bounded to one outstanding D-Bus write per physical device and the ch
 
 ## Native emulators and installation
 
-Follow the [Dolphin/Cemu source integration guide](../../Integrations/Emulators/README.md), using Linux dependencies instead of Xcode, Homebrew or MoltenVK. Both optional patches accept Linux with SDL enabled; Dolphin also requires Qt. The build helper selects Linux arguments, builds all enabled upstream installation targets, and retains the targeted macOS bundle build on Apple hosts. The emulator owns the same discovery UI and controller lifecycle; no dashboard is required.
+For playing games, start with the maintained [Dolphin fork](https://github.com/jmonster/dolphin#linux) or [Cemu fork](https://github.com/jmonster/Cemu#linux). Their build helpers enable Switch2Kit and install its native library; no source patches or separate dashboard are needed. Downloads are development builds for the distribution identified by the workflow, not universal Linux binaries.
+
+For the SDK's separate pinned source-patch examples, follow the [Dolphin/Cemu source integration guide](../../Integrations/Emulators/README.md), using Linux dependencies instead of Xcode, Homebrew or MoltenVK. Both optional patches accept Linux with SDL enabled; Dolphin also requires Qt. The build helper selects Linux arguments, builds all enabled upstream installation targets, and retains the targeted macOS bundle build on Apple hosts. The emulator owns the same discovery UI and controller lifecycle; no dashboard is required.
 
 ```sh
 bash scripts/build-switch2kit-emulator.sh dolphin /path/to/patched/dolphin /path/to/build
@@ -37,6 +39,16 @@ cmake --install /path/to/build --prefix /path/to/install
 ```
 
 `switch2kit_install_linux(target)` installs the C library and attribution notices and adds the relative library directory to the host's install RPATH. Host executables must be installed into `CMAKE_INSTALL_BINDIR`; the supplied integrations do so. Build-tree executables use CMake's normal build RPATH. The installation is **not a self-contained Linux app bundle**: compatible Swift runtime libraries and system dependencies must remain discoverable by the loader. A package maintainer must declare those dependencies or supply an appropriate runtime deployment; copying only the emulator executable is insufficient. `switch2kit_embed` remains the macOS bundle helper.
+
+When using a Swift toolchain installed outside the system loader paths, launch with its runtime paths in the process environment:
+
+```sh
+export LD_LIBRARY_PATH="$(swiftc -print-target-info | python3 -c 'import json,sys; print(":".join(json.load(sys.stdin)["paths"]["runtimeLibraryPaths"]))')${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+/path/to/install/bin/dolphin-emu
+# Or: /path/to/install/bin/Cemu_release
+```
+
+This is a shell-local setting, not a system-wide library replacement. Use the same shell for the lookup and the application launch.
 
 ## Verification and hardware boundary
 

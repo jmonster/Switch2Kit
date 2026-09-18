@@ -2,18 +2,18 @@
 
 **Use your Nintendo Switch Online GameCube controller, Nintendo Switch 2 Pro Controller, and Joy-Con 2 in apps and games.**
 
-Switch2Kit provides controller support that any app can integrate on a supported platform. Our [Dolphin](https://github.com/jmonster/dolphin#quick-start-macos-15) and [Cemu](https://github.com/jmonster/Cemu#quick-start-macos-15) forks are maintained reference apps with Switch2Kit already built in: get the app, connect your controller, and play. You do not need to install or run Switch2Kit separately.
+Switch2Kit provides controller support that any app can integrate on a supported platform. Our [Dolphin](https://github.com/jmonster/dolphin#quick-start) and [Cemu](https://github.com/jmonster/Cemu#quick-start) forks are maintained reference apps with Switch2Kit already built in: get the app, connect your controller, and play. You do not need to install or run Switch2Kit separately.
 
 ## Start playing
 
-Choose the emulator for your games. Both controller-enabled forks run on **macOS 15 or newer, on Apple Silicon and Intel Macs**.
+Choose the emulator for your games. The maintained forks embed Switch2Kit on **macOS 15+, Linux, and Windows x64**. Linux and Windows support is experimental; their setup guides identify the required runtime and Bluetooth dependencies.
 
 | Your games | App with Switch2Kit built in | Get started |
 | --- | --- | --- |
-| GameCube and Wii | [Dolphin fork](https://github.com/jmonster/dolphin) | [Download, connect, and play](https://github.com/jmonster/dolphin#quick-start-macos-15) |
-| Wii U | [Cemu fork](https://github.com/jmonster/Cemu) | [Download, connect, and play](https://github.com/jmonster/Cemu#quick-start-macos-15) |
+| GameCube and Wii | [Dolphin fork](https://github.com/jmonster/dolphin) | [Download, connect, and play](https://github.com/jmonster/dolphin#quick-start) |
+| Wii U | [Cemu fork](https://github.com/jmonster/Cemu) | [Download, connect, and play](https://github.com/jmonster/Cemu#quick-start) |
 
-1. **Get a controller-enabled app** from the linked fork's README. Prebuilt development apps are available through each fork's **Native Switch2Kit** GitHub Actions workflow; downloading them requires signing in to GitHub. These are not notarized releases. Each README also includes build-and-launch instructions when a download is unavailable.
+1. **Get a controller-enabled app** from the linked fork's README. Use the platform-specific **Switch2Kit** GitHub Actions build linked in that README; downloading artifacts requires signing in to GitHub. Only successful runs with an application artifact provide a download. These are development builds, not published releases. Each README also includes build-and-launch instructions when a download is unavailable.
 2. **Connect over Bluetooth.** Open **Controllers** in Dolphin or **Options > Input settings** in Cemu, click **Find Switch 2 Controllers**, allow Bluetooth access, and hold the controller's **Sync** button. Close other apps managing the same controller first.
 3. **Select your controller and play.** For GameCube games in Dolphin, select the GameCube or Pro controller beside the desired GameCube port. In Cemu, select it beside **Emulated controller**. The forks apply the recommended button and stick mappings automatically. Their guides cover rumble, reconnecting, and controller-specific limitations; Wii Remote setup in Dolphin remains separate.
 
@@ -21,7 +21,7 @@ Use the linked **fork builds**, not the ordinary upstream downloads: these forks
 
 ## Use it with other apps
 
-Switch2Kit is not limited to Dolphin and Cemu. Apps can embed the same support directly, and the optional [Switch2Kit dashboard](#dashboard) provides output paths for compatible [SDL3 games](sdl/README.md), [Chromium browser games](browser/README.md), and [RetroArch](docs/retroarch-integration.md).
+Switch2Kit is not limited to Dolphin and Cemu. Apps can embed the same support directly, and the optional macOS [Switch2Kit dashboard](#dashboard) provides output paths for compatible [SDL3 games](sdl/README.md), [Chromium browser games](browser/README.md), and [RetroArch](docs/retroarch-integration.md).
 
 For an app without built-in support, follow the [dashboard setup guide](docs/quick-start.md) and the instructions for its output path. Installing Switch2Kit alone does not make a controller appear in every app: it is not a universal system-wide controller driver.
 
@@ -40,10 +40,11 @@ This is support for the **wireless NSO GameCube controller**, not an original wi
 | Platform | Current Switch2Kit support |
 | --- | --- |
 | macOS 15+ (Apple Silicon and Intel) | Live Bluetooth controller support, the maintained Dolphin/Cemu reference forks, Swift and C/C++ hosts, and the optional dashboard. |
-| Linux / BlueZ (experimental) | Live Bluetooth backend, Swift and C/C++ hosts, and optional native SDL3/emulator source integrations. This is separate from the macOS-only reference-fork builds above. See [requirements and qualification limits](docs/switch2kit/linux.md). |
-| Windows and Android | No supported Switch2Kit controller backend or host build. |
+| Linux / BlueZ (experimental) | Native Bluetooth controller engine, Swift/C/C++ hosts, and the maintained Dolphin/Cemu forks. [Requirements and setup](docs/switch2kit/linux.md). |
+| Windows x64 / WinRT (experimental) | Native Bluetooth LE controller engine, Swift/C/C++ hosts, and the maintained Dolphin/Cemu forks. [Requirements and setup](docs/switch2kit/windows.md). |
+| Android | No Switch2Kit controller backend. |
 
-Dolphin and Cemu have their own upstream platform support; that does not mean their Switch2Kit backends support every upstream platform. Linux radio tests use an isolated synthetic BlueZ service; physical-controller and gameplay qualification remain separate.
+A controller-enabled build is required on every platform. The emulators' ordinary upstream builds do not include this integration. Automated tests cover native code and controlled transport boundaries; physical-controller pairing, reconnect, rumble, and gameplay qualification remain separate. The dashboard is macOS-only, but the controller engine is not.
 
 ## Developer integration
 
@@ -59,7 +60,7 @@ The SDL3 integrations run in the emulator's existing input backend. The emulator
 
 ### Library
 
-Requires Swift 6.2+. macOS hosts require macOS 15+ and Xcode 26+; Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md).
+Requires Swift 6.2+. macOS hosts require macOS 15+ and Xcode 26+; Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md); Windows hosts use [WinRT and the x64 Swift toolchain](docs/switch2kit/windows.md).
 
 ```swift
 .package(url: "https://github.com/jmonster/Switch2Kit.git", branch: "main")
