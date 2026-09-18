@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   windows:
-    runs-on: windows-2025
+    runs-on: windows-2022
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -27,6 +27,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           swift build -c release --product Switch2KitC 2>&1 | Tee-Object windows-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          swiftc -print-target-info > windows-target-info.log
+          Get-ChildItem .build -Recurse -Include '*Switch2KitC*' | Select-Object FullName | Out-File windows-library-paths.log
       - name: Preserve native diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

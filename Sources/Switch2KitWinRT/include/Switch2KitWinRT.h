@@ -2,6 +2,8 @@
 #define SWITCH2KIT_WINRT_H
 #include <stdint.h>
 #ifdef __cplusplus
+// HRESULT definitions belong to the C++ implementation, not the Swift C module.
+#include <windows.h>
 extern "C" {
 #endif
 /* Private transport ABI. No C++ or WinRT objects cross into Swift. */
