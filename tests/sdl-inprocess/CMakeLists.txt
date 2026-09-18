@@ -101,6 +101,7 @@ add_test(NAME sdl-motion COMMAND sdl-motion)
 set_tests_properties(sdl-motion PROPERTIES TIMEOUT 45)
 
 if(WIN32)
+  target_link_libraries(S2KSDLClockedAdapter PUBLIC mincore)
   foreach(_consumer sdl-inprocess sdl-motion)
     switch2kit_embed_windows(${_consumer})
     add_custom_command(TARGET ${_consumer} POST_BUILD

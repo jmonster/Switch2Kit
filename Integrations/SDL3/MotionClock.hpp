@@ -7,6 +7,12 @@
 #include <mach/mach_time.h>
 #elif defined(__linux__)
 #include <time.h>
+#elif defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <realtimeapiset.h>
 #endif
 
 namespace Switch2Kit::Detail {
@@ -42,6 +48,13 @@ inline std::uint64_t continuousTimeNS() noexcept {
     const auto base = seconds * second;
     const auto tail = static_cast<std::uint64_t>(value.tv_nsec);
     return tail > limit - base ? 0 : base + tail;
+#elif defined(_WIN32)
+    // Interrupt time includes suspend; the precise API avoids coarse system
+    // tick quantization falsely tripping the five-millisecond freshness guard.
+    // Its 100 ns units are an interval clock, never a sensor timestamp.
+    ULONGLONG value{};
+    QueryInterruptTimePrecise(&value);
+    return scaledTicksNS(value, 100, 1);
 #else
     return 0; // Unsupported freshness clock: fail closed for motion, not controls.
 #endif
