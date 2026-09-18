@@ -8,7 +8,13 @@ radioDependencies = [.target(name: "Switch2KitDBus")]
 radioDependencies = [.target(name: "Switch2KitWinRT")]
 #endif
 var products: [Product] = [.library(name: "Switch2Kit", targets: ["Switch2Kit"])]
+#if os(Windows)
+// PE exports are generated for product targets, not merely their transitive
+// dependencies. Keep the shared engine's Swift symbols in this same DLL.
+products.append(.library(name: "Switch2KitC", type: .dynamic, targets: ["Switch2KitC", "Switch2Kit"]))
+#else
 products.append(.library(name: "Switch2KitC", type: .dynamic, targets: ["Switch2KitC"]))
+#endif
 var targets: [Target] = [
     .target(name: "Switch2KitCABI"),
     .target(name: "Switch2KitC", dependencies: ["Switch2Kit", "Switch2KitCABI"],
