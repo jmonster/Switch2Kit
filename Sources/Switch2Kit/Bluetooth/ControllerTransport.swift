@@ -80,7 +80,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             guard expectedConnection == nil || current == expectedConnection else { return false }
             if inbox.pending[id] != nil || inbox.pending.count < 64 {
                 inbox.pending[id] = RumbleIntent(strong: strong, weak: weak, duration: duration, feedback: feedback,
-                                                submittedAt: ProcessInfo.processInfo.systemUptime,
+                                                submittedAt: ControllerClock.now,
                                                 generation: expectedConnection ?? current)
             } else { inbox.overflowed = true }
             guard !inbox.scheduled else { return false }
@@ -100,7 +100,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             guard let session = sessions.values.first(where: { $0.peripheral.identifier == id.rawValue }),
                   !session.isRetired else { failure(id, .controllerNotReady); continue }
             guard intent.generation == session.lifetime.id else { continue }
-            guard ProcessInfo.processInfo.systemUptime - intent.submittedAt < 0.5 else {
+            guard ControllerClock.now - intent.submittedAt < 0.5 else {
                 session.applyRumble(strong: 0, weak: 0); continue
             }
             if intent.feedback {
@@ -325,7 +325,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     }
 
     private func noteConnectionFailure(_ id: UUID) {
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         retryAfter = retryAfter.filter { $0.value > now || disconnecting.contains($0.key) }
         retryAdvertisements = retryAdvertisements.filter { $0.value.expiresAt > now }
         retryAdvertisements.removeValue(forKey: id)
@@ -352,7 +352,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     private func armRetryWake() {
         guard running, !suspended, central.state == .poweredOn,
               connecting.isEmpty, central.isScanning else { cancelRetryWake(); return }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         let future = Array(retryAfter.values) + [retryBlockedUntil]
         guard let deadline = future.filter({ $0 > now }).min() else { cancelRetryWake(); return }
         guard retryWake == nil || retryWakeAt != deadline else { return }
@@ -365,7 +365,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
 
     private func wakeConnectionRetries(generation: UInt64) {
         guard generation == retryWakeGeneration, retryWake != nil else { return }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         let deadline = retryWakeAt
         retryWake = nil; retryWakeAt = nil
         guard running, !suspended, central.state == .poweredOn else { resetConnectionRetries(); return }
@@ -381,7 +381,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
 
     private func beginConnection(_ peripheral: CBPeripheral, wasPairingMode: Bool) -> Bool {
         let id = peripheral.identifier
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         guard running, !suspended, central.state == .poweredOn, connecting.isEmpty,
               !disconnecting.contains(id), now >= retryBlockedUntil,
               now >= (retryAfter[id] ?? 0),
@@ -418,7 +418,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             central.stopScan(); resetConnectionRetries(); publishState(.paused); return
         }
         guard central.state == .poweredOn else { resetConnectionRetries(); publishState(.off); return }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         retryAdvertisements = retryAdvertisements.filter { $0.value.expiresAt > now }
         // Complete one connection/handshake before admitting another. Existing
         // ready sessions continue delivering input while a retry waits.
@@ -459,7 +459,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
 
     private func sweepIdleSessions() {
         guard running, !suspended else { return }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         for session in Array(sessions.values) {
             if now - session.lastReportAt > 5 {
                 diagnostics.emit(.warning, .session, "Input stream stopped; retiring stale session")
@@ -515,7 +515,7 @@ extension ControllerTransport: CBCentralManagerDelegate {
         else { return }
 
         let id = peripheral.identifier
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         if let notBefore = retryAfter[id], now < notBefore || disconnecting.contains(id) {
             // Retain only the validated identity and pairing flag, not arbitrary
             // advertisement data. Never reuse observations older than 10 seconds.

@@ -3,6 +3,7 @@
 # and the separate dashboard capability policy, never copied protocol methods.
 kit_flags=(-package-name Switch2Kit -D S2K_RADIO_FIXTURE)
 kit_sources=(
+  Sources/Switch2Kit/Platform/ControllerClock.swift
   Sources/Switch2Kit/Public/ControllerTypes.swift
   Sources/Switch2Kit/Public/Lifecycle.swift
   Sources/Switch2Kit/Protocol/Switch2Protocol.swift
