@@ -1,4 +1,4 @@
-#if canImport(CoreBluetooth) || os(Linux)
+#if canImport(CoreBluetooth) || os(Linux) || os(Windows)
 // ControllerSession.swift
 // One connected Switch 2 controller: GATT handshake, command serialization,
 // input decoding, keep-alive, and rumble.
@@ -323,7 +323,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     }
 
     private var hostAddressBytesLE: Data? {
-        #if os(Linux) && !S2K_RADIO_FIXTURE
+        #if (os(Linux) || os(Windows)) && !S2K_RADIO_FIXTURE
         return peripheral.hostAddressBytesLE
         #else
         return HostBluetooth.macAddressBytesLE
