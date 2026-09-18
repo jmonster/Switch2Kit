@@ -69,3 +69,9 @@ endif()
 
 # Compile the production settings/profile reader on every native consumer host.
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../host-file" host-file)
+
+# Native dependency graphs exercise the deployment boundary and missing-DLL
+# failures independently of Swift/Bluetooth; real consumers above test the SDK.
+add_test(NAME desktop-runtime-staging
+  COMMAND "${Python3_EXECUTABLE}" "${_root}/tests/desktop-runtime/test_staging.py")
+set_tests_properties(desktop-runtime-staging PROPERTIES TIMEOUT 300)

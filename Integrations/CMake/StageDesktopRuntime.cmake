@@ -9,15 +9,32 @@ include("${S2K_RUNTIME_CONFIG}")
 if(NOT EXISTS "${S2K_LIBRARY}")
   message(FATAL_ERROR "The built facade is required")
 endif()
+# Stop at files actually resolved inside the Windows installation. Filtering
+# names before resolution would also hide missing application DLLs. Filtering
+# after this traversal would be too late: OS internals can have optional imports
+# and another copy of the C++ runtime, neither belonging in the Swift closure.
+set(_system_libraries)
+foreach(_directory IN LISTS S2K_SYSTEM_RUNTIME_DIRS)
+  file(GLOB _libraries LIST_DIRECTORIES false "${_directory}/*.[dD][lL][lL]")
+  list(APPEND _system_libraries ${_libraries})
+endforeach()
 file(GET_RUNTIME_DEPENDENCIES
   LIBRARIES "${S2K_LIBRARY}"
-  DIRECTORIES ${S2K_RUNTIME_DIRS}
+  DIRECTORIES ${S2K_RUNTIME_DIRS} ${S2K_SYSTEM_RUNTIME_DIRS}
+  POST_EXCLUDE_FILES ${_system_libraries}
   PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
   RESOLVED_DEPENDENCIES_VAR _resolved
   UNRESOLVED_DEPENDENCIES_VAR _unresolved
   CONFLICTING_DEPENDENCIES_PREFIX _conflicts)
-if(_unresolved OR _conflicts_FILENAMES)
-  message(FATAL_ERROR "Unresolved/ambiguous runtime dependencies: ${_unresolved};${_conflicts_FILENAMES}")
+if(_unresolved)
+  message(FATAL_ERROR "Unresolved runtime dependencies: ${_unresolved}")
+endif()
+if(_conflicts_FILENAMES)
+  set(_details "")
+  foreach(_name IN LISTS _conflicts_FILENAMES)
+    string(APPEND _details "\n  ${_name}: ${_conflicts_${_name}}")
+  endforeach()
+  message(FATAL_ERROR "Ambiguous runtime dependencies:${_details}")
 endif()
 # License acquisition is build/install work, never an application startup request.
 # Git blob validation pins complete upstream license texts, not documentation prose.
