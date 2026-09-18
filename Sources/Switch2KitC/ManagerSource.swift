@@ -11,6 +11,9 @@ package final class ManagerSource: ControllerSource {
     package func start() { manager.start() }
     package func stop(completion: @escaping @Sendable () -> Void) { manager.stop(completion: completion) }
     package func discover(seconds: Double) { try? manager.discover(for: seconds) }
+    package func setAutomaticDiscovery(_ enabled: Bool) {
+        manager.configureDiscovery(enabled ? .automatic : .onDemand)
+    }
     package func disconnect(id: Switch2ControllerID, connection: UUID, forget: Bool) {
         manager.transport.disconnect(id, forget: forget, expectedConnection: connection)
     }

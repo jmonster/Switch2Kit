@@ -8,6 +8,7 @@ final class TestSource: ControllerSource {
     let hub = ControllerEventHub()
     struct State: Sendable {
         var running = false
+        var automaticDiscovery = false
         var controllers: [Int: Switch2Controller] = [:]
         var lifetimes: [Int: SessionLifetime] = [:]
         var calls: [String] = []
@@ -33,6 +34,12 @@ final class TestSource: ControllerSource {
         completion?()
     }
     func discover(seconds: Double) { state.withLock { $0.calls.append("discover") } }
+    func setAutomaticDiscovery(_ enabled: Bool) {
+        state.withLock {
+            $0.automaticDiscovery = enabled
+            $0.calls.append(enabled ? "automatic" : "on-demand")
+        }
+    }
     func disconnect(id: Switch2ControllerID, connection: UUID, forget: Bool) { state.withLock { $0.calls.append("disconnect") } }
     func rumble(id: Switch2ControllerID, connection: UUID, strong: Double, weak: Double, duration: Double?, feedback: Bool) {
         state.withLock { $0.calls.append(feedback ? "feedback" : "rumble") }

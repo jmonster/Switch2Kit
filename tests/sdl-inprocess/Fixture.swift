@@ -5,13 +5,15 @@ import Switch2KitC
 import Switch2KitCABI
 
 // This module is a test fixture, not part of the SDK or its distributions.
-private final class SDLTestSource: ControllerSource {
+final class SDLTestSource: ControllerSource {
     let hub = ControllerEventHub()
     struct State: Sendable {
         var controllers: [Int32: Switch2Controller] = [:]
         var lifetimes: [Int32: SessionLifetime] = [:]
         var calls: [Switch2ControllerID: (count: UInt32, strong: Double, weak: Double)] = [:]
         var running = false
+        var automaticDiscovery = false
+        var discoveryConfigurationCount: UInt32 = 0
         var stopCompletion: (@Sendable () -> Void)?
     }
     let state = Mutex(State())
@@ -29,6 +31,13 @@ private final class SDLTestSource: ControllerSource {
         }
     }
     func discover(seconds: Double) {}
+    func setAutomaticDiscovery(_ enabled: Bool) {
+        // Record policy intent without simulating Bluetooth or changing ready sessions.
+        state.withLock {
+            $0.automaticDiscovery = enabled
+            $0.discoveryConfigurationCount += 1
+        }
+    }
     func disconnect(id: Switch2ControllerID, connection: UUID, forget: Bool) {}
     func rumble(id: Switch2ControllerID, connection: UUID, strong: Double, weak: Double, duration: Double?, feedback: Bool) {
         state.withLock { value in

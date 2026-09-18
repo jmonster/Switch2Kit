@@ -53,6 +53,13 @@ public func stopContext(_ handle: OpaquePointer?) -> Int32 { context(handle)?.st
 public func discoverContext(_ handle: OpaquePointer?, _ seconds: Double) -> Int32 { context(handle)?.discover(seconds) ?? 1 }
 
 /// C ABI entry point; ownership, threading and argument rules are specified in Switch2KitC.h.
+@_cdecl("s2k_set_automatic_discovery")
+public func setAutomaticDiscoveryContext(_ handle: OpaquePointer?, _ enabled: UInt32) -> Int32 {
+    guard enabled <= 1 else { return 1 }
+    return context(handle)?.setAutomaticDiscovery(enabled == 1) ?? 1
+}
+
+/// C ABI entry point; ownership, threading and argument rules are specified in Switch2KitC.h.
 @_cdecl("s2k_read")
 public func readContext(_ handle: OpaquePointer?, _ events: UnsafeMutablePointer<S2KEvent>?,
     _ capacity: UInt32, _ stride: UInt32, _ count: UnsafeMutablePointer<UInt32>?,

@@ -117,7 +117,7 @@ enum { S2K_LINK_LOST=1, S2K_REQUESTED, S2K_FORGOTTEN, S2K_STOPPED,
  * not overwrite ordinary events before they have been processed. */
 enum { S2K_READ_RESYNC=1u, S2K_READ_MORE=2u };
 /** Creation configuration; initialize every field. Event capacity is 1..256, controllers 1..64.
- * The facade uses on-demand discovery and does not persist identities or preferences. */
+ * The facade defaults to on-demand discovery and does not persist identities or preferences. */
 typedef struct S2KConfig {
     uint32_t abi_version, struct_size, maximum_controllers, event_capacity;
 } S2KConfig;
@@ -142,6 +142,19 @@ S2KResult s2k_start(S2KContext *context);
 S2KResult s2k_stop(S2KContext *context);
 /** Open/replace a 0.1..300 second scan window after start; ready controllers are unaffected. */
 S2KResult s2k_discover(S2KContext *context, double seconds);
+/** Opt in to continuous discovery of available supported controllers (enabled=1),
+ * including reconnect after link loss; enabled=0 restores on-demand discovery.
+ * Default is 0. Any other value is INVALID_ARGUMENT. Idempotent and thread-safe.
+ * Configuration is queued; it does not start Bluetooth or revive stopped support.
+ * Call start separately. BUSY while asynchronous stop is finishing.
+ * Switching to 0 cancels automatic scanning, not ready connections. An already
+ * admitted handshake may finish. Use stop to cancel attempts and disconnect all.
+ * Automatic mode has no discovery-window deadline and resumes scanning when the
+ * radio/capacity permits. The host need not periodically renew discover calls.
+ * The choice survives stop/start on this context, not destroy/create. Hosts own
+ * user consent and persistence. New additive ABI-v1 symbol; link a matching SDK.
+ */
+S2KResult s2k_set_automatic_discovery(S2KContext *context, uint32_t enabled);
 /** Read without blocking or invoking callbacks. One logical reader per handle.
  * events may be NULL only when capacity is zero. event_stride must equal sizeof(S2KEvent);
  * snapshot_size must equal sizeof(S2KSnapshot). count/snapshot/flags must be non-NULL.
