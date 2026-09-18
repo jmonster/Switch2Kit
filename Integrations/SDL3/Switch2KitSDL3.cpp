@@ -465,9 +465,11 @@ struct SDL3Adapter::Impl {
         lastPump = now; wasActive = active;
         // SDL first expires finished effects; renewal below must not resurrect one.
         SDL_UpdateJoysticks();
-        std::array<S2KEvent, S2K_EVENT_CAPACITY> events{};
+        // Match the C ABI width and the backing array without implicit narrowing.
+        constexpr uint32_t eventCapacity{S2K_EVENT_CAPACITY};
+        std::array<S2KEvent, eventCapacity> events{};
         uint32_t count{}, flags{};
-        const auto result = s2k_read(context, events.data(), events.size(), sizeof(S2KEvent), &count,
+        const auto result = s2k_read(context, events.data(), eventCapacity, sizeof(S2KEvent), &count,
                                      &snapshot, sizeof(snapshot), &flags);
         if (result != S2K_OK) { clear(); return error = result; }
         const auto clock = ClockPair::sample();
