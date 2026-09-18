@@ -38,17 +38,18 @@ bash scripts/build-switch2kit-emulator.sh dolphin /path/to/patched/dolphin /path
 cmake --install /path/to/build --prefix /path/to/install
 ```
 
-`switch2kit_install_linux(target)` installs the C library and attribution notices and adds the relative library directory to the host's install RPATH. Host executables must be installed into `CMAKE_INSTALL_BINDIR`; the supplied integrations do so. Build-tree executables use CMake's normal build RPATH. The installation is **not a self-contained Linux app bundle**: compatible Swift runtime libraries and system dependencies must remain discoverable by the loader. A package maintainer must declare those dependencies or supply an appropriate runtime deployment; copying only the emulator executable is insufficient. `switch2kit_embed` remains the macOS bundle helper.
+`switch2kit_install_linux(target)` installs the C library, its compiler-selected Swift runtime dependency closure, and complete license/attribution notices. It adds the relative library directory to the host's install RPATH and removes compiler-specific search paths from the packaged ELF copies, not from the original toolchain files. Host executables must be installed into `CMAKE_INSTALL_BINDIR`; the supplied integrations do so. Build-tree executables use CMake's normal build RPATH. `switch2kit_embed` remains the macOS bundle helper.
 
-When using a Swift toolchain installed outside the system loader paths, launch with its runtime paths in the process environment:
+Keep the entire installed directory layout when extracting or relocating a package. A successfully staged application does not require a Swift compiler installation or `LD_LIBRARY_PATH` override at launch:
 
 ```sh
-export LD_LIBRARY_PATH="$(swiftc -print-target-info | python3 -c 'import json,sys; print(":".join(json.load(sys.stdin)["paths"]["runtimeLibraryPaths"]))')${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 /path/to/install/bin/dolphin-emu
 # Or: /path/to/install/bin/Cemu_release
 ```
 
-This is a shell-local setting, not a system-wide library replacement. Use the same shell for the lookup and the application launch.
+This is **not a universal self-contained Linux app bundle**. Compatible glibc, C++ and desktop libraries, graphics drivers, `libsystemd.so.0`, and the BlueZ service remain system prerequisites. Use the distribution/architecture identified by the application workflow and require successful native build and extracted-package checks for that revision. A source archive is not an application, and copying only the emulator executable is insufficient.
+
+`swift build` alone builds the SDK rather than staging a host application. Runtime-license selection is provided for Swift 6.2.1 and 6.3.3; other distributions need their complete Swift license and ICU third-party notices supplied through `SWITCH2KIT_SWIFT_LICENSE` and `SWITCH2KIT_RUNTIME_ICU_LICENSE`. Missing libraries or notices are packaging errors to resolve, not a reason to bypass the loader or omit license texts.
 
 ## Verification and hardware boundary
 
