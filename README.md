@@ -18,9 +18,7 @@ Dolphin itself is [cross-platform](https://dolphin-emu.org/docs/faq/). Switch2Ki
 
 Use the [C ABI and CMake integration](docs/switch2kit/cpp.md) to embed the same controller engine in a native host. The host does not need to be written in Swift and does not require the dashboard.
 
-The [Dolphin and Cemu integrations](Integrations/Emulators/README.md) connect Switch2Kit to each emulator's existing SDL3 input backend, in process. The emulator owns discovery, Bluetooth permissions, and controller lifecycle; no network bridge, second SDL instance, or system virtual controller is required. The guide covers pinned source patches, builds, controller bindings, and motion-profile configuration.
-
-These optional source integrations are maintained in this repository; do not assume an unmodified upstream emulator includes them. Enabling the backend requires macOS 15+ or the [Linux runtime dependencies](docs/switch2kit/linux.md). Builds with it disabled retain the emulator's other platforms and deployment targets.
+The [Dolphin and Cemu integrations](Integrations/Emulators/README.md) connect Switch2Kit to each emulator's existing SDL3 input backend, in process. The emulator owns discovery, Bluetooth permissions, and controller lifecycle; no network bridge, second SDL instance, or system virtual controller is required. The guide covers pinned source patches, builds, controller bindings, and motion-profile configuration. These optional patches are maintained here, not supplied by unmodified upstream emulators; disabled builds retain upstream platforms and deployment targets.
 
 ## Library
 
@@ -62,9 +60,11 @@ On macOS, the host provides `NSBluetoothAlwaysUsageDescription` and, when sandbo
 
 | Controller | Input | Rumble |
 | --- | --- | --- |
-| Switch 2 Pro Controller | Buttons, two sticks, motion, battery | Independent HD motors |
-| Joy-Con 2, left or right | Buttons, stick, motion, optical sensor, battery | Single HD motor per unit |
-| NSO GameCube | Buttons, two sticks, analog trigger travel and digital clicks, motion, battery | On/off motor and soft/strong firmware clips |
+| Switch 2 Pro Controller | Buttons, two sticks, raw motion, battery | Independent HD motors |
+| Joy-Con 2, left or right | Buttons, stick, raw motion, optical counters, battery | Single HD motor per unit |
+| NSO GameCube | Buttons, two sticks, analog trigger travel and digital clicks, raw motion, battery | On/off motor and soft/strong firmware clips |
+
+Calibrated SDL motion requires an explicitly selected [physical motion profile](docs/switch2kit/motion-profiles.md); no measured built-in profiles are supplied. See [controller and feature coverage](docs/switch2kit/coverage.md) for transport, output and physical-qualification boundaries.
 
 [Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
 

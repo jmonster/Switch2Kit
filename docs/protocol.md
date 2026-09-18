@@ -5,16 +5,17 @@ Controller 2, Joy-Con 2 L/R, and the NSO GameCube pad) over Bluetooth Low
 Energy from a host that is **not** a Switch console.
 
 This document covers connection, the command protocol, the input report
-layout, motion/environmental sensors, rumble, LEDs, and pairing. It focuses on
-what has been verified in practice, and calls out the platform quirks that
-matter on macOS in particular.
+layout, motion/environmental sensors, rumble, LEDs, and pairing. Retained
+protocol observations are not a qualification report for the current library,
+application or emulator integrations. See [controller and feature coverage](switch2kit/coverage.md)
+for implemented behavior and the remaining physical acceptance.
 
-> **Scope note.** NFC/amiibo is intentionally omitted here — that work is
-> still in progress and will be published separately once it is fully worked
-> out. Controller audio is covered in §10 to the extent it is currently
-> understood (the wire framing is verified on real hardware; the codec is
-> not yet identified). Everything else below is implemented and observed on
-> real hardware.
+> **Scope note.** Switch2Kit does not implement NFC/amiibo or headset audio.
+> Section 10 records protocol observations, not an audio transport supplied by
+> this repository. Raw motion counts are not calibrated SDL measurements;
+> [explicit device profiles](switch2kit/motion-profiles.md) are required.
+> Current automated tests do not establish physical gameplay, measured motion
+> coefficients, or support for every firmware or controller edition.
 
 Byte offsets are into the decrypted input report / command payloads.
 
@@ -185,8 +186,8 @@ calibrate with a figure-8 min/max per device).
 
 ```
 0x00000001 Y        0x00000800 L-stick     0x00080000 D-Left
-0x00000002 X        0x00001000 Home        0x00100000 SL (L)
-0x00000004 B        0x00002000 Capture     0x00200000 SR (L)
+0x00000002 X        0x00001000 Home        0x00100000 SR (L)
+0x00000004 B        0x00002000 Capture     0x00200000 SL (L)
 0x00000008 A        0x00004000 C           0x00400000 L
 0x00000010 SR (R)   0x00010000 D-Down      0x00800000 ZL
 0x00000020 SL (R)   0x00020000 D-Up        0x01000000 GR
@@ -195,8 +196,9 @@ calibrate with a figure-8 min/max per device).
 0x00000400 R-stick
 ```
 
-ZL/ZR are digital bits on every model except the NSO GameCube pad, which
-reports true analog triggers at `0x3C`/`0x3D`.
+ZL/ZR are digital bits, including the independent L/R clicks on the NSO
+GameCube pad. GameCube additionally reports analog trigger travel at
+`0x3C`/`0x3D`; travel does not imply a click.
 
 ---
 
