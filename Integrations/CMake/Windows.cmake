@@ -32,13 +32,16 @@ set(SWITCH2KIT_C_BINARY_DIR "${_s2k_bin}" CACHE INTERNAL "Built C facade directo
 
 include("${CMAKE_CURRENT_LIST_DIR}/Runtime.cmake")
 
-# Copy the facade and its compiler-selected Swift runtime closure. System DLLs
-# and graphics/Bluetooth drivers remain operating-system prerequisites.
+# Scan the actual host and its linked DLLs, not just the facade. A separately
+# compiled Swift client can have additional runtime imports. System DLLs and
+# graphics/Bluetooth drivers remain operating-system prerequisites.
 function(switch2kit_embed_windows target)
   get_filename_component(_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../.." ABSOLUTE)
   add_custom_command(TARGET "${target}" POST_BUILD
     COMMAND "${CMAKE_COMMAND}"
       "-DS2K_LIBRARY=$<TARGET_FILE:Switch2Kit::C>"
+      "-DS2K_EXECUTABLE=$<TARGET_FILE:${target}>"
+      "-DS2K_EXTRA_LIBRARIES=$<TARGET_RUNTIME_DLLS:${target}>"
       "-DS2K_DESTINATION=$<TARGET_FILE_DIR:${target}>"
       "-DS2K_NOTICES=$<TARGET_FILE_DIR:${target}>/Switch2KitNotices"
       "-DS2K_RUNTIME_CONFIG=${SWITCH2KIT_RUNTIME_CONFIG}"

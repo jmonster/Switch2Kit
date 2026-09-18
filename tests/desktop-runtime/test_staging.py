@@ -35,6 +35,9 @@ class RuntimeStagingTests(unittest.TestCase):
             'runtime': 'extern int leaf(void); int runtime(void) { return leaf(); }',
             'private_os': 'int private_os(void) { return 2; }',
             'system_boundary': 'extern int private_os(void); int system_boundary(void) { return private_os(); }',
+            'fixture_leaf': 'int fixture_leaf(void) { return 7; }',
+            'fixture': 'extern int fixture_leaf(void); int fixture(void) { return fixture_leaf(); }',
+            'consumer': 'extern int facade(void); extern int fixture(void); int main(void) { return facade() + fixture() == 10 ? 0 : 1; }',
             'facade': 'extern int runtime(void); extern int system_boundary(void); int facade(void) { return runtime() + system_boundary(); }',
         }.items():
             (self.root / f'{name}.c').write_text(body + '\n')
@@ -42,14 +45,21 @@ class RuntimeStagingTests(unittest.TestCase):
         # tested with native ELF on Linux and native PE on Windows.
         (self.root / 'CMakeLists.txt').write_text('''cmake_minimum_required(VERSION 3.24)
 project(RuntimeBoundary C)
-foreach(name leaf runtime private_os system_boundary facade)
+foreach(name leaf runtime private_os system_boundary facade fixture_leaf fixture)
   add_library(${name} SHARED ${name}.c)
   set_target_properties(${name} PROPERTIES PREFIX "" SUFFIX ".dll" WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endforeach()
+target_link_libraries(fixture PRIVATE fixture_leaf)
+add_executable(consumer consumer.c)
+target_link_libraries(consumer PRIVATE facade fixture)
+set_target_properties(consumer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/application")
+set_target_properties(fixture PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/fixture libraries"
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/fixture libraries")
 target_link_libraries(runtime PRIVATE leaf)
 target_link_libraries(system_boundary PRIVATE private_os)
 target_link_libraries(facade PRIVATE runtime system_boundary)
-foreach(name leaf runtime)
+foreach(name leaf runtime fixture_leaf)
   set_target_properties(${name} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/compiler runtime"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/compiler runtime")
@@ -97,11 +107,11 @@ set_target_properties(facade PROPERTIES
         self.config.write_text(''.join(f'set({key} [==[{value.as_posix() if isinstance(value, Path) else value}]==])\n'
                                        for key, value in values.items()))
 
-    def stage(self, destination=None):
+    def stage(self, destination=None, *extra):
         return self.run_command('cmake', f'-DS2K_LIBRARY={self.library.as_posix()}',
                                 f'-DS2K_DESTINATION={(destination or self.destination).as_posix()}',
                                 f'-DS2K_NOTICES={(self.root / "notices").as_posix()}',
-                                f'-DS2K_RUNTIME_CONFIG={self.config.as_posix()}', '-P', str(SCRIPT))
+                                f'-DS2K_RUNTIME_CONFIG={self.config.as_posix()}', *extra, '-P', str(SCRIPT))
 
     def test_system_boundary_preserves_transitive_runtime_and_source_files(self):
         before = {path: hashlib.sha256(path.read_bytes()).digest()
@@ -127,6 +137,36 @@ set_target_properties(facade PROPERTIES
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn('system_boundary.dll', result.stdout)
         self.assertFalse(self.destination.exists())
+
+    def host_arguments(self):
+        executable = self.app / ('consumer.exe' if sys.platform == 'win32' else 'consumer')
+        fixture = self.root / 'fixture libraries/fixture.dll'
+        return (f'-DS2K_EXECUTABLE={executable.as_posix()}',
+                f'-DS2K_EXTRA_LIBRARIES={fixture.as_posix()}')
+
+    def test_host_closure_includes_runtime_used_only_by_a_linked_fixture(self):
+        before = {path: path.read_bytes() for path in self.runtime.glob('*.dll')}
+        result = self.stage(None, *self.host_arguments())
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual({p.name for p in self.destination.iterdir()},
+                         {'facade.dll', 'runtime.dll', 'leaf.dll', 'fixture.dll', 'fixture_leaf.dll'})
+        for path, content in before.items():
+            self.assertEqual(path.read_bytes(), content, str(path))
+
+    def test_missing_fixture_only_runtime_fails_before_packaging(self):
+        (self.runtime / 'fixture_leaf.dll').unlink()
+        result = self.stage(None, *self.host_arguments())
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('fixture_leaf.dll', result.stdout)
+        self.assertFalse(self.destination.exists())
+
+    def test_missing_host_or_linked_library_is_not_ignored(self):
+        for argument in ('S2K_EXECUTABLE', 'S2K_EXTRA_LIBRARIES'):
+            with self.subTest(argument=argument):
+                result = self.stage(None, f'-D{argument}={self.root.as_posix()}/missing')
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn('missing', result.stdout)
+                self.assertFalse(self.destination.exists())
 
     def test_deployment_into_compiler_runtime_is_rejected(self):
         result = self.stage(self.runtime)
