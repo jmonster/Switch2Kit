@@ -15,7 +15,9 @@ def run(*args, cwd=None):
 def backend_block(emulator):
     additions = '\n'.join(line[1:] for line in (ROOT / f'Integrations/Emulators/{emulator}.patch').read_text().splitlines()
                           if line.startswith('+') and not line.startswith('+++'))
-    start = additions.index('if(ENABLE_SWITCH2KIT)', additions.index('option(ENABLE_SWITCH2KIT'))
+    marker = additions.index('message(FATAL_ERROR "Switch2Kit requires')
+    start = additions.rfind('if(ENABLE_SWITCH2KIT)', 0, marker)
+    if start < 0: raise AssertionError('missing integration platform guard')
     depth = 0; block = []
     for line in additions[start:].splitlines():
         block.append(line)

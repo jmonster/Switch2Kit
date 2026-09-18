@@ -1,18 +1,18 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 644032c..6d4a088 100644
+index 644032c..0ddbc3f 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -1,6 +1,8 @@
  cmake_minimum_required(VERSION 3.21.1)
- 
+
  option(ENABLE_VCPKG "Enable the vcpkg package manager" ON)
 +option(ENABLE_SWITCH2KIT "Use in-process Switch2Kit controllers on macOS 15+ or Linux/BlueZ" OFF)
 +set(SWITCH2KIT_SOURCE_DIR "" CACHE PATH "Switch2Kit source checkout")
  option(MACOS_BUNDLE "The executable when built on macOS will be created as an application bundle" OFF)
  option(ALLOW_PORTABLE "Allow Cemu to be run in portable mode" ON)
- 
+
 @@ -99,7 +101,9 @@ endif()
- 
+
  if (APPLE)
      enable_language(OBJC OBJCXX)
 -    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
@@ -20,12 +20,21 @@ index 644032c..6d4a088 100644
 +        set(CMAKE_OSX_DEPLOYMENT_TARGET "13.4")
 +    endif()
  endif()
- 
+
  if (UNIX AND NOT APPLE)
-@@ -168,6 +172,19 @@ if(ENABLE_SDL)
+@@ -164,10 +168,27 @@ find_package(fmt 12.1 REQUIRED)
+ find_package(PNG REQUIRED)
+
+ if(ENABLE_SDL)
+-	find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
++    if(ENABLE_SWITCH2KIT)
++        find_package(SDL3 3.4.16 REQUIRED CONFIG COMPONENTS SDL3)
++    else()
++        find_package(SDL3 REQUIRED CONFIG COMPONENTS SDL3)
++    endif()
  	add_compile_definitions(HAS_SDL)
  endif()
- 
+
 +if(ENABLE_SWITCH2KIT)
 +    if((NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux") OR NOT ENABLE_SDL OR (APPLE AND NOT MACOS_BUNDLE))
 +        message(FATAL_ERROR "Switch2Kit requires macOS or Linux, ENABLE_SDL, and MACOS_BUNDLE on macOS")
@@ -891,3 +900,34 @@ index ccd1c92..5426ebf 100644
 +    ${SWITCH2KIT_BLUETOOTH_USAGE}
  </dict>
  </plist>
+diff --git a/vcpkg.json b/vcpkg.json
+index 7f5ceca..57610be 100644
+--- a/vcpkg.json
++++ b/vcpkg.json
+@@ -2,6 +2,17 @@
+   "name": "cemu",
+   "version-string": "1.0",
+   "builtin-baseline": "f0fb3ddba5135b80982668de39dbaa139c00d281",
++  "vcpkg-configuration": {
++    "registries": [
++      {
++        "kind": "git",
++        "repository": "https://github.com/microsoft/vcpkg",
++        "baseline": "386d7c478221b7ee0c97bfe6ea61dcf65121d564",
++        "reference": "386d7c478221b7ee0c97bfe6ea61dcf65121d564",
++        "packages": ["sdl3"]
++      }
++    ]
++  },
+   "dependencies": [
+     "pugixml",
+     "zlib",
+@@ -76,7 +87,7 @@
+     },
+     {
+       "name": "sdl3",
+-      "version": "3.4.10"
++      "version": "3.4.16"
+     },
+     {
+       "name": "wxwidgets",

@@ -53,12 +53,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: libsdl-org/SDL
-          ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
+          ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
           path: build/SDL
           persist-credentials: false
       - name: Real SDL consumer on Linux
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+          S2K_EXPECT_SDL_VERSION: 3004016
         run: bash tests/sdl-inprocess/verify.sh
   dolphin:
     runs-on: ubuntu-24.04
@@ -114,7 +115,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: linux-dolphin-runtime-diagnostics
-          path: build/linux-installed-runtime.txt
+          path: |
+            build/linux-installed-runtime.txt
+            build/dolphin-build/integration-sdl-version.txt
           if-no-files-found: warn
           retention-days: 7
 
@@ -152,7 +155,8 @@ jobs:
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809
         with:
           path: build/vcpkg-cache
-          key: cemu-linux-x64-swift621-noble-3310f3b8-${{ hashFiles('build/cemu-source/vcpkg.json', 'build/cemu-source/vcpkg-configuration.json', 'build/cemu-source/dependencies/vcpkg_overlay_ports*/**') }}
+          key: cemu-linux-x64-swift621-noble-3310f3b8-${{ hashFiles('Integrations/Emulators/cemu.patch', 'build/cemu-source/vcpkg.json', 'build/cemu-source/vcpkg-configuration.json', 'build/cemu-source/dependencies/vcpkg_overlay_ports*/**') }}
+          restore-keys: cemu-linux-x64-swift621-noble-3310f3b8-
       - name: Build actual Linux Cemu with Switch2Kit
         run: |
           python3 Integrations/Emulators/apply.py cemu build/cemu-source
@@ -185,6 +189,7 @@ jobs:
           path: |
             build/linux-cemu-build.log
             build/linux-cemu-runtime.txt
+            build/cemu-build/integration-sdl-version.txt
             build/cemu-build/CMakeCache.txt
             build/cemu-build/CMakeFiles/CMakeConfigureLog.yaml
             build/cemu-build/vcpkg-manifest-install.log

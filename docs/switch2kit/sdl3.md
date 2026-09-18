@@ -12,7 +12,7 @@ target_link_libraries(your_emulator PRIVATE Switch2Kit::SDL3)
 switch2kit_embed(your_emulator) # macOS application bundle; host signs it afterward
 ```
 
-The source dependency builds through the [C binding](cpp.md). Enable it for macOS 15+ hosts or the experimental [Linux/BlueZ backend](linux.md). Both use the same live C API and SDL adapter; Windows and Android remain unsupported. CI tests unmodified SDL at commit `147a8ee32dbf9ac02f3794964490687b6bbda1bc`.
+The source dependency builds through the [C binding](cpp.md). Enable it for macOS 15+ hosts or the experimental [Linux/BlueZ backend](linux.md). Both use the same live C API and SDL adapter; Windows and Android remain unsupported. The adapter links the host's existing SDL target without patching SDL.
 
 ## Ownership and input loop
 

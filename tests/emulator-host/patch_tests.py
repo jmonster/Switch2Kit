@@ -87,6 +87,51 @@ class PatchTests(unittest.TestCase):
             self.invoke("--verify")
         self.assertEqual((self.source / "input.cpp").read_text(), "local change after applying\n")
 
+    def sdl_lookup(self, native, sdl=True):
+        # Execute the actual SDL-selection block delivered by the Cemu patch.
+        # Only package discovery is replaced; CMake evaluates the conditions.
+        text = (root / "Integrations/Emulators/cemu.patch").read_text()
+        first_file = text.split("diff --git a/src/CMakeLists.txt", 1)[0]
+        lines = [line[1:] for line in first_file.splitlines()
+                 if line.startswith(("+", " ")) and not line.startswith("+++")]
+        start = lines.index("if(ENABLE_SDL)")
+        block, depth = [], 0
+        for line in lines[start:]:
+            block.append(line)
+            if line.strip().startswith("if("):
+                depth += 1
+            elif line.strip() == "endif()":
+                depth -= 1
+                if depth == 0:
+                    break
+        self.assertEqual(depth, 0)
+        source = self.here / ("policy-" + str(native) + "-" + str(sdl))
+        source.mkdir()
+        (source / "CMakeLists.txt").write_text(
+            'cmake_minimum_required(VERSION 3.24)\n'
+            'project(SDLSelection LANGUAGES NONE)\n'
+            'macro(find_package)\n'
+            '  file(WRITE "${CMAKE_BINARY_DIR}/lookup.txt" "${ARGV}")\n'
+            'endmacro()\n' + "\n".join(block) + "\n")
+        build = source / "build"
+        subprocess.run(["cmake", "-S", str(source), "-B", str(build),
+                        "-DENABLE_SWITCH2KIT=" + ("ON" if native else "OFF"),
+                        "-DENABLE_SDL=" + ("ON" if sdl else "OFF")],
+                       check=True, capture_output=True, text=True, timeout=20)
+        result = build / "lookup.txt"
+        return result.read_text().split(";") if result.exists() else None
+
+    def test_cemu_disabled_backend_preserves_system_sdl_discovery(self):
+        self.assertEqual(self.sdl_lookup(False),
+                         ["SDL3", "REQUIRED", "CONFIG", "COMPONENTS", "SDL3"])
+        enabled = self.sdl_lookup(True)
+        self.assertEqual(enabled[0], "SDL3")
+        self.assertRegex(enabled[1], r"^3\.[0-9]+\.[0-9]+$")
+        self.assertEqual(enabled[2:], ["REQUIRED", "CONFIG", "COMPONENTS", "SDL3"])
+
+    def test_cemu_without_sdl_does_not_discover_it(self):
+        self.assertIsNone(self.sdl_lookup(False, sdl=False))
+
     def test_pins_and_patch_paths_match(self):
         directory = root / "Integrations/Emulators"
         revisions = json.loads((directory / "revisions.json").read_text())

@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: libsdl-org/SDL
-          ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
+          ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
           path: .ci-sdl
           persist-credentials: false
       - name: Ensure the real wired driver is compiled
@@ -25,11 +25,14 @@ jobs:
         run: |
           set -euo pipefail
           bash -n sdl/build-sdl.sh sdl/make-gopher64-both.sh tests/sdl-usb/check-sdl.sh
-          git -C .ci-sdl apply "$GITHUB_WORKSPACE/sdl/sdl3-3.4.14-s2udp.patch"
+          git -C .ci-sdl apply "$GITHUB_WORKSPACE/sdl/sdl3-s2udp.patch"
+          test "$(git -C .ci-sdl rev-parse HEAD)" = fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
           bash tests/sdl-usb/check-sdl.sh .ci-sdl before
           cmake -S .ci-sdl -B "$RUNNER_TEMP/sdl-build" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_HIDAPI_LIBUSB=ON > "$RUNNER_TEMP/sdl-baseline.log" 2>&1
           cmake --build "$RUNNER_TEMP/sdl-build" --parallel 3 >> "$RUNNER_TEMP/sdl-baseline.log" 2>&1 || { tail -80 "$RUNNER_TEMP/sdl-baseline.log"; exit 1; }
           grep '^#define HAVE_LIBUSB 1' "$RUNNER_TEMP/sdl-build"/include-config-*/build_config/SDL_build_config.h
+          cc -I .ci-sdl/include Integrations/SDL3/VerifyVersion.c -L "$RUNNER_TEMP/sdl-build" -Wl,-rpath,"$RUNNER_TEMP/sdl-build" -lSDL3 -o "$RUNNER_TEMP/check-sdl-version"
+          "$RUNNER_TEMP/check-sdl-version" 3004016 | tee "$RUNNER_TEMP/sdl-version.log"
           cc -I .ci-sdl/include tests/sdl-edges/check.c -L "$RUNNER_TEMP/sdl-build" -Wl,-rpath,"$RUNNER_TEMP/sdl-build" -lSDL3 -o "$RUNNER_TEMP/check-edges"
           set +e
           "$RUNNER_TEMP/check-edges"
@@ -45,6 +48,7 @@ jobs:
           bash tests/sdl-usb/check-sdl.sh .ci-sdl after
           # Resolve the same test executable against ONLY the corrected dylib.
           # SDL3_DYNAMIC_API would load both libraries' Objective-C classes.
+          DYLD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/sdl" "$RUNNER_TEMP/check-sdl-version" 3004016 | tee -a "$RUNNER_TEMP/sdl-version.log"
           DYLD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/sdl" "$RUNNER_TEMP/check-edges"
       - name: Pro Controller gamepad, sensor and rumble integration
         shell: bash

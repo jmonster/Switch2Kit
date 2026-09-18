@@ -17,3 +17,12 @@ set_target_properties(Switch2KitSDL3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(Switch2KitSDL3 PRIVATE -fexceptions)
 endif()
+
+if(SWITCH2KIT_VERIFY_SDL)
+  add_executable(Switch2KitSDLVersion EXCLUDE_FROM_ALL VerifyVersion.c)
+  target_compile_features(Switch2KitSDLVersion PRIVATE c_std_11)
+  target_link_libraries(Switch2KitSDLVersion PRIVATE SDL3::SDL3)
+  set_target_properties(Switch2KitSDLVersion PROPERTIES
+    MACOSX_BUNDLE FALSE
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/switch2kit-verify")
+endif()

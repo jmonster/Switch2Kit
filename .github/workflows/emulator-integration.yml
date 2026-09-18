@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: libsdl-org/SDL
-          ref: 147a8ee32dbf9ac02f3794964490687b6bbda1bc
+          ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
           path: build/SDL
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -43,6 +43,7 @@ jobs:
       - name: Exercise application lifecycle and concurrent enumeration
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+          S2K_EXPECT_SDL_VERSION: 3004016
           S2K_CEMU_SOURCE: ${{ github.workspace }}/build/Cemu-motion
           S2K_DOLPHIN_SOURCE: ${{ github.workspace }}/build/Dolphin-motion
         run: bash tests/emulator-host/verify.sh
@@ -180,6 +181,8 @@ jobs:
             build/emulator-disabled/compile_commands.json
             build/emulator-build/integration-native-diagnostics.txt
             build/emulator-build/integration-inspection.json
+            build/emulator-build/integration-sdl-version.txt
+            build/emulator-build/integration-notices.json
             build/emulator-build/build.ninja
             build/emulator-build/CMakeCache.txt
             build/emulator-build/compile_commands.json

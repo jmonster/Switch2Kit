@@ -13,7 +13,7 @@ emulator=$1; source=$2; build=$3; shift 3
 python3 "$root/Integrations/Emulators/apply.py" "$emulator" "$source" --verify
 swift --version
 args=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-      -DENABLE_SWITCH2KIT=ON "-DSWITCH2KIT_SOURCE_DIR=$root")
+      -DENABLE_SWITCH2KIT=ON -DSWITCH2KIT_VERIFY_SDL=ON "-DSWITCH2KIT_SOURCE_DIR=$root")
 if [ "$platform" = Darwin ]; then args+=(-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0); fi
 case "$emulator" in
   dolphin) args+=(-DENABLE_SDL=ON -DENABLE_QT=ON); target=dolphin-emu ;;
@@ -23,6 +23,8 @@ case "$emulator" in
   *) echo 'Unknown emulator' >&2; exit 2 ;;
 esac
 cmake -S "$source" -B "$build" "${args[@]}" "$@"
+cmake --build "$build" --target Switch2KitSDLVersion --parallel "${S2K_BUILD_JOBS:-4}"
+"$build/switch2kit-verify/Switch2KitSDLVersion" 3004016 | tee "$build/integration-sdl-version.txt"
 # A Linux install includes all enabled upstream targets (for example Dolphin's
 # command-line tools), not just the GUI executable. Build them before advertising
 # cmake --install. macOS retains its existing targeted bundle workflow.
