@@ -30,14 +30,19 @@ set_target_properties(Switch2Kit::C PROPERTIES
 add_dependencies(Switch2Kit::C Switch2KitCBuild)
 set(SWITCH2KIT_C_BINARY_DIR "${_s2k_bin}" CACHE INTERNAL "Built C facade directory")
 
-# Copy the application-owned DLL and its notices next to the executable. The
-# matching Swift runtime must already be installed; do not copy Windows system
-# DLLs, change PATH globally, or claim a self-contained release.
+include("${CMAKE_CURRENT_LIST_DIR}/Runtime.cmake")
+
+# Copy the facade and its compiler-selected Swift runtime closure. System DLLs
+# and graphics/Bluetooth drivers remain operating-system prerequisites.
 function(switch2kit_embed_windows target)
   get_filename_component(_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../.." ABSOLUTE)
   add_custom_command(TARGET "${target}" POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-      "$<TARGET_FILE:Switch2Kit::C>" "$<TARGET_FILE_DIR:${target}>"
+    COMMAND "${CMAKE_COMMAND}"
+      "-DS2K_LIBRARY=$<TARGET_FILE:Switch2Kit::C>"
+      "-DS2K_DESTINATION=$<TARGET_FILE_DIR:${target}>"
+      "-DS2K_NOTICES=$<TARGET_FILE_DIR:${target}>/Switch2KitNotices"
+      "-DS2K_RUNTIME_CONFIG=${SWITCH2KIT_RUNTIME_CONFIG}"
+      -P "${SWITCH2KIT_RUNTIME_SCRIPT}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target}>/Switch2KitNotices"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_root}/CREDITS.md"
       "$<TARGET_FILE_DIR:${target}>/Switch2KitNotices/CREDITS.md"

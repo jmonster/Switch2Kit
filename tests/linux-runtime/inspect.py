@@ -24,13 +24,7 @@ def main() -> None:
     require(executable.is_relative_to(prefix), "Executable must be inside the installed prefix")
     needed = [value for value in tags(executable, "NEEDED") if "Switch2KitC" in value]
     require(needed == ["libSwitch2KitC.so"], f"Unexpected facade DT_NEEDED: {needed}")
-    swift = shutil.which("swift")
-    require(swift is not None, "Swift is required to identify the runtime deployment paths")
-    assert swift is not None
-    info = json.loads(run([swift, "-print-target-info"]))
-    runtime_paths = info["paths"]["runtimeLibraryPaths"]
-    env = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C",
-           "LD_LIBRARY_PATH": os.pathsep.join(runtime_paths)}
+    env = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
     linked = run(["ldd", str(executable)], env=env)
     print(linked, end="")
     require("not found" not in linked, "Installed executable has unresolved dependencies")
@@ -40,6 +34,11 @@ def main() -> None:
     facade = Path(paths[0]).resolve(strict=True)
     require(facade.is_relative_to(prefix), f"Facade is outside installed prefix: {facade}")
     require(tags(facade, "SONAME") == ["libSwitch2KitC.so"], "Incorrect installed facade SONAME")
+    for name, path in re.findall(r"^\s*(\S+)\s+=>\s+(.+?)\s+\(0x[0-9a-f]+\)", linked, flags=re.MULTILINE):
+        if name.startswith(("libswift", "libFoundation", "lib_Foundation", "libdispatch", "libBlocksRuntime")):
+            require(Path(path).resolve(strict=True).is_relative_to(prefix),
+                    f"Swift runtime dependency escapes installed prefix: {name}: {path}")
+    require(tags(facade, "RUNPATH") == ["$ORIGIN"], "Facade runtime search path is not relocatable")
     print(f"PASS: {executable} resolves installed facade {facade}")
 
 

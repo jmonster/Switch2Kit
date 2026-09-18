@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 
 
 def run(arguments: list[str], *, env: dict[str, str] | None = None,
@@ -47,16 +48,8 @@ def main() -> None:
     for program in ("cmake", "ninja", "swift", "readelf"):
         require(shutil.which(program) is not None, f"Missing prerequisite: {program}")
     source = Path(__file__).resolve().parent
-    swift = shutil.which("swift")
-    assert swift is not None
-    info = json.loads(run([swift, "-print-target-info"]))
-    runtime_paths = info["paths"]["runtimeLibraryPaths"]
-    require(bool(runtime_paths) and all(Path(p).is_absolute() for p in runtime_paths),
-            "Swift did not identify its runtime library paths")
-    # Keep Swift runtime deployment explicit; never inherit a build-tree library
-    # path or injected preload from the developer's shell.
-    runtime_env = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C",
-                   "LD_LIBRARY_PATH": os.pathsep.join(runtime_paths)}
+    # No Swift installation or developer library-search path in the runtime environment.
+    runtime_env = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
     with tempfile.TemporaryDirectory(prefix="Switch2Kit loader ") as temporary:
         root = Path(temporary)
         build = root / "build"
@@ -77,7 +70,12 @@ def main() -> None:
                       if "Switch2KitC" in value]
             require(needed == ["libSwitch2KitC.so"],
                     f"{name}: unexpected facade DT_NEEDED: {needed}")
-        install.rename(relocated)
+        archive = root / "installed.tar.gz"
+        with tarfile.open(archive, "w:gz") as package:
+            package.add(install, arcname="relocated prefix")
+        install.rename(root / "unavailable install tree")
+        with tarfile.open(archive) as package:
+            package.extractall(root, filter="data")
         # Remove the exact original build location before running either host.
         # All modifications are within this test's private temporary directory.
         build.rename(root / "unavailable original build")
@@ -90,8 +88,10 @@ def main() -> None:
                  str(relocated / "bin" / name), str(relocated)])
         require((relocated / "share/Switch2KitNotices/CREDITS.md").is_file(),
                 "Installed source attribution is missing")
-        require((relocated / "share/Switch2KitNotices/LICENSES/README.md").is_file(),
-                "Installed third-party notices are missing")
+        notices = relocated / "share/Switch2KitNotices"
+        for name in ("LICENSES/MIT-trevlars.txt", "LICENSES/SDL-zlib.txt", "SwiftRuntime/LICENSE.txt", "SwiftRuntime/ICU.txt"):
+            require((notices / name).is_file() and (notices / name).stat().st_size > 0,
+                    f"Installed license text is missing: {name}")
         hidden = facade.with_suffix(".unavailable")
         facade.rename(hidden)
         try:
@@ -103,6 +103,16 @@ def main() -> None:
                         f"{name}: missing-library negative control did not fail at the loader")
         finally:
             hidden.rename(facade)
+        core = relocated / library_dir / "libswiftCore.so"
+        hidden_core = core.with_suffix(".unavailable")
+        core.rename(hidden_core)
+        try:
+            result = subprocess.run([str(relocated / "bin/imported_consumer")], env=runtime_env,
+                                    text=True, capture_output=True, timeout=10)
+            require(result.returncode != 0 and "libswiftCore.so" in result.stderr,
+                    "Missing Swift runtime incorrectly resolved through the compiler installation")
+        finally:
+            hidden_core.rename(core)
         print(f"PASS: {library_dir}; two real C++ consumers, relocated facade, "
               "unavailable build tree, and two missing-library negative controls")
 
