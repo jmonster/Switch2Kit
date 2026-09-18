@@ -23,7 +23,7 @@ public func createContext(_ config: UnsafePointer<S2KConfig>?, _ result: UnsafeM
         result?.pointee = 2; return nil
     }
     guard (1...256).contains(capacity), (1...64).contains(maximum) else { result?.pointee = 1; return nil }
-    #if canImport(CoreBluetooth)
+    #if canImport(CoreBluetooth) || os(Linux)
     guard Thread.isMainThread else { result?.pointee = 4; return nil }
     do {
         let source = MainActor.assumeIsolated { ManagerSource(maximumControllers: maximum) }

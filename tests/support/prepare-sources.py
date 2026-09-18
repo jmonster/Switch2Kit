@@ -11,7 +11,7 @@ import sys
 
 
 def fixture(source: str) -> str:
-    if source.startswith("#if canImport(CoreBluetooth)\n"):
+    if source.startswith(("#if canImport(CoreBluetooth)\n", "#if canImport(CoreBluetooth) || os(Linux)\n")):
         assert source.rstrip().endswith("#endif")
         source = source.split("\n", 1)[1].rstrip().removesuffix("#endif")
     source = re.sub(r"^import (CoreBluetooth|IOBluetooth|Switch2Kit)$", "", source, flags=re.M)

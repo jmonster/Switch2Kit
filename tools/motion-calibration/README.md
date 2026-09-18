@@ -8,7 +8,7 @@ bash tools/motion-calibration/build.sh "$PWD/build/s2k-calibrate"
 build/s2k-calibrate list
 ```
 
-The executable is linked to this source checkout, not a redistributable app bundle. On macOS it embeds its own Bluetooth usage description; allow Bluetooth access when prompted. No Accessibility permission or CoreHID is required. Offline fitting/validation also runs on Linux. `list` is an explicit 20-second diagnostic discovery action: hold Sync; it displays locally scoped physical UUIDs and models. These IDs are not sent to a service. Close other controller hosts before capture.
+The executable is linked to this source checkout, not a redistributable app bundle. On macOS it embeds its own Bluetooth usage description; allow Bluetooth access when prompted. No Accessibility permission or CoreHID is required. Linux also supports discovery and capture through the experimental [BlueZ backend](../../docs/switch2kit/linux.md), with normal system-bus permissions. Offline fitting/validation remains portable. `list` is an explicit 20-second diagnostic discovery action: hold Sync; it displays locally scoped physical UUIDs and models. These IDs are not sent to a service. Close other controller hosts before capture.
 
 ## Six stationary poses and gyro bias
 

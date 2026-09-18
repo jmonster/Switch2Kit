@@ -37,6 +37,24 @@ def package_name(description):
     return names["Switch2Kit"]
 
 
+def clang_modules(description):
+    """Carry SwiftPM's Clang module maps into the separately built fixture.
+
+    The library's Linux radio target is a private transitive Clang module. Its
+    map uses absolute header paths, so no production SDK flags or arbitrary
+    compiler options need to be copied into the fixture invocation.
+    """
+    maps = set()
+    for command in description.get("swiftCommands", {}).values():
+        if not isinstance(command, dict) or command.get("moduleName") not in ("Switch2Kit", "Switch2KitC"):
+            continue
+        arguments = command.get("otherArguments", [])
+        for index, argument in enumerate(arguments):
+            if index and arguments[index - 1] == "-Xcc" and isinstance(argument, str) and argument.startswith("-fmodule-map-file="):
+                maps.add(argument)
+    return [item for module in sorted(maps) for item in ("-Xcc", module)]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--description", type=Path, required=True)
@@ -49,8 +67,9 @@ def main(argv=None):
     try:
         if "-package-name" in arguments:
             raise ValueError("Fixture arguments must not override SwiftPM's package identity")
-        name = package_name(json.loads(options.description.read_text()))
-        return subprocess.run([options.compiler, "-package-name", name, *arguments], check=False).returncode
+        description = json.loads(options.description.read_text())
+        name = package_name(description)
+        return subprocess.run([options.compiler, "-package-name", name, *clang_modules(description), *arguments], check=False).returncode
     except (OSError, ValueError, AttributeError) as error:
         print(f"Cannot compile Swift fixture: {error}", file=sys.stderr)
         return 2

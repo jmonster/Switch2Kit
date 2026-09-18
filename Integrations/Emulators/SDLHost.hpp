@@ -174,7 +174,7 @@ private:
     // SDL callbacks take SDL's joystick lock first. Keep the same order for all
     // accesses so an emulator's enumeration thread cannot deadlock its input loop.
     struct Guard {
-        explicit Guard(std::mutex& mutex) : mutex(mutex) { SDL_LockJoysticks(); mutex.lock(); }
+        explicit Guard(std::mutex& hostMutex) : mutex(hostMutex) { SDL_LockJoysticks(); mutex.lock(); }
         ~Guard() { mutex.unlock(); SDL_UnlockJoysticks(); }
         std::mutex& mutex;
     };

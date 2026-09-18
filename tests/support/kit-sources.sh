@@ -1,7 +1,7 @@
 #!/bin/bash
 # Shared source list. Legacy fixtures compile the production kit values/decoder
 # and the separate dashboard capability policy, never copied protocol methods.
-kit_flags=(-package-name Switch2Kit)
+kit_flags=(-package-name Switch2Kit -D S2K_RADIO_FIXTURE)
 kit_sources=(
   Sources/Switch2Kit/Public/ControllerTypes.swift
   Sources/Switch2Kit/Public/Lifecycle.swift

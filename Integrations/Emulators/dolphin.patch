@@ -309,7 +309,7 @@ index bbbea66..85f96cf 100644
  
    return OverrideVec3(m_imu_accelerometer, GetAcceleration(accel));
  }
-@@ -956,7 +1002,16 @@ Common::Vec3 Wiimote::GetTotalAngularVelocity() const
+@@ -956,7 +1002,16 @@ Common::Vec3 Wiimote::GetTotalAcceleration() const
  Common::Vec3 Wiimote::GetTotalAngularVelocity() const
  {
    const Common::Vec3 default_ang_vel = {};
@@ -354,10 +354,9 @@ index 1e07e2a..e6f0499 100644
    Config::ConfigChangedCallbackID m_config_changed_callback_id;
  };
 diff --git a/Source/Core/DolphinQt/CMakeLists.txt b/Source/Core/DolphinQt/CMakeLists.txt
-index 1228885..86b1423 100644
 --- a/Source/Core/DolphinQt/CMakeLists.txt
 +++ b/Source/Core/DolphinQt/CMakeLists.txt
-@@ -689,6 +689,11 @@ if(APPLE)
+@@ -689,6 +689,11 @@
      endif()
    endif()
  
@@ -369,6 +368,20 @@ index 1228885..86b1423 100644
    if(POSTPROCESS_BUNDLE)
      # Update library references to make the bundle portable
      include(DolphinPostprocessBundle)
+@@ -733,3 +738,13 @@
+     target_compile_definitions(dolphin-emu PRIVATE -DRC_CLIENT_SUPPORTS_RAINTEGRATION)
+   endif()
+ endif()
++
++if(ENABLE_SWITCH2KIT AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
++  # These enabled executables can inherit the native input library through
++  # core/uicommon too. Give every installed host the same relocatable RPATH.
++  foreach(_s2k_host IN ITEMS dolphin-emu dolphin-nogui dolphin-tool)
++    if(TARGET ${_s2k_host})
++      switch2kit_install_linux(${_s2k_host})
++    endif()
++  endforeach()
++endif()
 diff --git a/Source/Core/DolphinQt/Config/ControllersPane.cpp b/Source/Core/DolphinQt/Config/ControllersPane.cpp
 index 32134a2..ab1a71a 100644
 --- a/Source/Core/DolphinQt/Config/ControllersPane.cpp
@@ -456,7 +469,7 @@ index 034d472..12887f0 100644
  </dict>
  </plist>
 diff --git a/Source/Core/InputCommon/CMakeLists.txt b/Source/Core/InputCommon/CMakeLists.txt
-index 5cc6b66..e57ac36 100644
+index 5cc6b66..ae9d356 100644
 --- a/Source/Core/InputCommon/CMakeLists.txt
 +++ b/Source/Core/InputCommon/CMakeLists.txt
 @@ -197,3 +197,18 @@ if(TARGET Hidapi::Hidapi)
@@ -464,11 +477,11 @@ index 5cc6b66..e57ac36 100644
    target_compile_definitions(inputcommon PRIVATE -DHAVE_HIDAPI=1)
  endif()
 +
-+option(ENABLE_SWITCH2KIT "Use in-process Switch2Kit controllers on macOS 15+" OFF)
++option(ENABLE_SWITCH2KIT "Use in-process Switch2Kit controllers on macOS 15+ or Linux/BlueZ" OFF)
 +set(SWITCH2KIT_SOURCE_DIR "" CACHE PATH "Switch2Kit source checkout")
 +if(ENABLE_SWITCH2KIT)
-+  if(NOT APPLE OR NOT ENABLE_SDL OR NOT ENABLE_QT)
-+    message(FATAL_ERROR "Switch2Kit requires macOS with the SDL and Qt backends")
++  if((NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux") OR NOT ENABLE_SDL OR NOT ENABLE_QT)
++    message(FATAL_ERROR "Switch2Kit requires macOS or Linux with the SDL and Qt backends")
 +  endif()
 +  if(NOT EXISTS "${SWITCH2KIT_SOURCE_DIR}/Integrations/SDL3/CMakeLists.txt")
 +    message(FATAL_ERROR "Set SWITCH2KIT_SOURCE_DIR to the SDK source checkout")
@@ -673,9 +686,9 @@ index 5aeb9e0..fb991e3 100644
 +{
 +  const auto state = NativeControllers().snapshot();
 +  if (!state.running) return "Select Find, then hold the controller Sync button.";
-+  if (state.bluetooth == S2K_BT_UNAUTHORIZED) return "Allow Dolphin Bluetooth access in System Settings.";
-+  if (state.bluetooth == S2K_BT_OFF) return "Turn on Bluetooth in System Settings.";
-+  if (state.bluetooth == S2K_BT_UNSUPPORTED) return "Bluetooth is unavailable on this Mac.";
++  if (state.bluetooth == S2K_BT_UNAUTHORIZED) return "Bluetooth access is denied. Check your operating system permissions.";
++  if (state.bluetooth == S2K_BT_OFF) return "Turn on your Bluetooth adapter.";
++  if (state.bluetooth == S2K_BT_UNSUPPORTED) return "Bluetooth is unavailable. Check the Bluetooth service and adapter.";
 +  std::string result = std::to_string(state.count) + " connected; " +
 +    (state.discovery == S2K_DISCOVERY_SCANNING ? "searching" : "discovery idle");
 +  std::array<unsigned, 5> counts{};
