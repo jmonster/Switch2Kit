@@ -1,6 +1,6 @@
 # C and C++ hosts
 
-The optional `Switch2KitC` binding exposes the same controller engine through `Switch2KitC.h`. It uses caller-owned C structs and a bounded polling reader, not Objective-C objects or Swift collections. The source `Switch2Kit` product is unchanged for Swift hosts. Bluetooth requires macOS 15+, Swift 6.2+, and Xcode 26+; Linux builds exercise the ABI and fake boundaries but do not open controllers.
+The optional `Switch2KitC` binding exposes the same controller engine through `Switch2KitC.h`. It uses caller-owned C structs and a bounded polling reader, not Objective-C objects or Swift collections. The source `Switch2Kit` product is unchanged for Swift hosts. Bluetooth requires macOS 15+ with Swift 6.2+/Xcode 26+, or the experimental [Linux/BlueZ backend](linux.md) with Swift 6.2+ and its runtime dependencies. Linux uses the same live factory, event hub and session engine; Windows and Android remain unsupported.
 
 ## Build with CMake
 
@@ -11,13 +11,13 @@ target_link_libraries(your_emulator PRIVATE Switch2Kit::C)
 switch2kit_embed(your_emulator)
 ```
 
-Use a CMake build directory owned by your project. The integration builds SwiftPM sources in that directory, respecting `CMAKE_OSX_ARCHITECTURES`. Explicitly select a deployment target of 15.0 or newer when enabling this backend. An emulator supporting older macOS versions should keep the backend optional rather than silently changing its minimum. The host supplies its Bluetooth usage description and, when sandboxed, Bluetooth entitlement. `switch2kit_embed` copies the binding and required Swift runtime libraries; the host's normal final signing step signs the bundle. No signing identity or application entitlements are supplied by the binding.
+Use a CMake build directory owned by your project. The integration builds SwiftPM sources in that directory, respecting `CMAKE_OSX_ARCHITECTURES`. On macOS, explicitly select a deployment target of 15.0 or newer when enabling this backend. An emulator supporting older macOS versions should keep the backend optional rather than silently changing its minimum. The macOS host supplies its Bluetooth usage description and, when sandboxed, Bluetooth entitlement. Linux uses normal BlueZ/system-bus permissions and `switch2kit_install_linux` rather than macOS bundle embedding; see [Linux installation](linux.md). `switch2kit_embed` copies the binding and required Swift runtime libraries; the host's normal final signing step signs the bundle. No signing identity or application entitlements are supplied by the binding.
 
 `bash scripts/build-switch2kit-c.sh` builds and inspects a universal `build/Switch2KitC.xcframework` and compiles a fresh C++ consumer for each architecture. The C distribution has a fixed-layout C ABI. Swift consumers use the SwiftPM source package; the standalone Swift XCFramework pipeline is retired (see [Swift distribution](xcframework.md)). Do not link both implementations into one process. The C binding already includes the controller engine.
 
 ## Lifecycle and input
 
-Create the handle on the macOS main thread, before starting support. Do not call the creation function from an emulator's render thread. Keep the application's main run loop active. Subsequent operations are thread-safe, except that each handle has one logical event reader and the owner must stop all API calls before destruction.
+Create the handle on the main thread, before starting support. Do not call the creation function from an emulator's render thread. On macOS, keep the application's main run loop active. The Linux C polling API does not require a GUI event loop. Subsequent operations are thread-safe, except that each handle has one logical event reader and the owner must stop all API calls before destruction.
 
 ```cpp
 #include <Switch2KitC.h>
@@ -60,7 +60,7 @@ Physical `id` persists locally, while `connection_id` changes on every reconnect
 
 Sticks are normalized `-1...1`, right/up positive. GameCube trigger travel is `0...1` and independent of digital ZL/ZR clicks. Missing fields are identified by `present`; zero does not mean missing. Buttons retain Nintendo report positions, including the extra controls. Do not reinterpret them as an Xbox button layout. Raw motion is explicitly not scaled to SDL sensor units; do not advertise a calibrated sensor from these raw values.
 
-Use `s2k_play_feedback` for a short action on every model. Use `s2k_set_rumble` for Pro/Joy-Con game effects, renewing an active intent before 500 ms and sending zero on stop. `s2k_pulse_rumble` accepts 0.01...0.5 seconds. GameCube firmware clips cannot be cancelled or assigned an arbitrary duration; `S2K_CAP_RUMBLE_PRESETS` is separate from `S2K_CAP_CONTINUOUS_RUMBLE`. See [rumble](../rumble.md).
+Use `s2k_play_feedback` for a short action on every model. Use `s2k_set_rumble` for game effects (Pro/Joy-Con amplitude or GameCube motor on/off), renewing an active intent before 500 ms and sending zero on stop. `s2k_pulse_rumble` accepts 0.01...0.5 seconds. GameCube firmware clips cannot be cancelled or assigned an arbitrary duration; `S2K_CAP_RUMBLE_PRESETS` is separate from `S2K_CAP_CONTINUOUS_RUMBLE`. See [rumble](../rumble.md).
 
 Malformed arguments return a synchronous `S2KResult`. Transport, radio and command failures arrive as `S2K_EVENT_ERROR`. Neither successful submission nor a protocol acknowledgement measures physical feedback.
 

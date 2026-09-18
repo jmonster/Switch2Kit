@@ -1,16 +1,22 @@
-#if canImport(CoreBluetooth)
+#if canImport(CoreBluetooth) || os(Linux)
 import Foundation
+#if canImport(Combine)
 import Combine
+#endif
 
 /// Owns independent, in-process Nintendo controller support for one host application.
 /// Create one manager per intended radio owner, usually on your App/scene's main actor.
-/// CoreBluetooth and sessions live on a private serial queue; no peripheral is exposed.
+/// The platform radio and sessions live on a private serial queue; no peripheral is exposed.
 /// Observable snapshots update at most about 10 Hz. Use `observe` for full-rate input.
 /// The host owns Bluetooth permission UI, lifecycle, persistence and all output mappings.
 @MainActor
-public final class Switch2ControllerManager: ObservableObject {
+public final class Switch2ControllerManager {
     /// Main-actor presentation snapshot, bounded/coalesced to approximately 10 Hz.
+    #if canImport(Combine)
     @Published public private(set) var snapshot = Switch2ManagerSnapshot()
+    #else
+    public private(set) var snapshot = Switch2ManagerSnapshot()
+    #endif
     /// Current main-actor Bluetooth presentation state.
     public var bluetoothState: Switch2BluetoothState { snapshot.bluetooth }
     /// Current main-actor discovery presentation state.
@@ -94,12 +100,12 @@ public final class Switch2ControllerManager: ObservableObject {
 
     /// Retires the selected session, including a pending connection attempt.
     /// The controller can reconnect through a later valid advertisement while discovery permits it.
-    /// This is not macOS SMP unpairing and does not erase the controller's protocol bond.
+    /// This is not operating-system SMP unpairing and does not erase the controller's protocol bond.
     public nonisolated func disconnect(_ id: Switch2ControllerID) { transport.disconnect(id, forget: false) }
 
     /// Removes the local remembered identity and retires the session. The controller still
     /// remembers its protocol bond; a later valid button-wake or Sync advertisement may connect
-    /// again while discovery permits it. No macOS pairing entry, application settings or
+    /// again while discovery permits it. No operating-system pairing entry, application settings or
     /// controller-stored bond is deleted. The host owns any persistent settings removal.
     public nonisolated func forget(_ id: Switch2ControllerID) { transport.disconnect(id, forget: true) }
 
@@ -116,8 +122,8 @@ public final class Switch2ControllerManager: ObservableObject {
         transport.submitRumble(id, strong: intensity, weak: 0, duration: nil, feedback: true)
     }
 
-    /// Sets normalized HD-rumble intent: each channel is 0...1. Pro uses strong=left, weak=right;
-    /// a Joy-Con mixes the channels into its single actuator. GameCube is rejected with a typed event.
+    /// Sets normalized motor intent: each channel is 0...1. Pro uses strong=left, weak=right;
+    /// a Joy-Con mixes the channels. GameCube runs its on/off motor when either channel is nonzero.
     /// Zero stops rumble. A 500 ms failsafe stops an intent unless renewed; this protects stalled hosts.
     /// Repeated intents coalesce in a bounded inbox. Values must be finite and in range.
     public nonisolated func setRumble(for id: Switch2ControllerID, strong: Double, weak: Double = 0) throws {
@@ -127,7 +133,7 @@ public final class Switch2ControllerManager: ObservableObject {
         transport.submitRumble(id, strong: strong, weak: weak, duration: nil)
     }
 
-    /// Plays a bounded 0.01...0.5 second HD-rumble pulse. A later pulse/intent replaces it;
+    /// Plays a bounded 0.01...0.5 second motor pulse. A later pulse/intent replaces it;
     /// generation checks prevent an old stop callback from cancelling newer rumble.
     /// The channel mapping and model restrictions are the same as `setRumble`.
     public nonisolated func pulseRumble(for id: Switch2ControllerID, strong: Double = 0.5,
@@ -157,4 +163,7 @@ public final class Switch2ControllerManager: ObservableObject {
         transport.withSession(id) { session in session.customLEDPattern = pattern; session.refreshLEDs() }
     }
 }
+#if canImport(Combine)
+extension Switch2ControllerManager: ObservableObject {}
+#endif
 #endif

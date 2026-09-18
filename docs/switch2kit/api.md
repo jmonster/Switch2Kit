@@ -40,9 +40,9 @@ Joy-Con optical telemetry exposes UInt16 absolute x/y counters wrapping modulo 6
 
 ## Identity, metadata and capabilities
 
-`Switch2ControllerID` wraps CoreBluetooth's locally scoped UUID, supports Codable restoration, and is potentially identifying data. It is not a serial, player slot or authentication proof. `connectionID` is a new transient token for each connection; do not persist it. Names are safe verified model labels; host custom names remain host state. Optional body/button colors contain eight-bit sRGB components, without alpha.
+`Switch2ControllerID` is a locally scoped, Codable identifier and potentially identifying data. macOS uses CoreBluetooth's UUID; Linux derives a stable UUID from the adapter address, remote address type and remote address. Changing adapters or rotating a remote address changes Linux identity. See [Linux identity and ownership](linux.md). It is not a serial, player slot or authentication proof. `connectionID` is a new transient token for each connection; do not persist it. Names are safe verified model labels; host custom names remain host state. Optional body/button colors contain eight-bit sRGB components, without alpha.
 
-Serial numbers are nil by default. A legacy host can explicitly opt in through configuration to preserve existing serial-keyed mappings; the library still does not log them. `capabilities` describes understood physical-controller functions, not whether a game, browser or output adapter supports them. All models provide `.rumble` through `playRumble`. Pro/Joy-Con also provide `.continuousRumble`; GameCube provides `.rumblePresets`. A paired Joy-Con grip is a host abstraction over two capability sets.
+Serial numbers are nil by default. A legacy host can explicitly opt in through configuration to preserve existing serial-keyed mappings; the library still does not log them. `capabilities` describes understood physical-controller functions, not whether a game, browser or output adapter supports them. All models provide `.rumble` through `playRumble`. All models provide `.continuousRumble` (on/off for GameCube); GameCube also provides `.rumblePresets`. A paired Joy-Con grip is a host abstraction over two capability sets.
 
 ## Failure semantics
 

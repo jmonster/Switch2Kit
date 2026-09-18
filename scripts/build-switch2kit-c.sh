@@ -60,6 +60,9 @@ lipo "$WORK/consumer" -verify_arch arm64 x86_64
 "$WORK/consumer"
 xcodebuild -create-xcframework -library "$LIB" \
   -headers "$ROOT/Sources/Switch2KitCABI/include" -output "$WORK/Switch2KitC.xcframework"
+mkdir -p "$WORK/Switch2KitC.xcframework/Notices"
+cp "$ROOT/CREDITS.md" "$WORK/Switch2KitC.xcframework/Notices/"
+cp -R "$ROOT/LICENSES" "$WORK/Switch2KitC.xcframework/Notices/"
 plutil -lint "$WORK/Switch2KitC.xcframework/Info.plist"
 python3 - "$WORK/Switch2KitC.xcframework/Info.plist" <<'PY'
 import plistlib,sys

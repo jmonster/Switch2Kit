@@ -1,6 +1,10 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
+var radioDependencies: [Target.Dependency] = []
+#if os(Linux)
+radioDependencies = [.target(name: "Switch2KitDBus")]
+#endif
 var products: [Product] = [.library(name: "Switch2Kit", targets: ["Switch2Kit"])]
 products.append(.library(name: "Switch2KitC", type: .dynamic, targets: ["Switch2KitC"]))
 var targets: [Target] = [
@@ -9,10 +13,13 @@ var targets: [Target] = [
             swiftSettings: [.swiftLanguageMode(.v6)]),
     .testTarget(name: "Switch2KitCTests", dependencies: ["Switch2Kit", "Switch2KitC", "Switch2KitCABI"],
                 swiftSettings: [.swiftLanguageMode(.v6)]),
-    .target(name: "Switch2Kit", path: "Sources/Switch2Kit", swiftSettings: [.swiftLanguageMode(.v6)]),
+    .target(name: "Switch2Kit", dependencies: radioDependencies, path: "Sources/Switch2Kit", swiftSettings: [.swiftLanguageMode(.v6)]),
     .testTarget(name: "Switch2KitTests", dependencies: ["Switch2Kit"], path: "Tests/Switch2KitTests",
                 swiftSettings: [.swiftLanguageMode(.v6)])
 ]
+#if os(Linux)
+targets.append(.target(name: "Switch2KitDBus", linkerSettings: [.linkedLibrary("dl")]))
+#endif
 #if os(macOS)
 products += [
     .executable(name: "Switch2KitApp", targets: ["Switch2KitApp"]),

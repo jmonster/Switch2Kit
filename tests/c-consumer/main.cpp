@@ -44,7 +44,7 @@ int main() {
     S2KResult status{};
     S2KConfig config{S2K_ABI_VERSION, sizeof(S2KConfig), 16, S2K_EVENT_CAPACITY};
     auto* real = s2k_create(&config, &status); // Create only; no Bluetooth starts.
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
     assert(real && status == S2K_OK);
 #else
     assert(!real && status == S2K_UNSUPPORTED_PLATFORM);
@@ -69,10 +69,13 @@ int main() {
     assert(gc.state.left_x == -0.5 && gc.state.left_y == 1);
     assert(gc.state.battery_millivolts == 3900 && gc.state.accel[0] == -100);
     assert(s2k_play_feedback(context, &gc.id, &gc.connection_id, 0.25) == S2K_OK);
-    assert(s2k_set_rumble(context, &gc.id, &gc.connection_id, 1, 0) == S2K_UNSUPPORTED_OPERATION);
+    assert(gc.capabilities & S2K_CAP_CONTINUOUS_RUMBLE);
+    assert(s2k_set_rumble(context, &gc.id, &gc.connection_id, 1, 0) == S2K_OK);
+    assert(s2k_pulse_rumble(context, &gc.id, &gc.connection_id, 1, 0, 0.2) == S2K_OK);
+    assert(s2k_set_rumble(context, &gc.id, &gc.connection_id, 0, 0) == S2K_OK);
     assert(s2k_set_rumble(context, &pro.id, &pro.connection_id, 0.5, 0.25) == S2K_OK);
     assert(s2k_set_rumble(context, &pro.id, &pro.connection_id, NAN, 0) == S2K_INVALID_ARGUMENT);
-    assert(s2k_fixture_calls(context) == 2);
+    assert(s2k_fixture_calls(context) == 5);
     s2k_fixture_emit(context, 0, S2K_GAMECUBE, 2, 1);
     s2k_fixture_emit(context, 0, S2K_GAMECUBE, 3, 0);
     read();

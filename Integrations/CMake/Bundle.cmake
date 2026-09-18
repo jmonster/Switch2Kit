@@ -22,6 +22,9 @@ function(switch2kit_embed target)
     set_property(TARGET "${target}" PROPERTY MACOSX_BUNDLE_INFO_PLIST "${_prepared}")
   endif()
 
+  get_filename_component(_notice_root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../.." ABSOLUTE)
+  file(GLOB _notices CONFIGURE_DEPENDS "${_notice_root}/LICENSES/*")
+  set_property(TARGET "${target}" APPEND PROPERTY LINK_DEPENDS "${_notice_root}/CREDITS.md" ${_notices})
   add_custom_command(TARGET "${target}" POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:Switch2Kit::C>"
@@ -29,6 +32,12 @@ function(switch2kit_embed target)
     COMMAND "${CMAKE_COMMAND}"
       "-DS2K_BUNDLE_LIBRARY=$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks/$<TARGET_FILE_NAME:Switch2Kit::C>"
       -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/PrepareBundle.cmake"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+      "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources/Switch2KitNotices"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_notice_root}/CREDITS.md"
+      "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources/Switch2KitNotices/CREDITS.md"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${_notice_root}/LICENSES"
+      "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Resources/Switch2KitNotices/LICENSES"
     COMMAND xcrun swift-stdlib-tool --copy --platform macosx
       --scan-executable "$<TARGET_FILE:Switch2Kit::C>"
       --destination "$<TARGET_BUNDLE_CONTENT_DIR:${target}>/Frameworks"

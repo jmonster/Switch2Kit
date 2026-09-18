@@ -16,7 +16,8 @@ endif()
 file(GLOB_RECURSE _s2k_sources CONFIGURE_DEPENDS
   "${SWITCH2KIT_SOURCE_ROOT}/Sources/Switch2Kit/*.swift"
   "${SWITCH2KIT_SOURCE_ROOT}/Sources/Switch2KitC/*.swift"
-  "${SWITCH2KIT_SOURCE_ROOT}/Sources/Switch2KitCABI/*")
+  "${SWITCH2KIT_SOURCE_ROOT}/Sources/Switch2KitCABI/*"
+  "${SWITCH2KIT_SOURCE_ROOT}/Sources/Switch2KitDBus/*")
 if(APPLE)
   set(_s2k_archs "${CMAKE_OSX_ARCHITECTURES}")
   if(NOT _s2k_archs)
@@ -62,10 +63,14 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     OUTPUT_VARIABLE _s2k_bin OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
   set(_s2k_library "${_s2k_bin}/libSwitch2KitC.so")
   add_custom_command(OUTPUT "${_s2k_library}"
+    # Give the ELF facade an actual SONAME. Imported-target metadata alone
+    # cannot prevent an absolute DT_NEEDED when a host links its file directly.
     COMMAND "${SWITCH2KIT_SWIFT}" build ${_s2k_args} --product Switch2KitC
-    DEPENDS ${_s2k_sources} "${SWITCH2KIT_SOURCE_ROOT}/Package.swift" VERBATIM)
+      -Xlinker -soname -Xlinker libSwitch2KitC.so
+    DEPENDS ${_s2k_sources} "${SWITCH2KIT_SOURCE_ROOT}/Package.swift"
+      "${CMAKE_CURRENT_LIST_FILE}" VERBATIM)
 else()
-  message(FATAL_ERROR "Switch2Kit supports macOS hosts and Linux ABI tests only")
+  message(FATAL_ERROR "Switch2Kit supports macOS and Linux hosts only")
 endif()
 add_custom_target(Switch2KitCBuild DEPENDS "${_s2k_library}")
 add_library(Switch2Kit::C SHARED IMPORTED GLOBAL)
@@ -77,10 +82,12 @@ if(APPLE)
   # State the install name so runtime paths do not depend on configure-time inspection.
   set_target_properties(Switch2Kit::C PROPERTIES IMPORTED_SONAME "@rpath/libSwitch2KitC.dylib")
 else()
-  # SwiftPM emits ELF libraries without DT_SONAME; use -l, not a relative DT_NEEDED path.
-  set_target_properties(Switch2Kit::C PROPERTIES IMPORTED_NO_SONAME TRUE)
+  # Match the SONAME supplied to the Linux library's linker above.
+  set_target_properties(Switch2Kit::C PROPERTIES IMPORTED_SONAME "libSwitch2KitC.so")
 endif()
 add_dependencies(Switch2Kit::C Switch2KitCBuild)
 set(SWITCH2KIT_C_BINARY_DIR "${_s2k_bin}" CACHE INTERNAL "Built C facade directory")
 
 include("${CMAKE_CURRENT_LIST_DIR}/Bundle.cmake")
+
+include("${CMAKE_CURRENT_LIST_DIR}/Linux.cmake")

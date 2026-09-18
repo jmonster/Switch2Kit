@@ -124,9 +124,10 @@ typedef struct S2KConfig {
 
 /** Returns S2K_ABI_VERSION. Struct layouts are frozen within an ABI version. */
 uint32_t s2k_abi_version(void);
-/** Create on the macOS main thread; does not start Bluetooth. NULL config uses defaults.
+/** Create on the main thread; does not start Bluetooth. NULL config uses defaults.
  * On failure returns NULL and writes result when non-NULL. No callbacks into C are used.
- * Linux builds support ABI tests but creation returns UNSUPPORTED_PLATFORM.
+ * macOS uses CoreBluetooth; Linux uses BlueZ. Creation opens neither radio.
+ * Other host platforms return UNSUPPORTED_PLATFORM.
  */
 S2KContext *s2k_create(const S2KConfig *config, S2KResult *result);
 /** Release one owning handle (NULL is allowed). Discards pending delivery synchronously,
@@ -158,10 +159,11 @@ S2KResult s2k_disconnect(S2KContext *context, const S2KID *id, const S2KID *conn
 /** Short feedback, intensity 0..1. Pro/Joy-Con: 400 ms HD pulse; GameCube: device-timed clip.
  * GameCube clips cannot be cancelled or assigned arbitrary duration. */
 S2KResult s2k_play_feedback(S2KContext *context, const S2KID *id, const S2KID *connection_id, double intensity);
-/** HD intent, normalized channels 0..1; zero stops. Renew before 500 ms to sustain.
- * GameCube returns UNSUPPORTED_OPERATION. Call only while the host's input loop is live. */
+/** Motor intent, normalized channels 0..1; zero stops. Renew before 500 ms to sustain.
+ * Pro/Joy-Con support amplitude; GameCube combines channels into motor on/off.
+ * Call only while the host's input loop is live. */
 S2KResult s2k_set_rumble(S2KContext *context, const S2KID *id, const S2KID *connection_id, double strong, double weak);
-/** HD pulse of 0.01..0.5 seconds; replaced by later intent. GameCube is unsupported. */
+/** Motor pulse of 0.01..0.5 seconds; replaced by later intent. GameCube is on/off. */
 S2KResult s2k_pulse_rumble(S2KContext *context, const S2KID *id, const S2KID *connection_id,
                          double strong, double weak, double seconds);
 /** Set the physical controller's 1..8 player-light pattern; no logical grouping is implied. */
