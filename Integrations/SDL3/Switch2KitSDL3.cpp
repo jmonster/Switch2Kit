@@ -467,7 +467,7 @@ struct SDL3Adapter::Impl {
         SDL_UpdateJoysticks();
         std::array<S2KEvent, S2K_EVENT_CAPACITY> events{};
         uint32_t count{}, flags{};
-        const auto result = s2k_read(context, events.data(), events.size(), sizeof(S2KEvent), &count,
+        const auto result = s2k_read(context, events.data(), S2K_EVENT_CAPACITY, sizeof(S2KEvent), &count,
                                      &snapshot, sizeof(snapshot), &flags);
         if (result != S2K_OK) { clear(); return error = result; }
         const auto clock = ClockPair::sample();
