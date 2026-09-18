@@ -68,12 +68,17 @@ jobs:
       - name: Execute extracted consumers without the compiler or developer PATH
         shell: pwsh
         run: |
-          & tests/c-consumer/relocate-windows.ps1 -CBuild "$PWD/build-c" -SDLBuild "$PWD/build-sdl" 2>&1 | Tee-Object windows-relocation.log
+          python tests/windows-relocation/test_relocation.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/c-consumer/relocate-windows.py --c-build build-c --sdl-build build-sdl 2>&1 | Tee-Object windows-relocation.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve native diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-native-diagnostics-${{ matrix.swift }}
-          path: windows-*.log
+          path: |
+            windows-*.log
+            windows-relocation.json
           if-no-files-found: warn
           retention-days: 7
