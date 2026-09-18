@@ -22,7 +22,7 @@ var targets: [Target] = [
                 sources: ["Fixture.swift", "FixtureTests.swift"],
                 swiftSettings: [.swiftLanguageMode(.v6)]),
     .target(name: "Switch2Kit", dependencies: radioDependencies, path: "Sources/Switch2Kit", swiftSettings: [.swiftLanguageMode(.v6)]),
-    .testTarget(name: "Switch2KitTests", dependencies: ["Switch2Kit"], path: "Tests/Switch2KitTests",
+    .testTarget(name: "Switch2KitTests", dependencies: [.target(name: "Switch2Kit")] + radioDependencies, path: "Tests/Switch2KitTests",
                 swiftSettings: [.swiftLanguageMode(.v6)])
 ]
 #if os(Linux)

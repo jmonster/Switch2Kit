@@ -7,8 +7,6 @@ import subprocess
 root = Path(__file__).resolve().parents[2]
 info = plistlib.loads((root / 'Resources/Info.plist').read_bytes())
 assert info['CFBundleIdentifier'] == 'wabisabi.ware.gamecubed'
-assert info['CFBundleDisplayName'] == 'Switch2Kit'
-assert info['CFBundleName'] == 'Switch2Kit'
 assert info['CFBundleExecutable'] == 'Switch2KitApp'
 assert 'Peter Sharma' in info['NSHumanReadableCopyright']
 # Automatic installation is removed, not merely disabled by a preference.

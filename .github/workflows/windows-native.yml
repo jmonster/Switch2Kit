@@ -29,6 +29,34 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           swiftc -print-target-info > windows-target-info.log
           Get-ChildItem .build -Recurse -Include '*Switch2KitC*' | Select-Object FullName | Out-File windows-library-paths.log
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: libsdl-org/SDL
+          ref: f87239e71e42da91ca317a12eefb82cfbf3393eb
+          path: test-sdl
+          persist-credentials: false
+      - name: Build and execute the real C and SDL consumers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual C++ x64 tools are required' }
+          cmd /c "`"$vs\Common7\Tools\VsDevCmd.bat`" -arch=x64 -host_arch=x64 >nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }
+          }
+          cmake -S tests/c-consumer -B build-c -G Ninja -DCMAKE_BUILD_TYPE=Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-c --parallel 3 2>&1 | Tee-Object windows-c-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-c --output-on-failure 2>&1 | Tee-Object windows-c-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S tests/sdl-inprocess -B build-sdl -G Ninja -DCMAKE_BUILD_TYPE=Release "-DS2K_SDL_SOURCE=$PWD/test-sdl"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-sdl --parallel 3 2>&1 | Tee-Object windows-sdl-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-sdl --output-on-failure 2>&1 | Tee-Object windows-sdl-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve native diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

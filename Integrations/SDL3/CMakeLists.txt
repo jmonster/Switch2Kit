@@ -14,7 +14,9 @@ target_link_libraries(Switch2KitSDL3 PUBLIC Switch2Kit::C SDL3::SDL3)
 set_target_properties(Switch2KitSDL3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Compile the adapter's constructor checks even when the host disables exceptions.
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+if(MSVC)
+  target_compile_options(Switch2KitSDL3 PRIVATE /EHsc)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(Switch2KitSDL3 PRIVATE -fexceptions)
 endif()
 

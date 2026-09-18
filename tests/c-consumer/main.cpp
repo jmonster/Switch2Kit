@@ -44,7 +44,7 @@ int main() {
     S2KResult status{};
     S2KConfig config{S2K_ABI_VERSION, sizeof(S2KConfig), 16, S2K_EVENT_CAPACITY};
     auto* real = s2k_create(&config, &status); // Create only; no Bluetooth starts.
-#if defined(__APPLE__) || defined(__linux__)
+#if defined(__APPLE__) || defined(__linux__) || defined(_WIN32)
     assert(real && status == S2K_OK);
 #else
     assert(!real && status == S2K_UNSUPPORTED_PLATFORM);
