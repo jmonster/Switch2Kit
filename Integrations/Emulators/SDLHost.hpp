@@ -9,7 +9,7 @@
 
 namespace Switch2Kit {
 /** Application-owned session for an SDL emulator. There is no process singleton.
- * initialize/discover must first run on the macOS main thread. pump belongs to
+ * initialize/start/discover must first run on the macOS main thread. pump belongs to
  * the emulator's input loop. Other calls are serialized; stop before SDL quits.
  * The library remains loaded until process exit. This owner never starts a worker.
  */
@@ -27,6 +27,21 @@ public:
         if (context_) return S2K_OK;
         context_ = s2k_create(nullptr, &error_);
         return error_;
+    }
+    /** Select continuous or on-demand discovery without starting support.
+     * Hosts own consent and persistence. Disabling preserves ready controllers;
+     * a stopped host remains stopped. BUSY is returned while stop is finishing. */
+    S2KResult setAutomaticDiscovery(bool enabled) {
+        if (const auto result = initialize(); result != S2K_OK) return result;
+        Guard lock(mutex_);
+        return error_ = s2k_set_automatic_discovery(context_, enabled ? 1u : 0u);
+    }
+    /** Start with the selected policy, without opening a finite discovery window.
+     * Call once after saved consent, or as an explicit user action, not per pump. */
+    S2KResult start() {
+        if (const auto result = initialize(); result != S2K_OK) return result;
+        Guard lock(mutex_);
+        return error_ = s2k_start(context_);
     }
     /** Explicit settings action: start support and open one bounded scan window. */
     S2KResult discover(double seconds = 60.0) {
