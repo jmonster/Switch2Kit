@@ -126,6 +126,45 @@ int main() {
         // OS scheduling must not turn a consumer-only delay into an input gap.
         TestClock::start();
         assert(adapter.pump(false) == S2K_OK); pump(); assert(events().empty());
+        {
+            // Test the same production rumble policy without assuming that a
+            // wall-clock sleep returns before the host/clock safety cutoffs.
+            // SDL and the Swift C facade are real; only adapter clock reads are
+            // controlled. Production clocks remain covered by sdl-inprocess.
+            const auto outputPump = [&] { assert(adapter.pump() == S2K_OK); };
+            double strong{}, weak{};
+            assert(SDL_RumbleGamepad(pads[0], 32768, 16384, 5000));
+            const auto started = test_input_rumble(context, 0, &strong, &weak);
+            assert(strong > 0.49 && weak > 0.24);
+            TestClock::advance(199999999); outputPump();
+            assert(test_input_rumble(context, 0, &strong, &weak) == started);
+            TestClock::advance(1); outputPump();
+            assert(test_input_rumble(context, 0, &strong, &weak) == started + 1);
+            assert(strong > 0.49 && weak > 0.24);
+            const auto renewed = test_input_rumble(context, 0, &strong, &weak);
+            // No pump means no background renewal. A stale callback must not
+            // revive the effect before the input loop notices its own stall.
+            TestClock::advance(500000001);
+            assert(test_input_rumble(context, 0, &strong, &weak) == renewed);
+            assert(!SDL_RumbleGamepad(pads[0], 30000, 20000, 5000));
+            assert(test_input_rumble(context, 0, &strong, &weak) == renewed);
+            outputPump();
+            const auto stopped = test_input_rumble(context, 0, &strong, &weak);
+            assert(stopped > renewed && strong == 0 && weak == 0);
+            TestClock::advance(200000000); outputPump();
+            assert(test_input_rumble(context, 0, &strong, &weak) == stopped);
+            assert(strong == 0 && weak == 0);
+            // SDL duration expiry still uses SDL's real clock. With the adapter
+            // clock held steady, this stop cannot be a host-stall false positive.
+            assert(SDL_RumbleGamepad(pads[0], 30000, 20000, 20));
+            SDL_Delay(40); outputPump();
+            test_input_rumble(context, 0, &strong, &weak);
+            assert(strong == 0 && weak == 0);
+            const auto expired = test_input_rumble(context, 0, &strong, &weak);
+            TestClock::advance(200000000); outputPump();
+            assert(test_input_rumble(context, 0, &strong, &weak) == expired);
+            std::puts("PASS exact rumble renewal boundary, stale callback rejection, stalled-host stop and no effect revival");
+        }
         for (int i = 0; i < 4; ++i) submit(i);
         pump(); assert(events().empty());
         for (int i = 0; i < 4; ++i) submit(i);
