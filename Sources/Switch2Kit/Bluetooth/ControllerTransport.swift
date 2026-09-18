@@ -1,4 +1,4 @@
-#if canImport(CoreBluetooth) || os(Linux)
+#if canImport(CoreBluetooth) || os(Linux) || os(Windows)
 import Foundation
 #if canImport(CoreBluetooth)
 import CoreBluetooth
@@ -125,7 +125,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             guard let self, !self.running else { return }
             self.running = true
             if self.central == nil { self.central = CBCentralManager(delegate: self, queue: self.btQueue) }
-            #if os(Linux) && !S2K_RADIO_FIXTURE
+            #if (os(Linux) || os(Windows)) && !S2K_RADIO_FIXTURE
             self.central.restart()
             #endif
             self.updateScanning()
@@ -150,7 +150,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             controlInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             if central != nil { resetConnections(cancel: true, reason: .stopped) }
             central?.delegate = nil
-            #if os(Linux) && !S2K_RADIO_FIXTURE
+            #if (os(Linux) || os(Windows)) && !S2K_RADIO_FIXTURE
             central?.shutdown()
             #endif
             central = nil
