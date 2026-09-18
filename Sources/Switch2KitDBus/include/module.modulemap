@@ -1,0 +1,4 @@
+module Switch2KitDBus {
+  header "Switch2KitDBus.h"
+  export *
+}

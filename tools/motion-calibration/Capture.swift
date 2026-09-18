@@ -35,8 +35,10 @@ func waitForCaptureReturn(input: Int32 = STDIN_FILENO, timeoutNanoseconds: UInt6
     throw CalibrationFailure.usage
 }
 
+#if os(macOS) || os(Linux)
 #if os(macOS)
 import CoreFoundation
+#endif
 
 // Uses only the existing engine's bounded C reader. No BLE decoder, session or protocol reads.
 private final class CaptureSession {
@@ -54,7 +56,9 @@ private final class CaptureSession {
         }
     }
     func pump() {
+        #if os(macOS)
         CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0.002, false)
+        #endif
         Thread.sleep(forTimeInterval: 0.002) // Keep an empty run loop from becoming a busy spin.
     }
     func read() throws -> (flags: UInt32, events: [S2KEvent]) {

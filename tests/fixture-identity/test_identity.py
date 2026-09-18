@@ -79,5 +79,13 @@ class FixtureIdentityTests(unittest.TestCase):
                     run.assert_not_called()
 
 
+class ClangModuleTests(unittest.TestCase):
+    def testTransitiveModuleMapsAreDeduplicatedWithoutCopyingOtherFlags(self):
+        data = description("native_sdk")
+        for command in data["swiftCommands"].values():
+            command["otherArguments"] += ["-Xcc", "-fmodule-map-file=/path with spaces/Radio/module.modulemap", "-Xcc", "-fPIC"]
+        self.assertEqual(helper.clang_modules(data), ["-Xcc", "-fmodule-map-file=/path with spaces/Radio/module.modulemap"])
+
+
 if __name__ == "__main__":
     unittest.main()

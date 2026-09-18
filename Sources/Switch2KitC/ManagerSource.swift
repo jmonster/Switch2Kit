@@ -1,4 +1,4 @@
-#if canImport(CoreBluetooth)
+#if canImport(CoreBluetooth) || os(Linux)
 import Foundation
 import Switch2Kit
 

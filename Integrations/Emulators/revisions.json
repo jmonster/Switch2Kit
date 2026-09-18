@@ -33,7 +33,7 @@
       },
       "Source/Core/DolphinQt/CMakeLists.txt": {
         "before": "985f7079bf624890175f47f976d67f8430970dc0997a047bb7fd58486250c3b3",
-        "after": "a3717638092147dbc1a9682673587380c31093f163ff58ff808f129772b1e0fb"
+        "after": "cb54da477e23690652e473cd1301880b43234a66c841d6ada2301816a3eb83ac"
       },
       "Source/Core/DolphinQt/Config/ControllersPane.cpp": {
         "before": "e35e32abdf46b7bf078209fc4c54a0b2a2270999018b9585da3bbd8a19fa893a",
@@ -45,7 +45,7 @@
       },
       "Source/Core/InputCommon/CMakeLists.txt": {
         "before": "8e8da07ea6b72a30eaad0d64261d3c01804b09dff1ce562c794f8e85f16f2a64",
-        "after": "6fb4b2514fd4ebb551007a20c4d446a343d19720b2a18a680bbf231ea007b365"
+        "after": "2000f5780fa06fd6b4673841827f5ab71e7f7282ce153fe58e1002bdc922c164"
       },
       "Source/Core/InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.cpp": {
         "before": "2e3455d16087ef9c707582fa5d2e8190f58726391ab9be776fdf9638beab5704",
@@ -57,7 +57,7 @@
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDL.cpp": {
         "before": "3a3fa5ae3b1249d21e2292d79a03c9387cf71dc39d60616983106a5866a88730",
-        "after": "936c3dff10415e76c22c395aa4ec08d353fdeec55c70077dd0cea9f08b761fff"
+        "after": "9d71b81e908a4387c65bc0b3e7960bcffc6bd3056758f862d188a5f0302ae2ac"
       },
       "Source/Core/InputCommon/ControllerInterface/SDL/SDL.h": {
         "before": "2fdfe907be5d670aba19f0a580fcc0a2b55c598b53c0bb5c82581ef0f10b40a3",
@@ -79,11 +79,11 @@
     "files": {
       "CMakeLists.txt": {
         "before": "919e665f6870584b28842c464fa9b109f8ee73d76d38462d81c98c89c0f466b6",
-        "after": "9464bc067dfe13959c65b23929b6c73954577e1ec3915a144b9229d5a0d2ee3c"
+        "after": "da202a7f65ca6f76ccf26024eec3a643bf07f61eb5ff674972b2346529abbd33"
       },
       "src/CMakeLists.txt": {
         "before": "20c43274c1b987d5da11e895ba8138735ed90f5cacf609344f98a2a476bd834f",
-        "after": "e8fa610a26173123b82117a47ced783123486584f3c6da6e7d68471d615f70ca"
+        "after": "f79126f455603e02c9e9233f9df46de54b5ddc122f3b478e5d17650c847b0ba0"
       },
       "src/gui/wxgui/input/InputAPIAddWindow.cpp": {
         "before": "c98f0656708f2b17623724dca7b6aeb04efb77dc014fcc4793fa61a159ede8d1",
@@ -127,7 +127,7 @@
       },
       "src/input/api/SDL/SDLControllerProvider.cpp": {
         "before": "65c299f965e976ead5c1364639e8e460275b89d6f33344fbf26452f647fcdf3f",
-        "after": "975e2f6a0c0d2a8f994417da6a4421f0f29a78da717cef11d3cd42f7a125efa9"
+        "after": "d8a0655af10c6a56b052da3f53fb0c711da81afc5e065df6e1d5820af6e50c6b"
       },
       "src/input/api/SDL/SDLControllerProvider.h": {
         "before": "51bba178d1a454c66dc049c41aa3243ca4238c88db6f1c4aa4e5ea8c48f916e9",

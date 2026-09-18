@@ -1,9 +1,11 @@
-#if canImport(CoreBluetooth)
+#if canImport(CoreBluetooth) || os(Linux)
 import Foundation
+#if canImport(CoreBluetooth)
 import CoreBluetooth
+#endif
 import Synchronization
 
-// Sole production owner of CoreBluetooth and physical sessions. Every mutable field
+// Sole production owner of the platform radio and physical sessions. Every mutable field
 // below is confined to btQueue. Public commands enqueue onto it; callbacks never
 // pass a peripheral, session or mutable collection to host application code.
 package final class ControllerTransport: NSObject, @unchecked Sendable {
@@ -123,6 +125,9 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             guard let self, !self.running else { return }
             self.running = true
             if self.central == nil { self.central = CBCentralManager(delegate: self, queue: self.btQueue) }
+            #if os(Linux) && !S2K_RADIO_FIXTURE
+            self.central.restart()
+            #endif
             self.updateScanning()
             self.publishManagerStatus()
         }
@@ -144,7 +149,11 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             rumbleInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             controlInbox.withLock { $0.pending.removeAll(); $0.overflowed = false }
             if central != nil { resetConnections(cancel: true, reason: .stopped) }
-            central?.delegate = nil; central = nil
+            central?.delegate = nil
+            #if os(Linux) && !S2K_RADIO_FIXTURE
+            central?.shutdown()
+            #endif
+            central = nil
             hub.cancelAll()
         }
     }
@@ -481,7 +490,7 @@ extension ControllerTransport: CBCentralManagerDelegate {
         case .unauthorized:
             resetConnections(cancel: false, reason: .bluetoothUnavailable)
             bridgeLog(.error, "engine",
-                      "Bluetooth permission denied — grant it in System Settings > Privacy & Security > Bluetooth")
+                      "Bluetooth permission denied — check the host operating system Bluetooth access policy")
             publishState(.unauthorized)
         case .poweredOff:
             resetConnections(cancel: false, reason: .bluetoothUnavailable)

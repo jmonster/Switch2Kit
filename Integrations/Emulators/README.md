@@ -4,7 +4,7 @@ These integrations put Switch2Kit inside the emulator's SDL3 input backend. The 
 
 ## Build
 
-Use macOS 15 or later, Xcode with Swift 6.2 or later, CMake and Ninja. Install the selected emulator's normal build dependencies first. The integration is disabled by default. Enabling it explicitly targets macOS 15; builds with it disabled retain the emulator's other platforms and deployment targets.
+Use macOS 15+ with Xcode/Swift 6.2+, or experimental Linux/BlueZ with Swift 6.2+; both need CMake and Ninja. Install the selected emulator's normal platform build dependencies first. The integration is disabled by default. Apple builds explicitly target macOS 15; Linux builds do not use Xcode, macOS deployment flags or app bundles. Builds with the backend disabled retain the emulator's other platforms and deployment targets. See [Linux requirements, installation and test limits](../../docs/switch2kit/linux.md).
 
 Use a fresh clone of the pinned revision, including its submodules:
 
@@ -16,7 +16,7 @@ python3 Integrations/Emulators/apply.py dolphin /path/to/dolphin
 bash scripts/build-switch2kit-emulator.sh dolphin /path/to/dolphin /path/to/dolphin-build
 ```
 
-For Cemu, install MoltenVK (`brew install molten-vk`) and leave the Vulkan renderer enabled.
+For Cemu on macOS, install MoltenVK (`brew install molten-vk`) and leave the Vulkan renderer enabled. Linux uses its normal Vulkan/build dependencies, not MoltenVK.
 
 
 ```sh
@@ -30,11 +30,11 @@ bash scripts/build-switch2kit-emulator.sh cemu /path/to/cemu /path/to/cemu-build
 
 `apply.py --check` validates without changing files. It refuses a different revision, modified files or untracked files. It never resets a checkout. `--verify` checks the applied source. The patches and file digests are in this directory. Extra arguments to the build script are ordinary CMake options for that emulator.
 
-The host links its existing SDL3 target and the source-built C facade. `switch2kit_embed` places the native library and required Swift runtime libraries in the application's Frameworks directory. The emulator retains responsibility for signing the completed bundle. Each patched application supplies its own Bluetooth usage description; the embedding helper resolves that template fragment before CMake generates the bundle plist; no signing identity or permission bypass is added.
+The host links its existing SDL3 target and the source-built C facade. On macOS, `switch2kit_embed` places the native library and required Swift runtime libraries in the application's Frameworks directory. The emulator retains responsibility for signing the completed bundle. Each patched application supplies its own Bluetooth usage description; the embedding helper resolves that template fragment before CMake generates the bundle plist; no signing identity or permission bypass is added.
 
 ## Connect and configure
 
-In Dolphin, open Controller Settings and select **Find Switch 2 Controllers**. In Cemu, open Input Settings, add an input API, and select **Find Switch 2 Controllers**. Allow that emulator's Bluetooth prompt, then hold Sync on the controller. Discovery lasts 60 seconds. Select the new SDL controller and configure the emulator's normal bindings.
+In Dolphin, open Controller Settings and select **Find Switch 2 Controllers**. In Cemu, open Input Settings, add an input API, and select **Find Switch 2 Controllers**. Allow that emulator's macOS Bluetooth prompt, or ensure its Linux BlueZ access is permitted, then hold Sync on the controller. Discovery lasts 60 seconds. Select the new SDL controller and configure the emulator's normal bindings.
 
 Pro Controller, left and right Joy-Con, and NSO GameCube are separate physical devices. Joy-Con grouping is not silently imposed. Set each half's bindings in the emulator as needed. Pro/Joy-Con offer amplitude-controlled SDL rumble; GameCube offers on/off SDL rumble through its dedicated motor channel. GameCube's device-timed firmware clips remain separately available through the C feedback API. Raw C telemetry remains available. A valid explicit physical-device profile enables calibrated SDL sensors; without one, basic controls work and calibrated motion is unavailable. No built-in model measurements are supplied.
 
@@ -67,3 +67,5 @@ Both hosts report unavailable profile, invalid calibration, disabled sensors, wa
 With `S2K_CEMU_SOURCE` pointing to the pinned Cemu checkout, the host suite compiles the real `WiiUMotionHandler`, Mahony and VPAD motion classes. With `S2K_DOLPHIN_SOURCE` pointing to the patched pinned Dolphin checkout, it compiles the real cursor filter, matrix math and INI parser. Both consumers exercise Swift hub → C ABI → shared adapter → real SDL → actual emulator motion processing. These component tests are distinct from full application builds.
 
 The emulator workflow applies the exact patches, builds the full macOS application targets, and inspects their Bluetooth descriptions and embedded native library. Controller radio behavior and gameplay still require a physical-controller run of the built application.
+
+The separate Linux workflow exercises the real BlueZ adapter on a private synthetic bus, runs native C/SDL tests, and builds and inspects both full pinned Linux applications after installation and relocation. GUI/gameplay and physical-controller qualification remain separate; enabling its source patch is not a claim of a completed gameplay test.
