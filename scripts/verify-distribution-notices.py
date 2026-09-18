@@ -7,7 +7,7 @@ from pathlib import Path
 import plistlib
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTICES = ('CREDITS.md', 'LICENSES/README.md', 'LICENSES/MIT-trevlars.txt', 'LICENSES/SDL-zlib.txt')
+NOTICES = ('CREDITS.md', 'LICENSES/MIT-trevlars.txt', 'LICENSES/SDL-zlib.txt')
 
 
 def verify(app, emulator, root=ROOT):
