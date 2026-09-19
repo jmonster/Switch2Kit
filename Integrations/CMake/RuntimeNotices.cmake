@@ -4,6 +4,10 @@ function(_s2k_license name url blob output)
   get_filename_component(_cache "${S2K_RUNTIME_CONFIG}" DIRECTORY)
   set(_path "${_cache}/runtime-notices/${name}")
   file(MAKE_DIRECTORY "${_cache}/runtime-notices")
+  # A concurrent deployment must not hash a partially downloaded cache file.
+  # This per-license lock is independent of the application copy lock and is
+  # released on function return. The download itself remains bounded at 60 s.
+  file(LOCK "${_path}.lock" GUARD FUNCTION TIMEOUT 120)
   if(NOT EXISTS "${_path}")
     file(DOWNLOAD "${url}" "${_path}" TLS_VERIFY ON STATUS _status TIMEOUT 60)
     list(GET _status 0 _code)

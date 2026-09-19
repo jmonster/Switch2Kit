@@ -5,11 +5,14 @@ The C/SDL consumer jobs separately qualify the real Swift dependency closure.
 """
 from pathlib import Path
 import hashlib
+import http.server
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -196,10 +199,142 @@ set_target_properties(facade PROPERTIES
                 self.assertIn('missing', result.stdout)
                 self.assertFalse(self.destination.exists())
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows deployment copy lock')
+    def test_missing_dependency_is_diagnosed_without_waiting_for_copy_lock(self):
+        key = hashlib.sha256(self.destination.resolve().as_posix().lower().encode()).hexdigest()
+        lock = Path(str(self.config) + '.' + key + '.lock')
+        ready, release = self.root / 'lock ready', self.root / 'release lock'
+        holder_script = self.root / 'hold-lock.cmake'
+        holder_script.write_text(f'''cmake_minimum_required(VERSION 3.24)
+file(LOCK "{lock.as_posix()}" GUARD PROCESS TIMEOUT 10)
+file(WRITE "{ready.as_posix()}" "ready")
+while(NOT EXISTS "{release.as_posix()}")
+  execute_process(COMMAND "${{CMAKE_COMMAND}}" -E sleep 0.1)
+endwhile()
+''')
+        holder = subprocess.Popen(['cmake', '-P', str(holder_script)],
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        try:
+            deadline = time.monotonic() + 15
+            while not ready.exists() and holder.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertTrue(ready.exists(), 'The independent deployment lock was not acquired')
+            (self.runtime / 'fixture_leaf.dll').unlink()
+            result = self.stage(None, *self.host_arguments())
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn('fixture_leaf.dll', result.stdout)
+            self.assertNotIn('error locking file', result.stdout)
+            self.assertIsNone(holder.poll(), 'Input validation must finish while the copy lock is still held')
+            self.assertFalse(self.destination.exists())
+        finally:
+            release.write_text('release')
+            try:
+                holder.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                holder.kill()
+                holder.communicate()
+
     def test_deployment_into_compiler_runtime_is_rejected(self):
         result = self.stage(self.runtime)
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertFalse((self.runtime / 'facade.dll').exists())
+
+
+class RuntimeNoticeTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix='s2k notice cache ')
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.content = b'Native test fixture license; not a redistributed runtime license.\n'
+        self.blob = hashlib.sha1(b'blob ' + str(len(self.content)).encode() + b'\0' + self.content).hexdigest()
+        self.git = shutil.which('git')
+        self.assertIsNotNone(self.git)
+        self.driver = self.root / 'notice.cmake'
+        self.driver.write_text(f'''cmake_minimum_required(VERSION 3.24)
+set(S2K_RUNTIME_CONFIG "{self.root.as_posix()}/runtime.cmake")
+set(S2K_GIT "{Path(self.git).as_posix()}")
+include("{(ROOT / 'Integrations/CMake/RuntimeNotices.cmake').as_posix()}")
+file(WRITE "${{READY}}" "ready")
+_s2k_license("fixture.txt" "${{URL}}" "{self.blob}" acquired)
+file(WRITE "${{RESULT}}" "${{acquired}}")
+''')
+
+    def launch(self, suffix, url):
+        return subprocess.Popen(['cmake', f'-DREADY={self.root.as_posix()}/{suffix}.ready',
+                                 f'-DRESULT={self.root.as_posix()}/{suffix}.result',
+                                 f'-DURL={url}', '-P', str(self.driver)],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    def test_parallel_acquisition_cannot_read_a_partial_license(self):
+        entered, release = threading.Event(), threading.Event()
+        requests = []
+        content = self.content
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests.append(self.path)
+                entered.set()
+                if not release.wait(20):
+                    self.send_error(503)
+                    return
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+
+            def log_message(self, *_args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        children = []
+        try:
+            url = f'http://127.0.0.1:{server.server_port}/fixture.txt'
+            children.append(self.launch('first', url))
+            self.assertTrue(entered.wait(15), 'The first acquisition did not reach the local fixture server')
+            second = self.launch('second', url)
+            children.append(second)
+            deadline = time.monotonic() + 15
+            while not (self.root / 'second.ready').exists() and second.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertTrue((self.root / 'second.ready').exists())
+            # The first download remains incomplete until this test releases it.
+            # A second caller must wait instead of hashing its partial cache file.
+            with self.assertRaises(subprocess.TimeoutExpired):
+                second.wait(timeout=0.5)
+            release.set()
+            for child in children:
+                output, _ = child.communicate(timeout=30)
+                self.assertEqual(child.returncode, 0, output)
+            self.assertEqual(requests, ['/fixture.txt'])
+            self.assertEqual((self.root / 'runtime-notices/fixture.txt').read_bytes(), self.content)
+            for suffix in ('first', 'second'):
+                self.assertEqual(Path((self.root / f'{suffix}.result').read_text()).read_bytes(), self.content)
+        finally:
+            release.set()
+            for child in children:
+                if child.poll() is None:
+                    child.kill()
+                child.communicate()
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_changed_cached_license_still_fails_hash_validation(self):
+        cache = self.root / 'runtime-notices'
+        cache.mkdir()
+        (cache / 'fixture.txt').write_bytes(b'altered fixture license')
+        child = self.launch('changed', 'http://127.0.0.1:1/not-used')
+        try:
+            output, _ = child.communicate(timeout=30)
+            self.assertNotEqual(child.returncode, 0, output)
+            self.assertIn('Altered or incorrect upstream license', output)
+            self.assertFalse((self.root / 'changed.result').exists())
+        finally:
+            if child.poll() is None:
+                child.kill()
+            child.communicate()
 
 
 if __name__ == '__main__':

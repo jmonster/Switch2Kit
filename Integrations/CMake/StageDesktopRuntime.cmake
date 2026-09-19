@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
+if(POLICY CMP0207)
+  cmake_policy(SET CMP0207 NEW)
+endif()
 # Operate on application-owned copies, never on the compiler installation.
 foreach(_argument S2K_LIBRARY S2K_DESTINATION S2K_NOTICES S2K_RUNTIME_CONFIG)
   if(NOT DEFINED ${_argument} OR "${${_argument}}" STREQUAL "")
@@ -44,11 +47,11 @@ if(CMAKE_GET_RUNTIME_DEPENDENCIES_PLATFORM STREQUAL "windows+pe")
   # Windows searches beside each importing binary before DIRECTORIES. Inspect
   # isolated copies of declared application roots so an old staged runtime
   # cannot mask a missing compiler dependency or conflict with the original.
-  # Serialize targets sharing an output directory before updating their DLLs.
+  # Independent scans must not serialize behind the deployment copy lock.
   get_filename_component(_destination_key "${S2K_DESTINATION}" ABSOLUTE)
   string(TOLOWER "${_destination_key}" _destination_key)
   string(SHA256 _destination_key "${_destination_key}")
-  file(LOCK "${S2K_RUNTIME_CONFIG}.${_destination_key}.lock" GUARD PROCESS TIMEOUT 60)
+  set(_deployment_lock "${S2K_RUNTIME_CONFIG}.${_destination_key}.lock")
   set(_root_names)
   foreach(_root IN LISTS _application_libraries _executables)
     get_filename_component(_name "${_root}" NAME)
@@ -108,7 +111,6 @@ foreach(_directory IN LISTS S2K_RUNTIME_DIRS)
     message(FATAL_ERROR "Refusing to stage runtime libraries into the compiler installation")
   endif()
 endforeach()
-file(MAKE_DIRECTORY "${S2K_DESTINATION}" "${S2K_NOTICES}/SwiftRuntime")
 set(_copies ${_application_libraries})
 set(_runtime_libraries)
 foreach(_library IN LISTS _resolved)
@@ -138,6 +140,12 @@ endif()
 list(APPEND _copies ${_runtime_libraries})
 list(REMOVE_DUPLICATES _copies)
 list(LENGTH _copies _count)
+# Dependency inspection and license acquisition above operate independently.
+# Serialize only the short mutation of shared application-owned output files.
+if(DEFINED _deployment_lock)
+  file(LOCK "${_deployment_lock}" GUARD PROCESS TIMEOUT 60)
+endif()
+file(MAKE_DIRECTORY "${S2K_DESTINATION}" "${S2K_NOTICES}/SwiftRuntime")
 foreach(_source IN LISTS _copies)
   get_filename_component(_name "${_source}" NAME)
   set(_copy "${S2K_DESTINATION}/${_name}")
