@@ -1,4 +1,4 @@
-#if canImport(CoreBluetooth) || os(Linux)
+#if canImport(CoreBluetooth) || os(Linux) || os(Windows)
 // ControllerSession.swift
 // One connected Switch 2 controller: GATT handshake, command serialization,
 // input decoding, keep-alive, and rumble.
@@ -125,7 +125,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
 
     /// Last time the HUMAN did something (button/stick/trigger change) —
     /// reports stream constantly, so idleness must be judged on content.
-    package private(set) var lastActivityAt: TimeInterval = ProcessInfo.processInfo.systemUptime
+    package private(set) var lastActivityAt: TimeInterval = ControllerClock.now
 
     /// Internal queue-confined receiver; never a host output callback.
     package var onState: (@Sendable (Int, ControllerState) -> Void)?
@@ -323,7 +323,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     }
 
     private var hostAddressBytesLE: Data? {
-        #if os(Linux) && !S2K_RADIO_FIXTURE
+        #if (os(Linux) || os(Windows)) && !S2K_RADIO_FIXTURE
         return peripheral.hostAddressBytesLE
         #else
         return HostBluetooth.macAddressBytesLE
@@ -424,13 +424,13 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         writeStallTimeout = nil
         // Rumble stop/replacement must not wait for a command response.
         if let motor = pendingMotor, let characteristic = chars[Switch2.GATT.vibration(for: model)] {
-            let value = ProcessInfo.processInfo.systemUptime < motor.expires
+            let value = ControllerClock.now < motor.expires
                 ? motor.value : Switch2.MotorVibration.stopped
             let packet = Switch2.motorPacket(value, packetID: vibrationPacketID, model: model)
             if packet.count <= peripheral.maximumWriteValueLength(for: .withoutResponse) {
                 peripheral.writeValue(packet, for: characteristic, type: .withoutResponse)
                 vibrationPacketID &+= 1
-                lastWriteAt = ProcessInfo.processInfo.systemUptime
+                lastWriteAt = ControllerClock.now
             }
             pendingMotor = nil
         }
@@ -456,7 +456,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
             commandTimeout = timeout
             queue.asyncAfter(deadline: .now() + 2, execute: timeout)
             peripheral.writeValue(request.frame, for: writeChar, type: .withoutResponse)
-            lastWriteAt = ProcessInfo.processInfo.systemUptime
+            lastWriteAt = ControllerClock.now
         }
     }
 
@@ -568,7 +568,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         rumbleStopTimer?.schedule(deadline: .distantFuture)
         rumbleTarget = (strong.isFinite ? max(0, min(1, strong)) : 0,
                         weak.isFinite ? max(0, min(1, weak)) : 0)
-        rumbleSetAt = ProcessInfo.processInfo.systemUptime
+        rumbleSetAt = ControllerClock.now
         maintainTick()
     }
 
@@ -585,7 +585,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         guard !ended, isReady else { completion?(.controllerNotReady); return }
         let level = intensity.isFinite ? max(0, min(1, intensity)) : 0
         guard level > 0 else { completion?(nil); return }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         guard now - lastRumbleFeedbackAt >= 0.5 else { completion?(.operationBusy); return }
         guard isCommandIdle, peripheral.canSendWriteWithoutResponse else {
             completion?(.operationBusy); return
@@ -633,7 +633,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         applyRumble(strong: strong, weak: weak)
         guard model.capabilities.contains(.continuousRumble), rumbleTarget.strong > 0.001 || rumbleTarget.weak > 0.001 else { return }
         let delay = max(0, min(5, duration))
-        rumbleStopDeadline = ProcessInfo.processInfo.systemUptime + delay
+        rumbleStopDeadline = ControllerClock.now + delay
         rumbleStopGeneration = rumbleGeneration
         if rumbleStopTimer == nil {
             let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -651,7 +651,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
     private func finishRumblePulse() {
         guard !ended, rumbleStopGeneration == rumbleGeneration,
               let deadline = rumbleStopDeadline else { return }
-        let remaining = deadline - ProcessInfo.processInfo.systemUptime
+        let remaining = deadline - ControllerClock.now
         guard remaining <= 0 else {
             rumbleStopTimer?.schedule(deadline: .now() + remaining)
             return
@@ -673,10 +673,10 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
         defer {
             // One deadline while idle, sustain cadence only while rumbling.
             let active = rumbleActive || pendingMotor != nil
-            let delay = active ? 0.05 : max(0.05, 1 - (ProcessInfo.processInfo.systemUptime - lastWriteAt))
+            let delay = active ? 0.05 : max(0.05, 1 - (ControllerClock.now - lastWriteAt))
             keepAliveTimer?.schedule(deadline: .now() + delay, leeway: .milliseconds(2))
         }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         var (strong, weakMag) = rumbleTarget
         // Failsafe: rumble intents expire after 0.5 s so a crashed consumer
         // can never leave the motor running.
@@ -719,7 +719,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
             return false
         }
         warnedMotorUnavailable = false
-        pendingMotor = (motors, ProcessInfo.processInfo.systemUptime + 0.5)
+        pendingMotor = (motors, ControllerClock.now + 0.5)
         pumpWrites()
         return true
     }
@@ -738,7 +738,7 @@ package final class ControllerSession: NSObject, @unchecked Sendable {
 
     private func handleInputReport(_ data: Data) {
         guard !ended, let report = Switch2.InputReport(data: data) else { return }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = ControllerClock.now
         if lastReportAt > 0, now - lastReportAt > 0.100 {
             gapCount += 1
             log(.warning, "slot \(slot + 1): BLE input gap #\(gapCount): \(Int((now - lastReportAt) * 1000)) ms")

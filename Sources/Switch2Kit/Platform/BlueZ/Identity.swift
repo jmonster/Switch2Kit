@@ -1,4 +1,4 @@
-#if os(Linux)
+#if os(Linux) || os(Windows)
 import Foundation
 
 // RFC 4122 name-based UUIDs: stable for an adapter/address/type tuple, without

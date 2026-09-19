@@ -91,4 +91,4 @@ public func motionProfileCalibration(_ profile: UnsafePointer<S2KMotionProfile>?
 
 /// C ABI entry point; same monotonic host clock used when accepting a controller input report.
 @_cdecl("s2k_monotonic_time")
-public func monotonicTime() -> Double { ProcessInfo.processInfo.systemUptime }
+public func monotonicTime() -> Double { ControllerClock.now }

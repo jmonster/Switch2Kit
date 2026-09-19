@@ -1,4 +1,4 @@
-#if canImport(CoreBluetooth) || os(Linux)
+#if canImport(CoreBluetooth) || os(Linux) || os(Windows)
 import Foundation
 #if canImport(Combine)
 import Combine
