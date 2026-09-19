@@ -9,7 +9,7 @@ $reportPath = [IO.Path]::GetFullPath($Report)
 $root = Join-Path ([IO.Path]::GetTempPath()) ('s2k extracted GUI ' + [guid]::NewGuid())
 $record = @{ version=1; emulator=$Emulator; archiveSHA256=(Get-FileHash $archivePath -Algorithm SHA256).Hash;
              testedRevision=$env:GITHUB_SHA; physicalControllerTested=$false; pristineFirstRunTested=$false;
-             runs=@(); status='failed' }
+             runs=@(); status='failed'; stage='preparation' }
 New-Item -ItemType Directory $root | Out-Null
 try {
     $unpack = Join-Path $root 'unpacked'
@@ -23,9 +23,9 @@ try {
     foreach ($notice in @('CREDITS.md','LICENSES/MIT-trevlars.txt','LICENSES/SDL-zlib.txt','SwiftRuntime/LICENSE.txt','SwiftRuntime/ICU.txt')) {
         if (-not (Test-Path (Join-Path $directory "Switch2KitNotices/$notice"))) { throw "Missing distributed license/attribution: $notice" }
     }
-    $home = Join-Path $root 'home'
+    $profileRoot = Join-Path $root 'home'
     $temp = Join-Path $root 'tmp'
-    New-Item -ItemType Directory $home, $temp, "$home/AppData/Roaming", "$home/AppData/Local" | Out-Null
+    New-Item -ItemType Directory $profileRoot, $temp, "$profileRoot/AppData/Roaming", "$profileRoot/AppData/Local" | Out-Null
     if ($Emulator -eq 'dolphin') {
         $user = Join-Path $root 'user'
         New-Item -ItemType Directory "$user/Config" | Out-Null
@@ -45,17 +45,21 @@ try {
         $start.WorkingDirectory = $directory
         $start.Environment.Clear()
         $values = @{ PATH="$env:SystemRoot\System32;$env:SystemRoot"; SystemRoot=$env:SystemRoot;
-                     WINDIR=$env:SystemRoot; SystemDrive=$env:SystemDrive; USERPROFILE=$home;
-                     APPDATA="$home/AppData/Roaming"; LOCALAPPDATA="$home/AppData/Local"; TEMP=$temp; TMP=$temp }
+                     WINDIR=$env:SystemRoot; SystemDrive=$env:SystemDrive; USERPROFILE=$profileRoot;
+                     APPDATA="$profileRoot/AppData/Roaming"; LOCALAPPDATA="$profileRoot/AppData/Local"; TEMP=$temp; TMP=$temp }
         foreach ($entry in $values.GetEnumerator()) { $start.Environment[$entry.Key] = $entry.Value }
         if ($Emulator -eq 'dolphin') { $start.ArgumentList.Add('--user'); $start.ArgumentList.Add($user) }
+        $record.stage = 'launch'
         $process = [Diagnostics.Process]::Start($start)
         try {
             $deadline = [DateTime]::UtcNow.AddSeconds(60)
             do {
                 Start-Sleep -Milliseconds 250
                 $process.Refresh()
-                if ($process.HasExited) { throw "Application exited before opening a GUI: $($process.ExitCode)" }
+                if ($process.HasExited) {
+                    $record.startupExitCode = $process.ExitCode
+                    throw "Application exited before opening a GUI: $($process.ExitCode)"
+                }
             } until ($process.MainWindowHandle -ne 0 -or [DateTime]::UtcNow -gt $deadline)
             if ($process.MainWindowHandle -eq 0) { throw 'No application window appeared within 60 seconds.' }
             $deadline = [DateTime]::UtcNow.AddSeconds(5)
@@ -64,6 +68,7 @@ try {
                 $process.Refresh()
                 if ($process.HasExited -or $process.MainWindowHandle -eq 0) { throw 'The application did not retain a usable GUI.' }
             } until ([DateTime]::UtcNow -ge $deadline)
+            $record.stage = 'runtime'
             $modules = @($process.Modules)
             $loaded = @($modules | Where-Object { $_.ModuleName -eq 'Switch2KitC.dll' })
             if ($loaded.Count -ne 1 -or $loaded[0].FileName -ne $expected) { throw 'The GUI did not load its packaged controller DLL.' }
@@ -80,6 +85,7 @@ try {
                     if ($module.FileName.StartsWith($blocked, [StringComparison]::OrdinalIgnoreCase)) { throw "Build dependency loaded: $($module.FileName)" }
                 }
             }
+            $record.stage = 'shutdown'
             if (-not $process.CloseMainWindow()) { throw 'The application rejected a normal close request.' }
             if (-not $process.WaitForExit(20000)) { throw 'The application did not shut down normally.' }
             if ($process.ExitCode -ne 0) { throw "Application failed during shutdown: $($process.ExitCode)" }
@@ -90,6 +96,7 @@ try {
             $process.Dispose()
         }
     }
+    $record.stage = 'complete'
     $record.status = 'passed'
 } catch {
     $record.reason = $_.Exception.Message

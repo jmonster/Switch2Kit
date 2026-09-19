@@ -65,6 +65,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir build-sdl --output-on-failure 2>&1 | Tee-Object windows-sdl-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/emulator-launch/test_windows.py 2>&1 | Tee-Object windows-host-supervisor-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Execute extracted consumers without the compiler or developer PATH
         shell: pwsh
         run: |
