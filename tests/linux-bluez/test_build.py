@@ -1,6 +1,8 @@
 """Linux integration build guards and relocation of the native install layout."""
 from pathlib import Path
+import json
 import os
+import shlex
 import re
 import shutil
 import subprocess
@@ -113,12 +115,32 @@ int main() {
     def test_installed_library_and_notices_relocate_with_host(self):
         with tempfile.TemporaryDirectory(prefix='Switch2Kit Linux install ') as temporary:
             root=Path(temporary)
-            (root/'lib.c').write_text('int fixture(void) { return 42; }\n')
+            # Model a compiler-selected shared runtime with native C fixtures. The
+            # real Swift facade is exercised separately by tests/linux-runtime.
+            runtime = root / 'compiler-runtime'
+            runtime.mkdir()
+            (root/'runtime.c').write_text('int runtime_value(void) { return 42; }\n')
+            (root/'lib.c').write_text('extern int runtime_value(void); int fixture(void) { return runtime_value(); }\n')
+            info = root / 'target.json'
+            info.write_text(json.dumps({'compilerVersion': 'Install fixture',
+                'paths': {'runtimeLibraryPaths': [str(runtime)]}}))
+            compiler = root / 'swiftc'
+            compiler.write_text('#!/bin/sh\n[ "$#" -eq 1 ] && [ "$1" = -print-target-info ] || exit 1\n'
+                                + 'exec cat ' + shlex.quote(str(info)) + '\n')
+            compiler.chmod(0o755)
+            for name in ('swift-license.txt', 'icu-license.txt'):
+                (root/name).write_text('License for the native install-test fixture: ' + name + '\n')
             (root/'main.c').write_text('extern int fixture(void); int main(void) { return fixture() != 42; }\n')
             (root/'CMakeLists.txt').write_text(f'''cmake_minimum_required(VERSION 3.24)
 project(InstallFixture C)
 include(GNUInstallDirs)
+set(SWITCH2KIT_SWIFTC "{compiler}")
+set(SWITCH2KIT_SWIFT_LICENSE "{root}/swift-license.txt")
+set(SWITCH2KIT_RUNTIME_ICU_LICENSE "{root}/icu-license.txt")
+add_library(FixtureRuntime SHARED runtime.c)
+set_target_properties(FixtureRuntime PROPERTIES LIBRARY_OUTPUT_DIRECTORY "{runtime}")
 add_library(Switch2KitC SHARED lib.c)
+target_link_libraries(Switch2KitC PRIVATE FixtureRuntime)
 add_library(Switch2Kit::C ALIAS Switch2KitC)
 add_executable(host main.c)
 target_link_libraries(host PRIVATE Switch2Kit::C)
@@ -131,7 +153,16 @@ install(TARGETS host RUNTIME DESTINATION "${{CMAKE_INSTALL_BINDIR}}")
                 result=run(*args); self.assertEqual(result.returncode,0,result.stdout)
             (root/'installed').rename(root/'relocated')
             shutil.rmtree(root/'build')
+            shutil.rmtree(runtime)
             result=run(str(root/'relocated/bin/host')); self.assertEqual(result.returncode,0,result.stdout)
+            for source, installed in [('swift-license.txt', 'LICENSE.txt'), ('icu-license.txt', 'ICU.txt')]:
+                self.assertEqual((root/f'relocated/share/Switch2KitNotices/SwiftRuntime/{installed}').read_bytes(),
+                                 (root/source).read_bytes())
+            # A missing runtime must fail, even if the facade itself is present.
+            runtime_copy = next((root/'relocated').rglob('libFixtureRuntime.so'))
+            runtime_copy.unlink()
+            result=run(str(root/'relocated/bin/host'))
+            self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertEqual((root/'relocated/share/Switch2KitNotices/CREDITS.md').read_bytes(), (ROOT/'CREDITS.md').read_bytes())
             for source in (ROOT/'LICENSES').glob('*'):
                 if source.is_file(): self.assertEqual((root/'relocated/share/Switch2KitNotices/LICENSES'/source.name).read_bytes(),source.read_bytes())

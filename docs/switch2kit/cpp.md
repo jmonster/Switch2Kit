@@ -1,23 +1,31 @@
 # C and C++ hosts
 
-The optional `Switch2KitC` binding exposes the same controller engine through `Switch2KitC.h`. It uses caller-owned C structs and a bounded polling reader, not Objective-C objects or Swift collections. The source `Switch2Kit` product is unchanged for Swift hosts. Bluetooth requires macOS 15+ with Swift 6.2+/Xcode 26+, or the experimental [Linux/BlueZ backend](linux.md) with Swift 6.2+ and its runtime dependencies. Linux uses the same live factory, event hub and session engine; Windows and Android remain unsupported.
+The optional `Switch2KitC` binding exposes the same controller engine through `Switch2KitC.h`. It uses caller-owned C structs and a bounded polling reader, not Objective-C objects or Swift collections. The source `Switch2Kit` product is unchanged for Swift hosts. Bluetooth requires macOS 15+ with Swift 6.2+/Xcode 26+, or the experimental [Linux/BlueZ backend](linux.md) with Swift 6.2+ and its runtime dependencies. Experimental [Windows x64/WinRT support](windows.md) uses the same engine with a native Bluetooth transport. Android remains unsupported.
 
 ## Build with CMake
 
 ```cmake
 add_subdirectory(/path/to/Switch2Kit/Integrations/CMake switch2kit)
 target_link_libraries(your_emulator PRIVATE Switch2Kit::C)
-# For a macOS application bundle:
-switch2kit_embed(your_emulator)
+# Call the platform helper in the directory that creates the executable.
+if(APPLE)
+  switch2kit_embed(your_emulator)
+elseif(WIN32)
+  switch2kit_embed_windows(your_emulator)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  switch2kit_install_linux(your_emulator)
+endif()
 ```
 
 Use a CMake build directory owned by your project. The integration builds SwiftPM sources in that directory, respecting `CMAKE_OSX_ARCHITECTURES`. On macOS, explicitly select a deployment target of 15.0 or newer when enabling this backend. An emulator supporting older macOS versions should keep the backend optional rather than silently changing its minimum. The macOS host supplies its Bluetooth usage description and, when sandboxed, Bluetooth entitlement. Linux uses normal BlueZ/system-bus permissions and `switch2kit_install_linux` rather than macOS bundle embedding; see [Linux installation](linux.md). `switch2kit_embed` copies the binding and required Swift runtime libraries; the host's normal final signing step signs the bundle. No signing identity or application entitlements are supplied by the binding.
+
+Windows uses a native x64 MSVC-compatible CMake build and the x64 Swift toolchain. The imported target provides both `Switch2KitC.dll` and its import library. `switch2kit_embed_windows` copies the DLL, its compiler-selected Swift runtime dependency closure, and the required license/attribution notices beside the executable. A successfully staged application does not need the Swift installation or a Swift-specific `PATH` entry at launch; Windows, Microsoft Visual C++ runtime and driver prerequisites remain. It does not copy Windows system libraries or change global `PATH`. See [Windows build and runtime instructions](windows.md).
 
 `bash scripts/build-switch2kit-c.sh` builds and inspects a universal `build/Switch2KitC.xcframework` and compiles a fresh C++ consumer for each architecture. The C distribution has a fixed-layout C ABI. Swift consumers use the SwiftPM source package; the standalone Swift XCFramework pipeline is retired (see [Swift distribution](xcframework.md)). Do not link both implementations into one process. The C binding already includes the controller engine.
 
 ## Lifecycle and input
 
-Create the handle on the main thread, before starting support. Do not call the creation function from an emulator's render thread. On macOS, keep the application's main run loop active. The Linux C polling API does not require a GUI event loop. Subsequent operations are thread-safe, except that each handle has one logical event reader and the owner must stop all API calls before destruction.
+Create the handle on the main thread, before starting support. Do not call the creation function from an emulator's render thread. On macOS, keep the application's main run loop active. The Linux and Windows C polling APIs do not require a GUI event loop. Subsequent operations are thread-safe, except that each handle has one logical event reader and the owner must stop all API calls before destruction.
 
 ```cpp
 #include <Switch2KitC.h>
@@ -52,7 +60,7 @@ This reader uses the production event hub directly. It does not poll the 10 Hz p
 
 Snapshots accompany every read, but do not overwrite ordinary historical input with a newer snapshot before processing the events. For SDL virtual devices, commit transitions at the SDL update boundary instead of staging multiple opposing changes before one update.
 
-Stop immediately suppresses input to the C reader and requests transport teardown. It is asynchronous: `snapshot.stopping` clears when teardown completes. Starting during that interval returns `S2K_BUSY`. Destruction cancels the reader and releases ownership; it never calls host code. There is no callback userdata to retain. Keep the loaded library resident for the process lifetime so queued Swift/Dispatch teardown can complete; do not `dlclose` it.
+Stop immediately suppresses input to the C reader and requests transport teardown. It is asynchronous: `snapshot.stopping` clears when teardown completes. Starting during that interval returns `S2K_BUSY`. Destruction cancels the reader and releases ownership; it never calls host code. There is no callback userdata to retain. Keep the loaded library resident for the process lifetime so queued Swift/Dispatch teardown can complete; do not `dlclose` it or call `FreeLibrary` on Windows.
 
 ## Mapping and control
 
@@ -68,8 +76,10 @@ Malformed arguments return a synchronous `S2KResult`. Transport, radio and comma
 
 ```sh
 swift test -Xswiftc -warnings-as-errors
-bash tests/c-consumer/run.sh
+bash tests/c-consumer/run.sh # macOS and Linux
 bash scripts/build-switch2kit-c.sh # macOS only
 ```
+
+On Windows, use CMake directly from a native x64 developer shell: `cmake -S tests/c-consumer -B build-c -G Ninja -DCMAKE_BUILD_TYPE=Release`, `cmake --build build-c`, then `ctest --test-dir build-c --output-on-failure`.
 
 The CMake consumer contains C11 and C++17 source. Its separately built test fixture feeds fake controller events through the real Swift event hub, C ABI and C++ program, exercising hotplug, edge order, all state fields, overflow, rumble routing and teardown. The fixture is not linked into any distribution product. Native CI also compiles the real manager creation path without starting Bluetooth. Physical controller and gameplay checks are separate from these tests.

@@ -101,7 +101,7 @@ final class CMotionProfileTests: XCTestCase {
         XCTAssertEqual(output.version, 42)
     }
     func testClockIsTheReportReceiveClockAndThreadSafe() {
-        let before = ProcessInfo.processInfo.systemUptime, value = monotonicTime(), after = ProcessInfo.processInfo.systemUptime
+        let before = ControllerClock.now, value = monotonicTime(), after = ControllerClock.now
         XCTAssertTrue(value.isFinite); XCTAssertGreaterThanOrEqual(value, before); XCTAssertLessThanOrEqual(value, after)
         DispatchQueue.concurrentPerform(iterations: 1000) { _ in XCTAssertTrue(monotonicTime().isFinite) }
     }

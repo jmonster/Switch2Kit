@@ -9,7 +9,7 @@ set(SDL_TESTS OFF CACHE BOOL "" FORCE)
 set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
-if(NOT APPLE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # These portable fixtures intentionally have no desktop video backend.
   set(SDL_UNIX_CONSOLE_BUILD ON CACHE BOOL "" FORCE)
   set(SDL_X11 OFF CACHE BOOL "" FORCE)
@@ -26,31 +26,51 @@ add_custom_target(sdl-version-check ALL DEPENDS Switch2KitSDLVersion)
 get_filename_component(_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(_fixture "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}S2KSDLFixture${CMAKE_SHARED_LIBRARY_SUFFIX}")
 set(_args)
+set(_fixture_byproducts)
+set(_rpath_args)
+if(WIN32)
+  set(_fixture_import "${CMAKE_CURRENT_BINARY_DIR}/S2KSDLFixture.lib")
+  list(APPEND _fixture_byproducts "${_fixture_import}")
+  list(APPEND _args -Xlinker "/IMPLIB:${_fixture_import}")
+else()
+  list(APPEND _rpath_args -Xlinker -rpath -Xlinker "${SWITCH2KIT_C_BINARY_DIR}")
+endif()
 if(APPLE)
   execute_process(COMMAND xcrun --sdk macosx --show-sdk-path OUTPUT_VARIABLE _sdk OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
   execute_process(COMMAND uname -m OUTPUT_VARIABLE _arch OUTPUT_STRIP_TRAILING_WHITESPACE)
   list(APPEND _args -sdk "${_sdk}" -target "${_arch}-apple-macosx15.0")
-else()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND _args -Xlinker -soname -Xlinker "${CMAKE_SHARED_LIBRARY_PREFIX}S2KSDLFixture${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
 add_custom_command(OUTPUT "${_fixture}"
+  BYPRODUCTS ${_fixture_byproducts}
   COMMAND "${Python3_EXECUTABLE}" "${_root}/tests/support/compile-fixture.py"
     --description "${SWITCH2KIT_C_BINARY_DIR}/description.json"
     --compiler "${SWITCH2KIT_SWIFTC}" -- -swift-version 6 -warnings-as-errors -emit-library
     -module-name S2KSDLFixture ${_args}
     -I "${SWITCH2KIT_C_BINARY_DIR}/Modules" -I "${_root}/Sources/Switch2KitCABI/include"
     -L "${SWITCH2KIT_C_BINARY_DIR}" -lSwitch2KitC
-    -Xlinker -rpath -Xlinker "${SWITCH2KIT_C_BINARY_DIR}"
+    ${_rpath_args}
     "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift" -o "${_fixture}"
   DEPENDS Switch2KitCBuild "${_root}/tests/support/compile-fixture.py" "${CMAKE_CURRENT_LIST_DIR}/Fixture.swift" VERBATIM)
 add_custom_target(S2KSDLFixtureBuild DEPENDS "${_fixture}")
 add_library(S2KSDLFixture SHARED IMPORTED GLOBAL)
 set_target_properties(S2KSDLFixture PROPERTIES IMPORTED_LOCATION "${_fixture}")
+if(WIN32)
+  set_target_properties(S2KSDLFixture PROPERTIES IMPORTED_IMPLIB "${_fixture_import}")
+endif()
 add_dependencies(S2KSDLFixture S2KSDLFixtureBuild)
 add_executable(sdl-inprocess main.cpp)
 target_compile_features(sdl-inprocess PRIVATE cxx_std_17)
-target_compile_options(sdl-inprocess PRIVATE -Wall -Wextra -Werror -UNDEBUG)
-target_compile_options(Switch2KitSDL3 PRIVATE -Wall -Wextra -Werror)
+if(MSVC)
+  set(_test_options /W4 /UNDEBUG)
+  set(_force_include "/FI${CMAKE_CURRENT_LIST_DIR}/Clock.hpp")
+else()
+  set(_test_options -Wall -Wextra -Werror -UNDEBUG)
+  set(_force_include -include "${CMAKE_CURRENT_LIST_DIR}/Clock.hpp")
+  target_compile_options(Switch2KitSDL3 PRIVATE -Wall -Wextra -Werror)
+endif()
+target_compile_options(sdl-inprocess PRIVATE ${_test_options})
 target_link_libraries(sdl-inprocess PRIVATE Switch2Kit::SDL3 S2KSDLFixture)
 set_property(TARGET sdl-inprocess APPEND PROPERTY BUILD_RPATH "${SWITCH2KIT_C_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 add_test(NAME sdl-inprocess COMMAND sdl-inprocess)
@@ -66,7 +86,7 @@ target_compile_features(S2KSDLClockedAdapter PUBLIC cxx_std_17)
 # constructor still requires its existing target-local -fexceptions override.
 target_compile_options(S2KSDLClockedAdapter PRIVATE
   "$<TARGET_PROPERTY:Switch2KitSDL3,COMPILE_OPTIONS>"
-  -include "${CMAKE_CURRENT_LIST_DIR}/Clock.hpp")
+  ${_force_include})
 target_compile_definitions(S2KSDLClockedAdapter PRIVATE
   SDL_GetTicksNS=s2k_test_ticks_ns s2k_monotonic_time=s2k_test_monotonic_time
   S2K_MOTION_CONTINUOUS_NS=s2k_test_continuous_ns)
@@ -74,8 +94,17 @@ target_include_directories(S2KSDLClockedAdapter PUBLIC "${_root}/Integrations/SD
 target_link_libraries(S2KSDLClockedAdapter PUBLIC Switch2Kit::C SDL3::SDL3)
 add_executable(sdl-motion motion.cpp Clock.cpp)
 target_compile_features(sdl-motion PRIVATE cxx_std_17)
-target_compile_options(sdl-motion PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+target_compile_options(sdl-motion PRIVATE ${_test_options})
 target_link_libraries(sdl-motion PRIVATE S2KSDLClockedAdapter S2KSDLFixture)
 set_property(TARGET sdl-motion APPEND PROPERTY BUILD_RPATH "${SWITCH2KIT_C_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 add_test(NAME sdl-motion COMMAND sdl-motion)
 set_tests_properties(sdl-motion PROPERTIES TIMEOUT 45)
+
+if(WIN32)
+  target_link_libraries(S2KSDLClockedAdapter PUBLIC mincore)
+  foreach(_consumer sdl-inprocess sdl-motion)
+    switch2kit_embed_windows(${_consumer})
+    add_custom_command(TARGET ${_consumer} POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_fixture}" "$<TARGET_FILE_DIR:${_consumer}>" VERBATIM)
+  endforeach()
+endif()

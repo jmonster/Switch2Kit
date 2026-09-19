@@ -32,7 +32,7 @@ package final class ControllerDiscoveryPolicy: @unchecked Sendable {
         for id in remembered.prefix(64) where !known.contains(id) { known.append(id) }
         self.remembered = Array(known.prefix(capacity))
     }
-    package func shouldScan(readyIDs: [UUID], now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+    package func shouldScan(readyIDs: [UUID], now: TimeInterval = ControllerClock.now) -> Bool {
         dispatchPrecondition(condition: .onQueue(queue))
         guard now.isFinite else { cancelWindow(); return mode != .onDemand }
         if mode == .automatic { wasQuiet = false; cancelWindow(); return true }
@@ -52,12 +52,12 @@ package final class ControllerDiscoveryPolicy: @unchecked Sendable {
         if let until, now >= until { cancelWindow() }
         return windowIsOpen(now: now) || remembered.isEmpty || !Set(remembered).isSubset(of: Set(ready))
     }
-    package func windowIsOpen(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+    package func windowIsOpen(now: TimeInterval = ControllerClock.now) -> Bool {
         dispatchPrecondition(condition: .onQueue(queue))
         return now.isFinite && (until.map { now < $0 } ?? false)
     }
     @discardableResult
-    package func openWindow(seconds: TimeInterval = 60, now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+    package func openWindow(seconds: TimeInterval = 60, now: TimeInterval = ControllerClock.now) -> Bool {
         dispatchPrecondition(condition: .onQueue(queue))
         guard seconds.isFinite, (0.1...300).contains(seconds), now.isFinite else { return false }
         guard mode != .automatic else { return true }
