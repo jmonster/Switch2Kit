@@ -2,7 +2,7 @@
 
 Switch2Kit connects Switch 2 Pro, NSO GameCube, and individual Joy-Con 2 controllers through Windows' native Bluetooth LE APIs. The transport feeds the existing controller session engine, C ABI, and in-process SDL3 adapter. It does not require a system virtual-controller driver, a separate dashboard, or a network bridge.
 
-For games, start with the maintained [Dolphin](https://github.com/jmonster/dolphin#windows) or [Cemu](https://github.com/jmonster/Cemu#windows) fork. Their **Find Switch 2 Controllers** action owns discovery; their GameCube/Pro shortcuts apply recommended mappings. Use the controller-enabled fork build, not an ordinary upstream download.
+For games, start with the maintained [Dolphin](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#windows) or [Cemu](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#windows) fork. Their **Find Switch 2 Controllers** action owns discovery; their GameCube/Pro shortcuts apply recommended mappings. Use the controller-enabled fork build, not an ordinary upstream download.
 
 ## Requirements
 
