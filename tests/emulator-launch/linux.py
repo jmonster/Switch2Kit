@@ -41,6 +41,39 @@ def environment(root):
     return env
 
 
+def wait_window_manager(manager, env, now=time.monotonic, sleep=time.sleep):
+    """Wait for both EWMH registration and the (possibly empty) client list.
+
+    Openbox can publish its identity before _NET_CLIENT_LIST. Starting the GUI
+    after `wmctrl -m` alone races the first `wmctrl -lp` observation. Probe the
+    actual observer prerequisite before launching; never turn observer errors
+    into successful windows or extend the application's startup deadline.
+    """
+    deadline = now() + 5
+    while now() < deadline:
+        if manager.poll() is not None:
+            raise LaunchFailure("The isolated window manager exited")
+        ready = True
+        for query in ("-m", "-lp"):
+            remaining = deadline - now()
+            if remaining <= 0:
+                ready = False
+                break
+            try:
+                probe = subprocess.run(["wmctrl", query], env=env, capture_output=True,
+                                       timeout=min(1, remaining))
+            except subprocess.TimeoutExpired:
+                ready = False
+                break
+            if probe.returncode != 0:
+                ready = False
+                break
+        if ready and manager.poll() is None:
+            return
+        sleep(min(0.1, max(0, deadline - now())))
+    raise LaunchFailure("The isolated X11 window manager/client list was not ready within 5 seconds")
+
+
 def windows(pid, env):
     result = []
     for line in command(["wmctrl", "-lp"], env).splitlines():
@@ -110,15 +143,7 @@ def qualify(emulator, archive, report, forbidden):
             with (report.parent / "linux-window-manager.log").open("w") as log:
                 manager = subprocess.Popen(["openbox", "--sm-disable"], env=env, stdout=log, stderr=subprocess.STDOUT)
                 try:
-                    for _ in range(50):
-                        if manager.poll() is not None:
-                            raise LaunchFailure("The isolated window manager exited")
-                        probe = subprocess.run(["wmctrl", "-m"], env=env, capture_output=True, timeout=5)
-                        if probe.returncode == 0:
-                            break
-                        time.sleep(0.1)
-                    else:
-                        raise LaunchFailure("No isolated X11 window manager")
+                    wait_window_manager(manager, env)
                     for attempt in (1, 2):
                         with (report.parent / f"linux-gui-{attempt}.log").open("w") as output:
                             process = subprocess.Popen(arguments, env=env, cwd=root, stdout=output, stderr=subprocess.STDOUT)
