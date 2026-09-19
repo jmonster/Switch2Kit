@@ -192,6 +192,11 @@ package final class WindowsCentral: @unchecked Sendable {
     private func finish(_ peripheral: WindowsPeripheral, failure: WindowsRadioError?) {
         let connected = peripheral.connected, cancelled = peripheral.disconnecting
         connections.removeValue(forKey: peripheral.token); peripheral.invalidate()
+        // A live peripheral may advertise during continuous discovery. Forget
+        // that scan admission when its link retires so a fresh advertisement
+        // can be delivered again. This neither starts scanning nor reconnects;
+        // the shared transport still owns retry, consent and explicit-stop policy.
+        seen.remove(peripheral.identifier)
         if let failure, !connected, !cancelled { delegate?.centralManager(self, didFailToConnect: peripheral, error: failure) }
         else { delegate?.centralManager(self, didDisconnectPeripheral: peripheral, error: failure) }
     }
