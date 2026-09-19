@@ -70,8 +70,8 @@ foreach(name private_os system_boundary)
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/System32")
 endforeach()
 set_target_properties(facade PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/application"
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/application")
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/facade libraries"
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/facade libraries")
 ''')
         for args in [
             ('cmake', '-S', str(self.root), '-B', str(self.root / 'build'), '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release'),
@@ -81,7 +81,7 @@ set_target_properties(facade PROPERTIES
             self.assertEqual(result.returncode, 0, result.stdout)
         # This dependency of an OS library must not be inspected or bundled.
         (self.system / 'private_os.dll').unlink()
-        self.library = self.app / 'facade.dll'
+        self.library = self.root / 'facade libraries/facade.dll'
         self.config = self.root / 'runtime.cmake'
         self.swift_license = self.root / 'fixture-license.txt'
         self.icu_license = self.root / 'fixture-icu.txt'
@@ -152,6 +152,28 @@ set_target_properties(facade PROPERTIES
                          {'facade.dll', 'runtime.dll', 'leaf.dll', 'fixture.dll', 'fixture_leaf.dll'})
         for path, content in before.items():
             self.assertEqual(path.read_bytes(), content, str(path))
+
+    def test_host_staging_is_repeatable_with_an_existing_runtime_copy(self):
+        for attempt in range(2):
+            with self.subTest(attempt=attempt):
+                result = self.stage(self.app, *self.host_arguments())
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertEqual((self.app / 'fixture_leaf.dll').read_bytes(),
+                                 (self.runtime / 'fixture_leaf.dll').read_bytes())
+
+    @unittest.skipUnless(sys.platform == 'win32', 'PE loader search order is Windows-specific')
+    def test_stale_staged_runtime_cannot_override_the_selected_compiler(self):
+        result = self.stage(self.app, *self.host_arguments())
+        self.assertEqual(result.returncode, 0, result.stdout)
+        (self.app / 'fixture_leaf.dll').write_bytes(b'not the selected compiler runtime')
+        result = self.stage(self.app, *self.host_arguments())
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual((self.app / 'fixture_leaf.dll').read_bytes(),
+                         (self.runtime / 'fixture_leaf.dll').read_bytes())
+        (self.runtime / 'fixture_leaf.dll').unlink()
+        result = self.stage(self.app, *self.host_arguments())
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('fixture_leaf.dll', result.stdout)
 
     def test_missing_fixture_only_runtime_fails_before_packaging(self):
         (self.runtime / 'fixture_leaf.dll').unlink()

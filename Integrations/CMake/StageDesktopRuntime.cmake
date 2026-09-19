@@ -37,10 +37,50 @@ foreach(_directory IN LISTS S2K_SYSTEM_RUNTIME_DIRS)
   file(GLOB _libraries LIST_DIRECTORIES false "${_directory}/*.[dD][lL][lL]")
   list(APPEND _system_libraries ${_libraries})
 endforeach()
+set(_scan_libraries ${_application_libraries})
+set(_scan_executables ${_executables})
+set(_scan_directories ${_application_directories} ${S2K_RUNTIME_DIRS} ${S2K_SYSTEM_RUNTIME_DIRS})
+if(CMAKE_GET_RUNTIME_DEPENDENCIES_PLATFORM STREQUAL "windows+pe")
+  # Windows searches beside each importing binary before DIRECTORIES. Inspect
+  # isolated copies of declared application roots so an old staged runtime
+  # cannot mask a missing compiler dependency or conflict with the original.
+  # Serialize targets sharing an output directory before updating their DLLs.
+  get_filename_component(_destination_key "${S2K_DESTINATION}" ABSOLUTE)
+  string(TOLOWER "${_destination_key}" _destination_key)
+  string(SHA256 _destination_key "${_destination_key}")
+  file(LOCK "${S2K_RUNTIME_CONFIG}.${_destination_key}.lock" GUARD PROCESS TIMEOUT 60)
+  set(_root_names)
+  foreach(_root IN LISTS _application_libraries _executables)
+    get_filename_component(_name "${_root}" NAME)
+    string(TOLOWER "${_name}" _name)
+    if(_name IN_LIST _root_names)
+      message(FATAL_ERROR "Ambiguous application library/executable name: ${_name}")
+    endif()
+    list(APPEND _root_names "${_name}")
+  endforeach()
+  string(RANDOM LENGTH 16 ALPHABET 0123456789abcdef _scan_id)
+  set(_scan_root "${S2K_RUNTIME_CONFIG}.scan-${_scan_id}")
+  file(MAKE_DIRECTORY "${_scan_root}")
+  set(_scan_libraries)
+  set(_scan_executables)
+  foreach(_kind libraries executables)
+    if(_kind STREQUAL "libraries")
+      set(_roots ${_application_libraries})
+    else()
+      set(_roots ${_executables})
+    endif()
+    foreach(_root IN LISTS _roots)
+      get_filename_component(_name "${_root}" NAME)
+      file(COPY "${_root}" DESTINATION "${_scan_root}")
+      list(APPEND _scan_${_kind} "${_scan_root}/${_name}")
+    endforeach()
+  endforeach()
+  set(_scan_directories "${_scan_root}" ${S2K_RUNTIME_DIRS} ${S2K_SYSTEM_RUNTIME_DIRS})
+endif()
 file(GET_RUNTIME_DEPENDENCIES
-  EXECUTABLES ${_executables}
-  LIBRARIES ${_application_libraries}
-  DIRECTORIES ${_application_directories} ${S2K_RUNTIME_DIRS} ${S2K_SYSTEM_RUNTIME_DIRS}
+  EXECUTABLES ${_scan_executables}
+  LIBRARIES ${_scan_libraries}
+  DIRECTORIES ${_scan_directories}
   POST_EXCLUDE_FILES ${_system_libraries}
   PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
   RESOLVED_DEPENDENCIES_VAR _resolved
@@ -89,6 +129,9 @@ foreach(_library IN LISTS _resolved)
     endif()
   endforeach()
 endforeach()
+if(DEFINED _scan_root)
+  file(REMOVE_RECURSE "${_scan_root}")
+endif()
 if(NOT _runtime_libraries)
   message(FATAL_ERROR "No Swift runtime dependency was resolved inside the selected compiler's runtime directories")
 endif()
