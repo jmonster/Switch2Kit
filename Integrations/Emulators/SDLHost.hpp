@@ -9,8 +9,9 @@
 
 namespace Switch2Kit {
 /** Application-owned session for an SDL emulator. There is no process singleton.
- * initialize/start/discover must first run on the macOS main thread. pump belongs to
- * the emulator's input loop. Other calls are serialized; stop before SDL quits.
+ * On macOS, the first call allocating a context (initialize, policy selection,
+ * start or discover) must run on the main thread. pump belongs to the emulator's
+ * input loop. Other calls are serialized; stop before SDL quits.
  * The library remains loaded until process exit. This owner never starts a worker.
  */
 class SDLHost final {

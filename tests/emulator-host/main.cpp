@@ -1,5 +1,6 @@
 #include <SDLHost.hpp>
 #include <cassert>
+#include <atomic>
 #include <thread>
 #include <cstdio>
 extern "C" {
@@ -14,6 +15,34 @@ uint32_t test_input_finish_stop(S2KContext*);
 }
 // Execute the production SDLHost, C context and SDL3 adapter. Only the radio
 // source is controlled; this is not physical Bluetooth qualification.
+static void onDemandPolicyTests() {
+    auto* fixture = test_input_create(); assert(fixture);
+    Switch2Kit::SDLHost host(fixture);
+    // No saved consent: selecting the default policy must not touch the radio.
+    assert(host.setAutomaticDiscovery(false) == S2K_OK);
+    assert(test_input_discovery_configuration_count(fixture) == 0);
+    assert(test_input_start_count(fixture) == 0 && !host.snapshot().running);
+    assert(host.start() == S2K_OK && host.start() == S2K_OK);
+    for (int i = 0; i < 100; ++i) assert(host.pump() == S2K_OK);
+    assert(host.snapshot().running && test_input_start_count(fixture) == 1);
+    assert(test_input_automatic_discovery(fixture) == 0);
+    assert(test_input_discovery_count(fixture) == 0);
+    assert(host.stop() == S2K_OK && host.snapshot().stopping);
+    assert(host.discover() == S2K_BUSY);
+    assert(test_input_start_count(fixture) == 1 && test_input_discovery_count(fixture) == 0);
+    assert(test_input_finish_stop(fixture) == 1);
+    // Changing either policy while stopped is configuration, not a restart.
+    assert(host.setAutomaticDiscovery(true) == S2K_OK);
+    assert(host.setAutomaticDiscovery(false) == S2K_OK);
+    assert(!host.snapshot().running && !host.snapshot().stopping);
+    assert(test_input_start_count(fixture) == 1);
+    assert(host.start() == S2K_OK && test_input_start_count(fixture) == 2);
+    assert(test_input_automatic_discovery(fixture) == 0);
+    assert(test_input_discovery_count(fixture) == 0);
+    assert(host.stop() == S2K_OK && test_input_finish_stop(fixture) == 1);
+    host.shutdown();
+    std::puts("PASS policy-only start defaults to on-demand, busy discovery and stopped opt-out");
+}
 static void automaticDiscoveryTests() {
     auto* fixture = test_input_create(); assert(fixture);
     Switch2Kit::SDLHost host(fixture);
@@ -56,6 +85,27 @@ static void automaticDiscoveryTests() {
     assert(test_input_start_count(fixture) == 1 && test_input_discovery_count(fixture) == 0);
     assert(test_input_discovery_configuration_count(fixture) == 3);
 
+    // Settings can change policy while the input loop and enumeration are live.
+    // Exercise the production SDL-before-host lock order without timing sleeps.
+    std::atomic<bool> inputReady{false}, policyDone{false};
+    std::thread settings([&] {
+        while (!inputReady.load()) std::this_thread::yield();
+        for (int i = 0; i < 500; ++i) {
+            assert(host.setAutomaticDiscovery(false) == S2K_OK);
+            assert(host.setAutomaticDiscovery(true) == S2K_OK);
+            assert(host.instance(first) == original && host.instance(second) == other);
+        }
+        policyDone.store(true);
+    });
+    inputReady.store(true);
+    do {
+        assert(host.pump() == S2K_OK && host.snapshot().count == 2);
+        assert(SDL_GamepadConnected(pad));
+    } while (!policyDone.load());
+    settings.join();
+    assert(test_input_discovery_configuration_count(fixture) == 1003);
+    assert(test_input_start_count(fixture) == 1 && test_input_discovery_count(fixture) == 0);
+
     assert(host.stop() == S2K_OK && !host.snapshot().running);
     assert(!SDL_GamepadConnected(pad));
     SDL_CloseGamepad(pad);
@@ -89,6 +139,7 @@ int main() {
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     assert(SDL_Init(SDL_INIT_GAMEPAD));
+    onDemandPolicyTests();
     automaticDiscoveryTests();
     auto* fixture = test_input_create();
     Switch2Kit::SDLHost host(fixture);

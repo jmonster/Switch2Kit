@@ -47,27 +47,65 @@ Dolphin and Cemu have their own upstream platform support; that does not mean th
 
 ## Developer integration
 
-Requires Swift 6.2+. macOS hosts require macOS 15+ and Xcode 26+; Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md). To use an existing controller-enabled emulator, start with [Start playing](#start-playing).
+The sections below cover adding Switch2Kit to an app, building the optional dashboard, and working on the library. To use an existing controller-enabled emulator, start with [Start playing](#start-playing).
 
 ### C/C++ integration
 
-Use the [C ABI and CMake integration](docs/switch2kit/cpp.md) to embed the same controller engine in a native host without the dashboard. The [emulator integration guide](Integrations/Emulators/README.md) documents pinned source patches, builds, bindings, and motion profiles. Those reference patches can differ from the maintained forks in UI, platforms, and features; use each fork's README for end-user setup.
+Use the [C ABI and CMake integration](docs/switch2kit/cpp.md) to embed the same controller engine in a native host. The host does not need to be written in Swift and does not require the dashboard.
+
+The maintained [Dolphin](https://github.com/jmonster/dolphin) and [Cemu](https://github.com/jmonster/Cemu) forks demonstrate complete app integrations. The separate [emulator integration guide](Integrations/Emulators/README.md) documents pinned source patches, builds, controller bindings, and motion-profile configuration for the SDK's reference integrations. Those patches and the maintained forks can differ in UI, supported platforms, and features; use each fork's README for its end-user setup.
 
 The SDL3 integrations run in the emulator's existing input backend. The emulator owns discovery, Bluetooth permissions, and controller lifecycle; no network bridge, second SDL instance, or system virtual controller is required. Disabled builds retain the emulator's upstream platforms and deployment targets.
 
 ### Library
 
-Add `.package(url: "https://github.com/jmonster/Switch2Kit.git", branch: "main")` and `.product(name: "Switch2Kit", package: "Switch2Kit")` to your SwiftPM host. For a local checkout, use `.package(path: "/path/to/Switch2Kit")`. The [library guide](docs/switch2kit/README.md#minimal-discovery-and-input) contains the complete retained-observation, discovery, input, and shutdown example.
+Requires Swift 6.2+. macOS hosts require macOS 15+ and Xcode 26+; Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md).
+
+```swift
+.package(url: "https://github.com/jmonster/Switch2Kit.git", branch: "main")
+```
+
+Add `.product(name: "Switch2Kit", package: "Switch2Kit")` to your target dependencies. For a local checkout, use `.package(path: "/path/to/Switch2Kit")`.
+
+```swift
+import Switch2Kit
+
+@MainActor
+final class ControllerInput {
+    let manager = Switch2ControllerManager()
+    private var observation: Switch2ControllerObservation?
+
+    func start() throws {
+        observation = try manager.observe(on: .main) { event in
+            if case .input(let controller) = event {
+                print(controller.state.buttons)
+            }
+        }
+        manager.start()
+        try manager.discover(for: 60)
+    }
+
+    func stop() async {
+        await manager.stop()
+        observation?.cancel()
+        observation = nil
+    }
+}
+```
 
 On macOS, the host provides `NSBluetoothAlwaysUsageDescription` and, when sandboxed, `com.apple.security.device.bluetooth`. In-process input needs neither Accessibility permission nor CoreHID. Hold the controller's Sync button while discovery is active.
 
-Raw motion telemetry is available through the library. Calibrated SDL motion requires an explicitly selected [physical motion profile](docs/switch2kit/motion-profiles.md); no measured built-in profiles are supplied. NSO GameCube's soft/strong firmware feedback clips are separate from its on/off game rumble.
+Raw motion telemetry is available through the library. Calibrated SDL motion requires an explicitly selected [physical motion profile](docs/switch2kit/motion-profiles.md); no measured built-in profiles are supplied. NSO GameCube's soft/strong firmware feedback clips are separate from its on/off game rumble. See [controller and feature coverage](docs/switch2kit/coverage.md) for transport, output, and physical-qualification boundaries.
 
-[API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
+[Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
 
 ## Dashboard
 
-The optional macOS dashboard displays live input and manages multiple controllers, Joy-Con pairs, player indicators, rumble, and mappings. It is not needed by the Dolphin and Cemu forks above. With the macOS/Xcode requirements installed:
+The optional macOS dashboard displays live input and manages multiple controllers, Joy-Con pairs, player indicators, rumble, and mappings. It is not needed by the Dolphin and Cemu forks above.
+
+### Build
+
+With the macOS/Xcode requirements above installed, clone this repository and run:
 
 ```sh
 git clone https://github.com/jmonster/Switch2Kit.git
@@ -88,9 +126,11 @@ Package and regression checks (automated tests do not establish physical radio o
 swift build
 swift test
 bash tests/run.sh
-bash tests/linux-bluez/run.sh             # Linux radio integration
-bash scripts/build-switch2kit-demo.sh     # macOS application
-bash scripts/verify-switch2kit-consumer.sh # Independent Swift consumer
+# Linux radio integration tests:
+bash tests/linux-bluez/run.sh
+# macOS application and independent Swift consumer checks:
+bash scripts/build-switch2kit-demo.sh
+bash scripts/verify-switch2kit-consumer.sh
 ```
 
 The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. Swift consumers use SwiftPM source integration; the independent consumer check needs no prebuilt framework. The [distribution note](docs/switch2kit/xcframework.md) covers migration from the standalone Swift XCFramework. The optional C/C++ integration retains its native library build and validation.
