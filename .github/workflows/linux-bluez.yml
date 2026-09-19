@@ -24,7 +24,7 @@ jobs:
       - name: Install test dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 dbus libsystemd0 nodejs
+          apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 dbus libsystemd0 nodejs libx11-dev xvfb openbox wmctrl x11-utils
       - name: Preserve the exact source under test
         run: |
           # The runner owns this bind-mounted checkout, but the Swift container
@@ -43,6 +43,8 @@ jobs:
           swift test -Xswiftc -warnings-as-errors
           bash tests/linux-bluez/run.sh
           bash tests/run.sh
+      - name: Exercise the real isolated X11 observer and readiness regression
+        run: python3 tests/emulator-launch/test_linux_native.py
       - name: Release package tests
         run: swift test -c release -Xswiftc -warnings-as-errors
       - name: Relocated native facade and real C++ consumers
