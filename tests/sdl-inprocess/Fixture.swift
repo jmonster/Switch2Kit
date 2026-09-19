@@ -14,6 +14,8 @@ final class SDLTestSource: ControllerSource {
         var running = false
         var automaticDiscovery = false
         var discoveryConfigurationCount: UInt32 = 0
+        var startCount: UInt32 = 0
+        var discoveryCount: UInt32 = 0
         var stopCompletion: (@Sendable () -> Void)?
     }
     let state = Mutex(State())
@@ -21,7 +23,7 @@ final class SDLTestSource: ControllerSource {
         .init(isRunning: value.running, bluetooth: .poweredOn, discovery: .paused,
               controllers: value.controllers.sorted { $0.key < $1.key }.map(\.value))
     }
-    func start() { state.withLock { $0.running = true; hub.publish(snapshot($0), event: .status(snapshot($0))) } }
+    func start() { state.withLock { $0.startCount += 1; $0.running = true; hub.publish(snapshot($0), event: .status(snapshot($0))) } }
     func stop(completion: @escaping @Sendable () -> Void) {
         state.withLock { value in
             value.running = false; value.stopCompletion = completion
@@ -30,7 +32,7 @@ final class SDLTestSource: ControllerSource {
             hub.publish(snapshot(value), event: .status(snapshot(value)))
         }
     }
-    func discover(seconds: Double) {}
+    func discover(seconds: Double) { state.withLock { $0.discoveryCount += 1 } }
     func setAutomaticDiscovery(_ enabled: Bool) {
         // Record policy intent without simulating Bluetooth or changing ready sessions.
         state.withLock {
@@ -97,4 +99,34 @@ public func fixtureRumble(_ handle: OpaquePointer, _ index: Int32, _ strong: Uns
     let value = source(handle).state.withLock { $0.calls[id] }
     strong.pointee = value?.strong ?? 0; weak.pointee = value?.weak ?? 0
     return value?.count ?? 0
+}
+
+// Native consumer inspection only. These exports are not SDK distribution APIs.
+@_cdecl("test_input_automatic_discovery")
+public func fixtureAutomaticDiscovery(_ handle: OpaquePointer) -> UInt32 {
+    source(handle).state.withLock { $0.automaticDiscovery ? 1 : 0 }
+}
+@_cdecl("test_input_discovery_configuration_count")
+public func fixtureDiscoveryConfigurationCount(_ handle: OpaquePointer) -> UInt32 {
+    source(handle).state.withLock { $0.discoveryConfigurationCount }
+}
+@_cdecl("test_input_start_count")
+public func fixtureStartCount(_ handle: OpaquePointer) -> UInt32 {
+    source(handle).state.withLock { $0.startCount }
+}
+@_cdecl("test_input_discovery_count")
+public func fixtureDiscoveryCount(_ handle: OpaquePointer) -> UInt32 {
+    source(handle).state.withLock { $0.discoveryCount }
+}
+@_cdecl("test_input_finish_stop")
+public func fixtureFinishStop(_ handle: OpaquePointer) -> UInt32 {
+    let completion = source(handle).state.withLock { value in
+        let completion = value.stopCompletion
+        value.stopCompletion = nil
+        return completion
+    }
+    // Deliver after releasing the source lock, as the real asynchronous source does.
+    guard let completion else { return 0 }
+    completion()
+    return 1
 }
