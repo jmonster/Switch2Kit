@@ -165,7 +165,13 @@ set_target_properties(facade PROPERTIES
     def test_stale_staged_runtime_cannot_override_the_selected_compiler(self):
         result = self.stage(self.app, *self.host_arguments())
         self.assertEqual(result.returncode, 0, result.stdout)
-        (self.app / 'fixture_leaf.dll').write_bytes(b'not the selected compiler runtime')
+        staged = self.app / 'fixture_leaf.dll'
+        source = self.runtime / 'fixture_leaf.dll'
+        staged.write_bytes(b'X' * source.stat().st_size)
+        # A stale cache can retain both file size and modification time. The
+        # deployment copy must compare content rather than trust timestamps.
+        source_stat = source.stat()
+        os.utime(staged, ns=(source_stat.st_atime_ns, source_stat.st_mtime_ns))
         result = self.stage(self.app, *self.host_arguments())
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual((self.app / 'fixture_leaf.dll').read_bytes(),
