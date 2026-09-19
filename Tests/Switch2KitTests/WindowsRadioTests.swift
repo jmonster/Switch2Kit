@@ -145,5 +145,76 @@ final class WindowsRadioTests: XCTestCase {
         XCTAssertEqual(p.identifier, same.identifier); XCTAssertNotEqual(p.identifier, other.identifier)
         XCTAssertEqual(p.hostAddressBytesLE, Data([6, 5, 4, 3, 2, 1]))
     }
+    func testContinuousScanReadmitsDisconnectedIdentityAndFencesRetiredToken() throws {
+        let (central, radio, observer) = setup(); defer { central.shutdown() }
+        let p = try connect(central, observer)
+        let retired = p.token
+        // The shared transport stops discovery during a handshake and resumes
+        // it after readiness. A live device may advertise during that new scan.
+        central.stopScan()
+        central.scanForPeripherals(withServices: nil, options: nil)
+        central.receive(advertisement())
+        let before = observer.found.count
+        central.receive(advertisement())
+        XCTAssertEqual(observer.found.count, before)
+        central.receive(event(UInt32(S2W_DISCONNECTED), token: retired))
+        XCTAssertEqual(observer.disconnected, 1)
+        XCTAssertFalse(p.connected); XCTAssertEqual(p.token, 0)
+        XCTAssertTrue(central.isScanning)
+        XCTAssertEqual(observer.found.count, before) // No synthetic rediscovery.
+        central.receive(advertisement())
+        XCTAssertEqual(observer.found.count, before + 1)
+        XCTAssertTrue(observer.found.last === p)
+        central.connect(p, options: nil)
+        let current = p.token
+        XCTAssertGreaterThan(current, retired)
+        central.receive(event(UInt32(S2W_CONNECTED), token: retired))
+        central.receive(event(UInt32(S2W_VALUE), token: retired))
+        central.receive(event(UInt32(S2W_FAILED), token: retired))
+        XCTAssertFalse(p.connected); XCTAssertEqual(p.token, current)
+        XCTAssertEqual(observer.values, 0)
+        XCTAssertEqual(observer.connected, 1)
+        var connected = event(UInt32(S2W_CONNECTED), token: current); connected.flags = 67
+        central.receive(connected)
+        XCTAssertTrue(p.connected); XCTAssertEqual(observer.connected, 2)
+        XCTAssertEqual(radio.scans, [true, false, true])
+    }
+
+    func testFailureAndCancellationDoNotPermanentlySuppressFreshAdvertisements() throws {
+        for failure in [true, false] {
+            let (central, radio, observer) = setup(); defer { central.shutdown() }
+            central.receive(advertisement())
+            let p = try XCTUnwrap(observer.found.first)
+            central.connect(p, options: nil)
+            if failure {
+                central.receive(event(UInt32(S2W_FAILED), token: p.token))
+                XCTAssertEqual(observer.failed, 1)
+            } else {
+                radio.acceptsCancellation = false
+                central.cancelPeripheralConnection(p)
+                XCTAssertEqual(observer.disconnected, 1)
+            }
+            XCTAssertEqual(p.token, 0)
+            XCTAssertEqual(observer.found.count, 1)
+            central.receive(advertisement())
+            XCTAssertEqual(observer.found.count, 2)
+            XCTAssertTrue(observer.found.last === p)
+        }
+    }
+
+    func testTerminalEventsNeverRestartExplicitlyStoppedDiscovery() throws {
+        let (central, radio, observer) = setup(); defer { central.shutdown() }
+        let p = try connect(central, observer)
+        central.stopScan()
+        central.receive(event(UInt32(S2W_DISCONNECTED), token: p.token))
+        let before = observer.found.count
+        central.receive(advertisement())
+        XCTAssertFalse(central.isScanning)
+        XCTAssertEqual(observer.found.count, before)
+        XCTAssertEqual(radio.scans, [true, false])
+        central.shutdown()
+        central.receive(advertisement())
+        XCTAssertEqual(observer.found.count, before)
+    }
 }
 #endif
