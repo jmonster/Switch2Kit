@@ -29,7 +29,7 @@ Writes are bounded to one outstanding D-Bus write per physical device and the ch
 
 ## Native emulators and installation
 
-For playing games, start with the maintained [Dolphin fork](https://github.com/jmonster/dolphin#linux) or [Cemu fork](https://github.com/jmonster/Cemu#linux). Their build helpers enable Switch2Kit and install its native library; no source patches or separate dashboard are needed. Downloads are development builds for the distribution identified by the workflow, not universal Linux binaries.
+For playing games, start with the maintained [Dolphin fork](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#linux) or [Cemu fork](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#linux). Their build helpers enable Switch2Kit and install its native library; no source patches or separate dashboard are needed. Downloads are development builds for the distribution identified by the workflow, not universal Linux binaries.
 
 For the SDK's separate pinned source-patch examples, follow the [Dolphin/Cemu source integration guide](../../Integrations/Emulators/README.md), using Linux dependencies instead of Xcode, Homebrew or MoltenVK. Both optional patches accept Linux with SDL enabled; Dolphin also requires Qt. The build helper selects Linux arguments, builds all enabled upstream installation targets, and retains the targeted macOS bundle build on Apple hosts. The emulator owns the same discovery UI and controller lifecycle; no dashboard is required.
 

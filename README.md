@@ -2,7 +2,7 @@
 
 **Use your Nintendo Switch Online GameCube controller, Nintendo Switch 2 Pro Controller, and Joy-Con 2 in apps and games.**
 
-Switch2Kit provides controller support that any app can integrate on a supported platform. Our [Dolphin](https://github.com/jmonster/dolphin#quick-start) and [Cemu](https://github.com/jmonster/Cemu#quick-start) forks are maintained reference apps with Switch2Kit already built in: get the app, connect your controller, and play. You do not need to install or run Switch2Kit separately.
+Switch2Kit provides controller support that any app can integrate on a supported platform. Our [Dolphin](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#quick-start) and [Cemu](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#quick-start) forks are maintained reference apps with Switch2Kit already built in: get the app, connect your controller, and play. You do not need to install or run Switch2Kit separately.
 
 ## Start playing
 
@@ -10,8 +10,10 @@ Choose the emulator for your games. The maintained forks embed Switch2Kit on **m
 
 | Your games | App with Switch2Kit built in | Get started |
 | --- | --- | --- |
-| GameCube and Wii | [Dolphin fork](https://github.com/jmonster/dolphin) | [Download, connect, and play](https://github.com/jmonster/dolphin#quick-start) |
-| Wii U | [Cemu fork](https://github.com/jmonster/Cemu) | [Download, connect, and play](https://github.com/jmonster/Cemu#quick-start) |
+| GameCube and Wii | [Dolphin fork](https://github.com/jmonster/dolphin) | [Download, connect, and play](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#quick-start) |
+| Wii U | [Cemu fork](https://github.com/jmonster/Cemu) | [Download, connect, and play](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#quick-start) |
+
+The linked setup guides describe the reviewed desktop builds. While [Dolphin #5](https://github.com/jmonster/dolphin/pull/5) or [Cemu #3](https://github.com/jmonster/Cemu/pull/3) is unmerged, select application artifacts from `feature/switch2kit-desktop-platforms`; the forks’ default-branch READMEs may still describe older macOS-only builds. The guides include the exact artifact names, extraction paths, and source-build fallbacks.
 
 1. **Get a controller-enabled app** from the linked fork's README. Use the platform-specific **Switch2Kit** GitHub Actions build linked in that README; downloading artifacts requires signing in to GitHub. Only successful runs with an application artifact provide a download. These are development builds, not published releases. Each README also includes build-and-launch instructions when a download is unavailable.
 2. **Connect over Bluetooth.** Open **Controllers** in Dolphin or **Options > Input settings** in Cemu, click **Find Switch 2 Controllers**, allow Bluetooth access, and hold the controller's **Sync** button. Close other apps managing the same controller first.
