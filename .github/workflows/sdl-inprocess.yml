@@ -1,8 +1,5 @@
 name: In-process SDL3 native consumers
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

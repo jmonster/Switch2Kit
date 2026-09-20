@@ -1,13 +1,5 @@
 name: SDL input regressions
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/sdl-regressions.yml'
-      - 'sdl/**'
-      - 'tests/sdl-edges/**'
-      - 'tests/sdl-pro-controller/**'
-      - 'tests/sdl-usb/**'
-      - 'Integrations/SDL3/VerifyVersion.c'
   workflow_dispatch:
 permissions:
   contents: read

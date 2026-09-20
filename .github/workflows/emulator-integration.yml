@@ -1,6 +1,5 @@
 name: Emulator integration
 on:
-  pull_request:
   workflow_dispatch:
     inputs:
       full_emulators:

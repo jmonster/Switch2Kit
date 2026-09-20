@@ -1,8 +1,5 @@
 name: Linux BlueZ and native hosts
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       full_emulators:

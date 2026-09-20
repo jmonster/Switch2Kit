@@ -1,5 +1,5 @@
 name: Packaged macOS runtime qualification
-# Full qualification is explicit; routine checks live in macos-validation.yml.
+# Full qualification is explicit; routine checks live in ci.yml.
 on:
   workflow_dispatch:
 permissions:

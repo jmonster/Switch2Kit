@@ -1,102 +1,139 @@
-# CI execution and artifact policy
+# CI: one routine workflow, explicit qualification
 
-Routine pull requests validate the SDK, platform transports, and real consumers.
-They do not rebuild and archive complete upstream emulator applications. Full
-application and distribution qualification remains available explicitly.
+`ci.yml` is the only automatic workflow. It checks pull requests, main pushes and merge-queue
+commits; it can also be dispatched manually. The other eight workflow files are
+on-demand qualification tools, not eight independent per-commit build pipelines.
 
-## Routine checks
+## Routine budget
 
-| Workflow | Automatic work |
+| Lane | Work | Job timeout |
+| --- | --- | ---: |
+| Preflight | CI-policy tests, repository links/identity, notices, signing guards, source boundaries, complete-PR change classification | 2 min |
+| macOS 26 | Complete `tests/run.sh` (Swift package plus every portable shell suite), independent public Swift consumer, real demo/app, signing and current-runtime probe | 8 min |
+| Linux / Swift 6.2.1 | Package tests, private-D-Bus BlueZ transport tests, one real SDL build for the adapter and automatic-discovery host consumers | 8 min |
+| Windows 2022 / Swift 6.2.1 | Native WinRT transport/package tests and release C facade | 8 min |
+| CI gate | Verify all expected outcomes, including intentional docs-only skips | 1 min |
+
+Preflight must succeed before any compiler runner is allocated. The three native
+lanes then run in parallel. All runs cancel superseded work for the same PR/ref.
+There are no retries, extra automatic matrices, or scheduled qualification runs.
+
+The configured maximum is **27 aggregate job-timeout minutes**, down from 230 in
+the first cost-control revision and 925 in the original main configuration, per PR.
+That is an 88.3% reduction from the first revision, or 97.1% from the original.
+These are timeout budgets, not measured execution time, billable minutes, or
+invoice savings. A PR followed by a main push has two bounded runs (up to 54
+aggregate timeout minutes), not one. They do not cap runner queue/provisioning delays. A native job
+exceeding eight minutes fails; the limit must not be mistaken for evidence that
+the revised suite already passed within it.
+
+Known documentation-only PR/main changes run just preflight and the gate: **two cheap
+Linux jobs, zero compiler jobs, three aggregate timeout minutes**. The entire PR
+merge-base diff is examined, not only its latest commit. Main pushes use the
+complete before/after diff. Rename deletions are
+included. Unknown paths, missing Git history, empty diffs, workflow changes,
+source/test/build inputs, and material license changes conservatively run native
+checks. Manual and merge-queue runs always run all three native lanes. Cheap
+repository/link/notice/identity checks still run for documentation changes.
+
+Do not replace this with a workflow-level `paths-ignore`: required workflows can
+remain pending when filtered out. The always-reporting `CI gate` rejects failed,
+cancelled, missing, or unexpectedly skipped jobs. `.github/ci/test_policy.py`
+checks the budget, event policy, native coverage, dependency pins, artifact
+policy, whole-PR/rename selection, and all 512 success/failure/cancel/skip gate
+combinations. Policy tests run in preflight before expensive jobs.
+
+## What is no longer rebuilt on every PR
+
+The full portable shell suite runs once on macOS instead of again on Linux.
+Linux retains its actual platform transport and real SDL/SDLHost integration
+checks. Routine Windows retains the baseline compiler and real WinRT tests,
+without rebuilding SDL and extracted consumers on two toolchains. Routine macOS
+no longer adds separate Intel/ARM SDL builds or an upstream motion-consumer job.
+The SDL before/after patch rebuild, Linux release/relocation/X11 qualification,
+and full application/distribution matrices are explicit work below.
+
+No production code or existing test assertion is removed. The eight existing
+qualification workflows retain their job definitions, dependency pins, and
+matrices. Moving work out of automatic CI is a coverage tradeoff, not proof that
+the omitted configurations passed. Routine green CI does not establish full
+platform compatibility, full emulator integration, or physical-controller and
+gameplay acceptance.
+
+## Required check and direct-main policy
+
+Use `CI gate` as the routine required check, after its new-head run succeeds.
+Retire requirements referring to the now-manual workflow jobs when adopting this
+policy; do not treat absent old checks as passes. This source change does not
+modify branch protection or merge anything.
+
+The audit found main unprotected, with no required-check contexts or rulesets.
+Therefore main pushes retain the same bounded pipeline: direct commits must not
+silently bypass validation. There is no feature-branch push trigger duplicating
+PR events. A PR merge intentionally validates its resulting main commit again.
+Merge queues are supported by `merge_group` and validate their integration
+commits with all native lanes. Configure `CI gate` as a required check to enforce
+this policy at merge time; publishing this PR does not configure that setting.
+
+## Explicit qualification
+
+Run the relevant workflows before distributing artifacts or asserting support,
+and when reviewing their affected integration/packaging/toolchain changes:
+
+| Workflow file | Qualification retained |
 | --- | --- |
-| `macos-validation.yml` | Strict Swift build, public Swift consumer, demo, package/output regressions, signed development bundle, and the existing packaged runtime probe on macOS 26. |
-| `linux-bluez.yml` | Package/BlueZ tests, release tests, relocation, X11 observer, and the combined SDL/SDLHost native suite. Also runs on main pushes. |
-| `windows-native.yml` | Both existing Windows/Swift toolchains, native transport, C/SDL consumers, and relocated runtime checks. |
-| `sdl-inprocess.yml` | Both macOS architectures; one unrelated checkout path containing spaces, rather than three fresh builds of the same tests on each runner. |
-| `emulator-integration.yml` | The native host and actual pinned Cemu/Dolphin motion consumers, not the complete applications. |
-| `sdl-regressions.yml` | Before/after SDL patch regressions, only when this workflow or its SDL/test/version-check inputs change. |
+| `macos-validation.yml` | Full development-app packaging and requested artifact |
+| `linux-bluez.yml` | Full portable/release, relocation (lib/lib64), X11 and SDLHost checks; optional complete Dolphin/Cemu builds |
+| `windows-native.yml` | Both Windows/Swift toolchains, real C/SDL consumers and extracted-runtime negative controls |
+| `sdl-inprocess.yml` | Both Mac architectures and unrelated checkout paths containing spaces |
+| `sdl-regressions.yml` | Before/after SDL patch regressions and requested corrected SDL library |
+| `emulator-integration.yml` | Pinned actual upstream motion consumers; optional four full Mac apps and four clean-runner launch checks |
+| `runtime-qualification.yml` | Full four-entry macOS version/architecture runtime matrix |
+| `switch2kit-distribution.yml` | Universal C ABI/XCFramework and independent consumers |
 
-The former concurrency workflow's warnings-as-errors build and the distribution
-workflow's source-boundary/public Swift consumer checks now live in macOS
-validation. `tests/run.sh` still runs the package and every `tests/*/run.sh`
-suite; Linux no longer invokes the package and BlueZ suites twice.
+For C ABI, SDL or host integration changes, review the relevant Windows/macOS
+native qualifications as well as routine Linux coverage. Packaging, deployment,
+X11 or loader changes need the affected platform's full workflow. Emulator patch
+or dependency-pin changes need the real upstream consumers/full apps. These are
+explicit reviewer qualification obligations, not automatic path-enforced gates.
 
-The former SDLHost workflow is folded into Linux validation:
-`tests/emulator-host/CMakeLists.txt` includes `tests/sdl-inprocess`, so its native
-build executes both suites without building SDL again in a separate workflow.
-No production code or test assertions are removed.
-
-Core checks deliberately still run for all PRs. Broad documentation exclusions
-could silently skip license/notice or repository checks. Only the isolated SDL
-patch workflow has a narrow path filter; do not make that path-filtered workflow
-a required check without arranging an always-reporting gate.
-
-## Explicit full qualification
-
-Use Actions > Run workflow on the branch being qualified. For the two emulator
-workflows, `full_emulators` defaults to **false**. Only explicitly setting it to
-true enables full upstream builds, after their baseline job succeeds:
+Examples (replace `main` with the reviewed branch and verify the resolved SHA):
 
 ```sh
+gh workflow run ci.yml --ref main
+gh workflow run windows-native.yml --ref main
+gh workflow run sdl-inprocess.yml --ref main
+gh workflow run linux-bluez.yml --ref main
 gh workflow run emulator-integration.yml --ref main -f full_emulators=true
 gh workflow run linux-bluez.yml --ref main -f full_emulators=true
 gh workflow run runtime-qualification.yml --ref main
 gh workflow run switch2kit-distribution.yml --ref main
 ```
 
-Replace `main` with the branch being reviewed and verify the resolved commit SHA
-in the run. The Mac emulator workflow retains all four application builds and
-all four separate clean-runner launch checks. Linux retains both complete
-emulator builds and relocation inspections. The runtime workflow retains all
-four macOS version/architecture combinations; distribution retains the universal
-C ABI/XCFramework and independent consumers.
+The two `full_emulators` inputs default to false. Heavy application jobs depend
+on their baseline qualification job succeeding. Do not dispatch every manual
+workflow for a prose or routine CI-policy change.
 
-Run the relevant full workflows before distributing artifacts or asserting full
-platform compatibility, and when reviewing emulator patches, packaging, deployment
-targets, toolchains, or pinned dependency updates. They are intentionally **not**
-automatic merge gates: routine green CI alone does not establish full application,
-minimum-OS, hardware, or gameplay qualification. No scheduled full builds are added.
+## Evidence, storage and billing limits
 
-For only a development app, dispatch `macos-validation.yml`. The SDL patch
-workflow also publishes its corrected library when explicitly dispatched.
+Historical step timing informed the split; it is not a benchmark of this change.
+On September 19, 2026, macOS run `35460054677` spent 4m39s executing after roughly
+30 minutes queued. Windows run `35452827984` used 8m36s / 9m13s across its two
+jobs; native package/release steps took 2m43s / 2m12s, while C/SDL builds added
+4m14s / 5m18s. Linux run `35452827978` spent 9m35s in its baseline job, including
+repeated portable, release and relocation work. Re-measure the new exact head;
+do not relabel these historical successes as new-head CI results.
 
-## Storage and cancellation
+Successful routine runs upload no artifacts and add no build cache. Failed Linux
+and Windows native lanes retain small logs for one day. Manual workflow artifact
+retention remains bounded at one to seven days. Normal Actions logs remain
+available. No stale artifacts are deleted and no already-accrued charges change.
 
-Successful automatic PR/main runs upload no artifacts. Failed native-host, SDL
-patch, and Windows runs retain small diagnostics for three days; ordinary Actions
-logs remain available. Repeated SDK and SDL source archives are removed from
-routine runs; the checkout/dependency SHAs identify the tested inputs.
+The repository was public with standard hosted runners at the audit; GitHub's
+billing documentation distinguishes their free public-repository compute from
+storage and other charged SKUs. No account invoice was accessible through this
+repository audit. No dollar savings are inferred from these timeout budgets.
 
-Explicit Mac emulator builds retain intermediate apps, upstream source archives,
-and diagnostics for one day, including the artifacts consumed by launch jobs.
-Requested SDK app/universal distributions and runtime reports are retained for
-seven days. Linux/Windows diagnostics and the requested SDL library use three days.
-Every workflow cancels superseded runs on the same ref and every job has a timeout.
-
-Changing these workflows affects future uploads, not existing artifacts or
-previously accrued charges. This change does not delete old artifacts, change
-account billing/budgets, or merge itself.
-
-## Audit baseline and billing caveat
-
-At main `d9129e3876f0d68aa7d13395dcff8e2abb38d609` (2026-09-19), ten workflows
-could schedule 25 jobs per PR, with a sum of configured job timeouts of 925
-runner-minutes. This policy has six automatic workflows and at most eight
-runner jobs (seven when the SDL patch workflow is not relevant), with a sum of
-230 configured timeout minutes. That is 68% fewer potential automatic jobs and
-about 75% less timeout exposure, **not measured runtime or invoice savings**.
-The two remaining workflows are manual-only. Skipped qualification jobs do not
-allocate runners.
-
-This repository was public at the audit, and its runner labels were standard
-GitHub-hosted labels, not paid larger runners. GitHub documents standard-runner
-compute as free for public repositories. High run counts are waste and queue
-pressure, but are not by themselves evidence of invoiced compute charges.
-Actual billing attribution requires the account's usage by repository and SKU;
-artifact storage, cache allowance/settings, and historical billing must be checked
-separately. No invoice total is inferred from workflow elapsed time.
-
-References:
-- [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
-- [Standard runner labels](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
-- [Usage details and reports](https://docs.github.com/en/billing/how-tos/products/view-productlicense-use)
-- [Budgets and spending controls](https://docs.github.com/en/billing/how-tos/set-up-budgets)
+References: [workflow filtering](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow),
+[concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+[Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
