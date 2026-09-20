@@ -22,14 +22,17 @@ jobs:
           git rev-parse HEAD
           swift --version
           xcodebuild -version
-          git archive HEAD -o "$RUNNER_TEMP/source.zip"
       - name: Describe and build the Swift package with Apple SDKs
         run: |
+          python3 scripts/switch2kit/check-boundaries.py
           swift package describe
-          swift build
+          swift build -Xswiftc -warnings-as-errors
+      - name: Compile the independent public Swift source consumer
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/scripts/verify-switch2kit-consumer.sh"
       - name: Build the independent example and its Bluetooth host bundle
         run: |
-          swift build --product Switch2KitDemo
           bash scripts/build-switch2kit-demo.sh
       - name: Run Swift 6 package and output regressions (no radio required)
         run: bash tests/run.sh
@@ -38,18 +41,14 @@ jobs:
           bash scripts/build-app.sh
           codesign --verify --strict "build/Switch2Kit.app"
           plutil -lint "build/Switch2Kit.app/Contents/Info.plist"
+      - name: Qualify the already-built app on this runtime without Bluetooth
+        run: bash scripts/check-runtime.sh
       - name: Verify and package the tested development app
         run: bash scripts/package-dev.sh
-      - name: Preserve the tested application
+      - name: Preserve the explicitly requested development application
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: switch2kit-development-app
           path: build/distribution/
-          retention-days: 14
-      - name: Preserve exact tested source
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: tested-source
-          path: ${{ runner.temp }}/source.zip
           retention-days: 7

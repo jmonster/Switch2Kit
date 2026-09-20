@@ -2,6 +2,11 @@ name: Emulator integration
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      full_emulators:
+        description: Build and qualify complete emulator applications (expensive)
+        type: boolean
+        default: false
 permissions:
   contents: read
 env:
@@ -48,6 +53,9 @@ jobs:
           S2K_DOLPHIN_SOURCE: ${{ github.workspace }}/build/Dolphin-motion
         run: bash tests/emulator-host/verify.sh
   native:
+    # Full upstream application builds are qualification, not per-commit tests.
+    if: github.event_name == 'workflow_dispatch' && inputs.full_emulators
+    needs: host
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -107,7 +115,7 @@ jobs:
           name: ${{ matrix.emulator }}-pinned-source
           path: ${{ runner.temp }}/${{ matrix.emulator }}-source.zip
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
       - name: Install native build tools
         env:
           EMULATOR: ${{ matrix.emulator }}
@@ -190,17 +198,18 @@ jobs:
             build/emulator-build/vcpkg-manifest-install.log
             build/emulator-build/**/Info.plist
             build/emulator-source/bin/**/Info.plist
-          retention-days: 7
+          retention-days: 1
       - name: Preserve the built emulator
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ${{ matrix.emulator }}-${{ matrix.architecture }}-switch2kit-app
           path: build/emulator-build/integration-app.zip
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   launch:
     # A different runner: application build dependencies must not leak from native.
+    if: github.event_name == 'workflow_dispatch' && inputs.full_emulators
     needs: native
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
@@ -251,4 +260,4 @@ jobs:
           name: ${{ matrix.emulator }}-${{ matrix.architecture }}-gui-launch
           path: build/launch-result
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1

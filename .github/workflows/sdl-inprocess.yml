@@ -28,31 +28,20 @@ jobs:
           path: build/SDL
           persist-credentials: false
       - name: Record exact input dependency
-        if: matrix.os == 'macos-26'
-        run: |
-          test "$(git -C build/SDL rev-parse HEAD)" = fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
-          git -C build/SDL archive HEAD -o "$RUNNER_TEMP/sdl-source.zip"
-      - name: Preserve pinned SDL source for reproductions
-        if: matrix.os == 'macos-26'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: sdl-inprocess-source
-          path: ${{ runner.temp }}/sdl-source.zip
-          retention-days: 3
-      - name: Verify native consumers across checkout names from outside the repository
+        run: test "$(git -C build/SDL rev-parse HEAD)" = fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
+      - name: Verify native consumers from an unrelated checkout path with spaces
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
           S2K_EXPECT_SDL_VERSION: 3004016
         run: |
           work=$(mktemp -d)
           trap 'rm -rf "$work"' EXIT
-          for name in Switch2Kit unrelated-sdk 'Native SDK-checkout'; do
-            checkout="$work/$name"
-            mkdir "$checkout"
-            git archive HEAD | tar -x -C "$checkout"
-            (
-              cd "$work"
-              bash "$checkout/tests/c-consumer/run.sh"
-              bash "$checkout/tests/sdl-inprocess/verify.sh"
-            )
-          done
+          # A noncanonical name with whitespace also covers the quoting regression.
+          checkout="$work/Native SDK-checkout"
+          mkdir "$checkout"
+          git archive HEAD | tar -x -C "$checkout"
+          (
+            cd "$work"
+            bash "$checkout/tests/c-consumer/run.sh"
+            bash "$checkout/tests/sdl-inprocess/verify.sh"
+          )

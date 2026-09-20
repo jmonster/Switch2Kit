@@ -1,8 +1,6 @@
 name: Packaged macOS runtime qualification
+# Full qualification is explicit; routine checks live in macos-validation.yml.
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -52,4 +50,4 @@ jobs:
           name: runtime-${{ matrix.runner }}
           path: build/runtime-qualification.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7

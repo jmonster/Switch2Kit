@@ -75,7 +75,7 @@ jobs:
           python tests/c-consumer/relocate-windows.py --c-build build-c --sdl-build build-sdl 2>&1 | Tee-Object windows-relocation.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve native diagnostics
-        if: always()
+        if: failure() || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-native-diagnostics-${{ matrix.swift }}
@@ -83,4 +83,4 @@ jobs:
             windows-*.log
             windows-relocation.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 3
