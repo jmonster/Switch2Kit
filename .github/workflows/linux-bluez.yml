@@ -1,7 +1,11 @@
 name: Linux BlueZ and native hosts
 on:
-  pull_request:
   workflow_dispatch:
+    inputs:
+      full_emulators:
+        description: Build and qualify complete emulator applications (expensive)
+        type: boolean
+        default: false
 permissions:
   contents: read
 defaults:
@@ -25,23 +29,16 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 dbus libsystemd0 nodejs libx11-dev xvfb openbox wmctrl x11-utils
-      - name: Preserve the exact source under test
+      - name: Trust the container checkout and record its revision
         run: |
           # The runner owns this bind-mounted checkout, but the Swift container
           # runs as root. Trust this checkout only, including later layout tests.
           git config --global --add safe.directory "$PWD"
-          git archive HEAD -o "$RUNNER_TEMP/switch2kit-tested-source.zip"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: linux-tested-source
-          path: ${{ runner.temp }}/switch2kit-tested-source.zip
-          retention-days: 7
-          if-no-files-found: error
+          git rev-parse HEAD
       - name: Package, Linux radio and retained portable regressions
         run: |
           swift --version
-          swift test -Xswiftc -warnings-as-errors
-          bash tests/linux-bluez/run.sh
+          # tests/run.sh already runs both the package and Linux BlueZ tests.
           bash tests/run.sh
       - name: Exercise the real isolated X11 observer and readiness regression
         run: python3 tests/emulator-launch/test_linux_native.py
@@ -58,12 +55,23 @@ jobs:
           ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
           path: build/SDL
           persist-credentials: false
-      - name: Real SDL consumer on Linux
+      - name: Real SDL and automatic-discovery host consumers on Linux
         env:
           S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
           S2K_EXPECT_SDL_VERSION: 3004016
-        run: bash tests/sdl-inprocess/verify.sh
+        # emulator-host includes the sdl-inprocess CMake project and its tests.
+        run: bash tests/emulator-host/verify.sh 2>&1 | tee native-host.log
+      - name: Preserve failed native-host diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-native-host-diagnostics
+          path: native-host.log
+          if-no-files-found: warn
+          retention-days: 3
   dolphin:
+    if: github.event_name == 'workflow_dispatch' && inputs.full_emulators
+    needs: linux
     runs-on: ubuntu-24.04
     container: swift:6.2.1-noble
     timeout-minutes: 60
@@ -121,9 +129,11 @@ jobs:
             build/linux-installed-runtime.txt
             build/dolphin-build/integration-sdl-version.txt
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 3
 
   cemu:
+    if: github.event_name == 'workflow_dispatch' && inputs.full_emulators
+    needs: linux
     runs-on: ubuntu-24.04
     container: swift:6.2.1-noble
     timeout-minutes: 90
@@ -196,4 +206,4 @@ jobs:
             build/cemu-build/CMakeFiles/CMakeConfigureLog.yaml
             build/cemu-build/vcpkg-manifest-install.log
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 3

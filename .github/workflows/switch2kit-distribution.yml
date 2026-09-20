@@ -1,8 +1,6 @@
 name: Swift source and native C distribution
+# Full qualification is explicit; routine checks live in ci.yml.
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +33,7 @@ jobs:
           path: |
             build/Switch2KitC.xcframework.zip
             build/Switch2KitC.xcframework.zip.sha256
-          retention-days: 14
+          retention-days: 7
       - name: Preserve build and inspection diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

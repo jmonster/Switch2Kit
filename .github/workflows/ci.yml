@@ -1,0 +1,152 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      native: ${{ steps.changes.outputs.native }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate CI policy and cheap repository checks before allocating compilers
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-policy"
+          "$RUNNER_TEMP/ci-policy/bin/pip" install --disable-pip-version-check --only-binary=:all: PyYAML==6.0.3
+          "$RUNNER_TEMP/ci-policy/bin/python" -m unittest discover -s .github/ci -p 'test_*.py' -v
+          bash tests/repository/run.sh
+          bash tests/distribution-notices/run.sh
+          bash tests/app-identity/run.sh
+          python3 scripts/switch2kit/check-boundaries.py
+      - name: Classify the complete change, conservatively
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 .github/ci/policy.py plan
+  macos:
+    needs: preflight
+    if: needs.preflight.outputs.native == 'true'
+    runs-on: macos-26
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Package and complete portable regression suite, once
+        run: |
+          swift --version
+          xcodebuild -version
+          # Includes swift test with warnings as errors and every tests/*/run.sh.
+          bash tests/run.sh
+      - name: Independent public Swift consumer
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/scripts/verify-switch2kit-consumer.sh"
+      - name: Real demo, app identity, signing and current-runtime probe
+        run: |
+          bash scripts/build-switch2kit-demo.sh
+          bash scripts/build-app.sh
+          codesign --verify --strict "build/Switch2Kit.app"
+          plutil -lint "build/Switch2Kit.app/Contents/Info.plist"
+          bash scripts/check-runtime.sh
+  linux:
+    needs: preflight
+    if: needs.preflight.outputs.native == 'true'
+    runs-on: ubuntu-24.04
+    container: swift:6.2.1-noble
+    timeout-minutes: 8
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install only native-test dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 dbus libsystemd0 pkg-config
+          git config --global --add safe.directory "$PWD"
+      - name: Linux package and private-D-Bus transport regressions
+        run: |
+          swift --version
+          swift test -Xswiftc -warnings-as-errors
+          bash tests/linux-bluez/run.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: libsdl-org/SDL
+          ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
+          path: build/SDL
+          persist-credentials: false
+      - name: One real SDL build covers the adapter and automatic-discovery host
+        env:
+          S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+          S2K_EXPECT_SDL_VERSION: 3004016
+        run: bash tests/emulator-host/verify.sh 2>&1 | tee native-host.log
+      - name: Retain failed native-host diagnostics only
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-linux-native-host
+          path: native-host.log
+          if-no-files-found: warn
+          retention-days: 1
+  windows:
+    needs: preflight
+    if: needs.preflight.outputs.native == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: compnerd/gha-setup-swift@397094e75494a93fa8d81db0268dbc8f5d6cf7c6
+        with:
+          swift-version: swift-6.2.1-release
+          swift-build: 6.2.1-RELEASE
+      - name: Native WinRT transport, package tests and release facade on the baseline compiler
+        shell: pwsh
+        run: |
+          swift --version
+          swift test -Xswiftc -warnings-as-errors 2>&1 | Tee-Object windows-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          swift build -c release --product Switch2KitC 2>&1 | Tee-Object windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain failed native transport diagnostics only
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-windows-native
+          path: windows-*.log
+          if-no-files-found: warn
+          retention-days: 1
+  gate:
+    name: CI gate
+    needs: [preflight, macos, linux, windows]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Fail closed on failed, cancelled or unexpectedly skipped checks
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 .github/ci/policy.py gate

@@ -1,9 +1,11 @@
 name: SDL input regressions
 on:
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: sdl-regressions-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   sdl:
     runs-on: macos-26
@@ -57,13 +59,14 @@ jobs:
           cc -I .ci-sdl/include tests/sdl-pro-controller/check.c -L "$RUNNER_TEMP/sdl-build" -Wl,-rpath,"$RUNNER_TEMP/sdl-build" -lSDL3 -o "$RUNNER_TEMP/check-pro"
           DYLD_LIBRARY_PATH="$GITHUB_WORKSPACE/build/sdl" "$RUNNER_TEMP/check-pro"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
+        if: failure()
         with:
           name: sdl-build-diagnostics
           path: ${{ runner.temp }}/sdl-*.log
-          retention-days: 7
+          retention-days: 3
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: corrected-sdl-arm64
           path: build/sdl/libSDL3.0.dylib
-          retention-days: 7
+          retention-days: 3
