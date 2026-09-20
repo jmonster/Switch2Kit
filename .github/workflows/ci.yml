@@ -55,6 +55,10 @@ jobs:
           xcodebuild -version
           # Includes swift test with warnings as errors and every tests/*/run.sh.
           bash tests/run.sh
+      - name: Actual Swift package on iOS Simulator and device
+        run: |
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-simulator CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS' -derivedDataPath build/ios-device CODE_SIGNING_ALLOWED=NO build
       - name: Independent public Swift consumer
         run: |
           cd "$RUNNER_TEMP"
