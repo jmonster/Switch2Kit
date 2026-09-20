@@ -1,0 +1,111 @@
+name: iOS package portability workbench
+on:
+  push:
+    branches: [maintenance/ios-package-port]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 6b5cba6233b21fca1020570e96b1bf247ba21f1e
+          persist-credentials: false
+      - name: Apply the SDK-owned platform correction
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('Package.swift')
+          p.write_text(p.read_text().replace('platforms: [.macOS(.v15)]', 'platforms: [.iOS(.v18), .macOS(.v15)]'))
+          p=Path('Sources/Switch2Kit/Bluetooth/ControllerSession.swift')
+          s=p.read_text().replace('import IOBluetooth\n', '#if canImport(IOBluetooth)\nimport IOBluetooth\n#endif\n')
+          s=s.replace('        guard let addr = IOBluetoothHostController.default()?.addressAsString() else {', '        #if canImport(IOBluetooth)\n        guard let addr = IOBluetoothHostController.default()?.addressAsString() else {')
+          s=s.replace('        return Data(parts.reversed())\n', '        return Data(parts.reversed())\n        #else\n        // CoreBluetooth does not expose the local adapter address on iOS.\n        // Keep Sync-mode connections available without writing a fabricated bond.\n        return nil\n        #endif\n')
+          p.write_text(s)
+          Path('Tests/Switch2KitTests/ApplePlatformTests.swift').write_text('''#if canImport(CoreBluetooth)
+          import XCTest
+          @testable import Switch2Kit
+
+          final class ApplePlatformTests: XCTestCase {
+              @MainActor
+              func testConstructionDoesNotStartTheRadio() {
+                  let manager = Switch2ControllerManager()
+                  XCTAssertFalse(manager.currentSnapshot.isRunning)
+                  XCTAssertTrue(manager.currentSnapshot.controllers.isEmpty)
+              }
+
+              func testHostAddressIsAbsentWithoutIOBluetooth() {
+                  #if !canImport(IOBluetooth)
+                  XCTAssertNil(HostBluetooth.macAddressBytesLE)
+                  #endif
+              }
+          }
+          #endif
+          ''')
+          Path('docs/switch2kit/ios.md').write_text('''# iOS package integration
+
+          The `Switch2Kit` library product can be imported directly by iOS/iPadOS 18+
+          applications built with Swift 6.2 or newer. No replacement manifest, copied
+          sources, SDL adapter, or macOS application target is required. Add this
+          repository as a Swift package dependency and select its `Switch2Kit` product.
+
+          The host app supplies `NSBluetoothAlwaysUsageDescription`, owns its controller
+          manager and observation, and stops or suspends input with its scene lifecycle.
+          See [the public API](api.md) and [delivery contract](concurrency-and-logging.md).
+
+          CoreBluetooth on iOS does not expose the local Bluetooth adapter address.
+          Address lookup therefore returns `nil`; the existing handshake skips the
+          address-dependent protocol bond rather than inventing one. Use explicit
+          `start()` / `discover(for:)` and the controller's Sync button. Automatic
+          button-wake reconnection is not promised. This is compile-supported,
+          experimental integration, not physical pairing/gameplay qualification.
+
+          The normal macOS CI lane also compiles the actual library for both iOS
+          Simulator architectures and the device SDK. Existing desktop tests and
+          transport behavior remain unchanged.
+          ''')
+          PY
+          git add Package.swift Sources/Switch2Kit/Bluetooth/ControllerSession.swift Tests/Switch2KitTests/ApplePlatformTests.swift docs/switch2kit/ios.md
+          git diff --cached --check
+      - name: Test actual package on macOS
+        run: swift test -Xswiftc -warnings-as-errors > macos-tests.log 2>&1
+      - name: Build actual package for iOS Simulator and device
+        run: |
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-simulator CODE_SIGNING_ALLOWED=NO build > ios-simulator.log 2>&1
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS' -derivedDataPath build/ios-device CODE_SIGNING_ALLOWED=NO build > ios-device.log 2>&1
+      - name: Export tested change
+        run: git diff --cached --binary > sdk.patch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sdk-portability-validation
+          path: |
+            *.log
+            sdk.patch
+          retention-days: 1
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 6b5cba6233b21fca1020570e96b1bf247ba21f1e
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-portability-validation
+          path: /tmp/sdk-validation
+      - name: Publish only the natively validated source change
+        run: |
+          git apply --index /tmp/sdk-validation/sdk.patch
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Support direct Swift package consumption on iOS'
+          git push origin HEAD:refs/heads/ios/package-support
