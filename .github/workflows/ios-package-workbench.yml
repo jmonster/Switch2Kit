@@ -1,111 +1,138 @@
-name: iOS package portability workbench
+name: SDK package compatibility validation
 on:
   push:
     branches: [maintenance/ios-package-port]
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 jobs:
-  validate:
-    runs-on: macos-15
-    timeout-minutes: 15
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 6b5cba6233b21fca1020570e96b1bf247ba21f1e
+          ref: de2514bc687df810ea804449c8d5c0e88c4702bd
           persist-credentials: false
-      - name: Apply the SDK-owned platform correction
+      - name: Existing policy and repository checks
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ci-policy"
+          "$RUNNER_TEMP/ci-policy/bin/pip" install --disable-pip-version-check --only-binary=:all: PyYAML==6.0.3
+          "$RUNNER_TEMP/ci-policy/bin/python" -m unittest discover -s .github/ci -p 'test_*.py' -v
+          bash tests/repository/run.sh
+          bash tests/distribution-notices/run.sh
+          bash tests/app-identity/run.sh
+          python3 scripts/switch2kit/check-boundaries.py
+  macos:
+    needs: preflight
+    runs-on: macos-26
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: de2514bc687df810ea804449c8d5c0e88c4702bd
+          persist-credentials: false
+      - name: Existing complete package and portable regression suite
+        run: |
+          swift --version
+          xcodebuild -version
+          bash tests/run.sh
+      - name: Actual package on iOS Simulator and device
+        run: |
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-simulator CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS' -derivedDataPath build/ios-device CODE_SIGNING_ALLOWED=NO build
+      - name: Existing independent public Swift consumer
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/scripts/verify-switch2kit-consumer.sh"
+      - name: Existing demo, app, signing and runtime checks
+        run: |
+          bash scripts/build-switch2kit-demo.sh
+          bash scripts/build-app.sh
+          codesign --verify --strict "build/Switch2Kit.app"
+          plutil -lint "build/Switch2Kit.app/Contents/Info.plist"
+          bash scripts/check-runtime.sh
+  linux:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    container: swift:6.2.1-noble
+    timeout-minutes: 8
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: de2514bc687df810ea804449c8d5c0e88c4702bd
+          persist-credentials: false
+      - name: Existing native-test dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build make g++ python3 dbus libsystemd0 pkg-config
+          git config --global --add safe.directory "$PWD"
+      - name: Existing Linux package and private-D-Bus regressions
+        run: |
+          swift --version
+          swift test -Xswiftc -warnings-as-errors
+          bash tests/linux-bluez/run.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: libsdl-org/SDL
+          ref: fa2c02bb6e21974a89ea9824bc53c9932abe5f9c
+          path: build/SDL
+          persist-credentials: false
+      - name: Existing real SDL host and adapter checks
+        env:
+          S2K_SDL_SOURCE: ${{ github.workspace }}/build/SDL
+          S2K_EXPECT_SDL_VERSION: 3004016
+        run: bash tests/emulator-host/verify.sh 2>&1 | tee native-host.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: linux-native-host
+          path: native-host.log
+          retention-days: 1
+  windows:
+    needs: preflight
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: de2514bc687df810ea804449c8d5c0e88c4702bd
+          persist-credentials: false
+      - uses: compnerd/gha-setup-swift@397094e75494a93fa8d81db0268dbc8f5d6cf7c6
+        with:
+          swift-version: swift-6.2.1-release
+          swift-build: 6.2.1-RELEASE
+      - name: Existing WinRT package and release facade checks
+        shell: pwsh
+        run: |
+          swift --version
+          swift test -Xswiftc -warnings-as-errors 2>&1 | Tee-Object windows-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          swift build -c release --product Switch2KitC 2>&1 | Tee-Object windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: windows-native
+          path: windows-*.log
+          retention-days: 1
+  result:
+    needs: [preflight, macos, linux, windows]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require every native platform to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
         run: |
           python3 - <<'PY'
-          from pathlib import Path
-          p=Path('Package.swift')
-          p.write_text(p.read_text().replace('platforms: [.macOS(.v15)]', 'platforms: [.iOS(.v18), .macOS(.v15)]'))
-          p=Path('Sources/Switch2Kit/Bluetooth/ControllerSession.swift')
-          s=p.read_text().replace('import IOBluetooth\n', '#if canImport(IOBluetooth)\nimport IOBluetooth\n#endif\n')
-          s=s.replace('        guard let addr = IOBluetoothHostController.default()?.addressAsString() else {', '        #if canImport(IOBluetooth)\n        guard let addr = IOBluetoothHostController.default()?.addressAsString() else {')
-          s=s.replace('        return Data(parts.reversed())\n', '        return Data(parts.reversed())\n        #else\n        // CoreBluetooth does not expose the local adapter address on iOS.\n        // Keep Sync-mode connections available without writing a fabricated bond.\n        return nil\n        #endif\n')
-          p.write_text(s)
-          Path('Tests/Switch2KitTests/ApplePlatformTests.swift').write_text('''#if canImport(CoreBluetooth)
-          import XCTest
-          @testable import Switch2Kit
-
-          final class ApplePlatformTests: XCTestCase {
-              @MainActor
-              func testConstructionDoesNotStartTheRadio() {
-                  let manager = Switch2ControllerManager()
-                  XCTAssertFalse(manager.currentSnapshot.isRunning)
-                  XCTAssertTrue(manager.currentSnapshot.controllers.isEmpty)
-              }
-
-              func testHostAddressIsAbsentWithoutIOBluetooth() {
-                  #if !canImport(IOBluetooth)
-                  XCTAssertNil(HostBluetooth.macAddressBytesLE)
-                  #endif
-              }
-          }
-          #endif
-          ''')
-          Path('docs/switch2kit/ios.md').write_text('''# iOS package integration
-
-          The `Switch2Kit` library product can be imported directly by iOS/iPadOS 18+
-          applications built with Swift 6.2 or newer. No replacement manifest, copied
-          sources, SDL adapter, or macOS application target is required. Add this
-          repository as a Swift package dependency and select its `Switch2Kit` product.
-
-          The host app supplies `NSBluetoothAlwaysUsageDescription`, owns its controller
-          manager and observation, and stops or suspends input with its scene lifecycle.
-          See [the public API](api.md) and [delivery contract](concurrency-and-logging.md).
-
-          CoreBluetooth on iOS does not expose the local Bluetooth adapter address.
-          Address lookup therefore returns `nil`; the existing handshake skips the
-          address-dependent protocol bond rather than inventing one. Use explicit
-          `start()` / `discover(for:)` and the controller's Sync button. Automatic
-          button-wake reconnection is not promised. This is compile-supported,
-          experimental integration, not physical pairing/gameplay qualification.
-
-          The normal macOS CI lane also compiles the actual library for both iOS
-          Simulator architectures and the device SDK. Existing desktop tests and
-          transport behavior remain unchanged.
-          ''')
+          import json,os
+          results=json.loads(os.environ['RESULTS'])
+          assert len(results)==4 and all(job['result']=='success' for job in results.values()), results
+          print('All existing native-platform checks passed against the SDK package PR revision.')
           PY
-          git add Package.swift Sources/Switch2Kit/Bluetooth/ControllerSession.swift Tests/Switch2KitTests/ApplePlatformTests.swift docs/switch2kit/ios.md
-          git diff --cached --check
-      - name: Test actual package on macOS
-        run: swift test -Xswiftc -warnings-as-errors > macos-tests.log 2>&1
-      - name: Build actual package for iOS Simulator and device
-        run: |
-          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-simulator CODE_SIGNING_ALLOWED=NO build > ios-simulator.log 2>&1
-          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS' -derivedDataPath build/ios-device CODE_SIGNING_ALLOWED=NO build > ios-device.log 2>&1
-      - name: Export tested change
-        run: git diff --cached --binary > sdk.patch
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: sdk-portability-validation
-          path: |
-            *.log
-            sdk.patch
-          retention-days: 1
-  publish:
-    needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: 6b5cba6233b21fca1020570e96b1bf247ba21f1e
-      - uses: actions/download-artifact@v4
-        with:
-          name: sdk-portability-validation
-          path: /tmp/sdk-validation
-      - name: Publish only the natively validated source change
-        run: |
-          git apply --index /tmp/sdk-validation/sdk.patch
-          git diff --cached --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Support direct Swift package consumption on iOS'
-          git push origin HEAD:refs/heads/ios/package-support
