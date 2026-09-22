@@ -4,7 +4,9 @@
 
 Switch2Kit provides controller support that any app can integrate on a supported platform. These [Dolphin](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#quick-start) and [Cemu](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#quick-start) forks are maintained reference apps with Switch2Kit already built in: get the app, connect your controller, and play. You do not need to install or run Switch2Kit separately.
 
-You do NOT need this repo at all; go straight to the forked projects above.
+You do NOT need this repo to play games; go straight to the forked projects above.
+
+Continue reading to add Switch2 controller support to your apps.
 
 ## Start playing
 
