@@ -2,24 +2,22 @@
 
 **Use your Nintendo Switch Online GameCube controller, Nintendo Switch 2 Pro Controller, and Joy-Con 2 in apps and games.**
 
-Switch2Kit provides controller support that any app can integrate on a supported platform. Our [Dolphin](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#quick-start) and [Cemu](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#quick-start) forks are maintained reference apps with Switch2Kit already built in: get the app, connect your controller, and play. You do not need to install or run Switch2Kit separately.
+Switch2Kit provides controller support that any app can integrate on a supported platform. These [Dolphin](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#quick-start) and [Cemu](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#quick-start) forks are maintained reference apps with Switch2Kit already built in: get the app, connect your controller, and play. You do not need to install or run Switch2Kit separately.
+
+You do NOT need this repo at all; go straight to the forked projects above.
 
 ## Start playing
 
-Choose the emulator for your games. The maintained forks embed Switch2Kit on **macOS 15+, Linux, and Windows x64**. Linux and Windows support is experimental; their setup guides identify the required runtime and Bluetooth dependencies.
+Those maintained forks embed Switch2Kit on **macOS 15+, Linux, and Windows x64**. Linux and Windows support is experimental.
 
 | Your games | App with Switch2Kit built in | Get started |
 | --- | --- | --- |
 | GameCube and Wii | [Dolphin fork](https://github.com/jmonster/dolphin) | [Download, connect, and play](https://github.com/jmonster/dolphin/blob/041a158aea44abb8b9625ce3359b8c231ad931da/Readme.md#quick-start) |
 | Wii U | [Cemu fork](https://github.com/jmonster/Cemu) | [Download, connect, and play](https://github.com/jmonster/Cemu/blob/9a8a563c93791634bc2a5288fde885a25fbcddd4/README.md#quick-start) |
 
-The linked setup guides describe the reviewed desktop builds. While [Dolphin #5](https://github.com/jmonster/dolphin/pull/5) or [Cemu #3](https://github.com/jmonster/Cemu/pull/3) is unmerged, select application artifacts from `feature/switch2kit-desktop-platforms`; the forks’ default-branch READMEs may still describe older macOS-only builds. The guides include the exact artifact names, extraction paths, and source-build fallbacks.
-
 1. **Get a controller-enabled app** from the linked fork's README. Use the platform-specific **Switch2Kit** GitHub Actions build linked in that README; downloading artifacts requires signing in to GitHub. Only successful runs with an application artifact provide a download. These are development builds, not published releases. Each README also includes build-and-launch instructions when a download is unavailable.
 2. **Connect over Bluetooth.** Open **Controllers** in Dolphin or **Options > Input settings** in Cemu, click **Find Switch 2 Controllers**, allow Bluetooth access, and hold the controller's **Sync** button. Close other apps managing the same controller first.
 3. **Select your controller and play.** For GameCube games in Dolphin, select the GameCube or Pro controller beside the desired GameCube port. In Cemu, select it beside **Emulated controller**. The forks apply the recommended button and stick mappings automatically. Their guides cover rumble, reconnecting, and controller-specific limitations; Wii Remote setup in Dolphin remains separate.
-
-Use the linked **fork builds**, not the ordinary upstream downloads: these forks include the Switch2Kit integration. No separate dashboard or controller driver is needed. Individual Joy-Con 2 halves use the emulators' normal input configuration rather than the GameCube/Pro quick-setup dropdowns.
 
 ## Use it with other apps
 
@@ -45,8 +43,6 @@ This is support for the **wireless NSO GameCube controller**, not an original wi
 | Linux / BlueZ (experimental) | Native Bluetooth controller engine, Swift/C/C++ hosts, and the maintained Dolphin/Cemu forks. [Requirements and setup](docs/switch2kit/linux.md). |
 | Windows x64 / WinRT (experimental) | Native Bluetooth LE controller engine, Swift/C/C++ hosts, and the maintained Dolphin/Cemu forks. [Requirements and setup](docs/switch2kit/windows.md). |
 | Android | No Switch2Kit controller backend. |
-
-A controller-enabled build is required on every platform. The emulators' ordinary upstream builds do not include this integration. Automated tests cover native code and controlled transport boundaries; physical-controller pairing, reconnect, rumble, and gameplay qualification remain separate. The dashboard is macOS-only, but the controller engine is not.
 
 ## Developer integration
 
