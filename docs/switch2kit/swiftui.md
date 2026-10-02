@@ -1,5 +1,8 @@
 # SwiftUI integration
 
+Use this presentation pattern on macOS or experimental [iOS/iPadOS](ios.md).
+The host's permissions, lifecycle, and hardware-qualification limits still apply.
+
 ## Own the manager above controller views
 
 Create one main-actor-owned manager for the application's intended radio owner. `@StateObject` at the app or coordinator level provides stable lifetime. Pass that same instance to windows/rows as `@ObservedObject`; do not construct managers in `body`, one per row, or one per duplicate dashboard window.
@@ -59,7 +62,7 @@ Do not rely on the observable list's sampling rate to detect very short taps. On
 
 A `WindowGroup` can invoke appearance callbacks more than once. Library `start()` is idempotent, but observation installation and host timers should also be idempotent. Do not stop the application's shared manager merely because one secondary window disappears.
 
-Own sleep/wake and quit handling in an application delegate/coordinator. The full [demo](../../Examples/Switch2KitDemo) illustrates workspace observers, explicit user enablement, cancellation of its input observation/local keyboard monitor/repeat timer, and deferred AppKit termination until transport stop completes. Inactivity suppresses semantic UI navigation immediately; it does not silently rewrite the user's choice about controller support.
+On macOS, own sleep/wake and quit handling in an application delegate/coordinator. The full [demo](../../Examples/Switch2KitDemo) illustrates workspace observers, explicit user enablement, cancellation of its input observation/local keyboard monitor/repeat timer, and deferred AppKit termination until transport stop completes. On iOS, coordinate [scene lifecycle and reconnection](ios.md#scene-lifecycle-and-reconnection) at the host level; AppKit workspace/termination APIs do not apply. Inactivity suppresses semantic UI navigation immediately; it does not silently rewrite the user's choice about controller support.
 
 The manager's `stop()` async overload updates presentation before it returns. Its completion overload signals transport teardown on a background queue, so marshal UI changes back to the main actor. Returning a SwiftUI `View` or retaining a snapshot does not retain a live Bluetooth session independently of its manager.
 

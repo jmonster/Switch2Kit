@@ -54,10 +54,12 @@ Accessibility, synthetic keyboard input or system virtual HID.
 
 ## Platforms and hardware features outside this implementation
 
-The reusable engine has live macOS/CoreBluetooth and experimental Linux/BlueZ
-backends. Linux supports native Swift/C/SDL hosts, not the macOS dashboard. See
-[Linux requirements and qualification limits](linux.md). Windows and Android
-have no supported Switch2Kit backend. USB-driver work under
+The reusable engine has live macOS/CoreBluetooth and experimental
+[Linux/BlueZ](linux.md) and [Windows x64/WinRT](windows.md) backends. Linux and
+Windows support native Swift/C/SDL hosts; the dashboard remains macOS-only.
+Experimental [iOS/iPadOS 18+ Swift package integration](ios.md) uses CoreBluetooth
+and is compile-supported, without physical pairing/gameplay qualification or a
+button-wake reconnection guarantee. Android has no Switch2Kit backend. USB-driver work under
 [`sdl/`](../../sdl/README.md) is separate from these Bluetooth transports; it does
 not make USB a transport of the reusable Swift library.
 
@@ -83,8 +85,10 @@ Their host's ordinary input backends remain available.
 Automated tests cover synthetic profiles and fake controller boundaries feeding
 the real Swift hub, C ABI, pinned SDL and emulator motion components. Linux tests
 also exercise the real BlueZ transport through an isolated synthetic D-Bus service.
-Native CI builds and inspects full Dolphin/Cemu applications on Linux and on
-macOS arm64/x86_64. The macOS [fresh-runner launch suite](../../tests/emulator-launch/README.md)
+Separate opt-in qualification workflows are configured to build and inspect full
+Dolphin/Cemu applications on Linux and macOS arm64/x86_64. A configured workflow
+is not evidence of a successful run for the candidate revision; follow the
+[release-readiness checklist](release-readiness.md). The macOS [fresh-runner launch suite](../../tests/emulator-launch/README.md)
 observes configured onscreen GUI startup and normal quit with developer dependency
 paths inaccessible. It does not complete first-use dialogs or test a stock clean
 Mac, Gatekeeper/notarization, Bluetooth, or gameplay. Linux build, installation and

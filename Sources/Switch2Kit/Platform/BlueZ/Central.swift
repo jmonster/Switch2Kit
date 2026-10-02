@@ -103,6 +103,13 @@ package final class BlueZCentral: @unchecked Sendable {
                 self.refreshCompletions.removeAll()
                 if case .failure(let error) = result, error.isPermission { self.setState(.unauthorized) }
                 else { self.setState(.unsupported) }
+                // The transport retires sessions without cancellation when the
+                // radio becomes unavailable. Release our owned links here while
+                // this bus can still send Disconnect; pending cancellations keep
+                // their original generation and bounded D-Bus timeout.
+                for peripheral in Array(self.peripherals.values) where peripheral.connected || peripheral.connecting {
+                    self.cancelPeripheralConnection(peripheral)
+                }
                 return
             }
             var next: [String: [String: BlueZValue]] = [:]

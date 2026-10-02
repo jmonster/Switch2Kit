@@ -70,11 +70,14 @@ public func decodeMotionProfile(_ bytes: UnsafePointer<UInt8>?, _ byteCount: UIn
 public func motionProfileCalibration(_ profile: UnsafePointer<S2KMotionProfile>?, _ controller: UnsafePointer<S2KController>?,
                                      _ output: UnsafeMutablePointer<S2KMotionCalibration>?, _ outputSize: UInt32) -> Int32 {
     guard let profile, let output else { return Int32(S2K_INVALID_ARGUMENT) }
-    let value = profile.pointee
-    guard value.version == S2K_MOTION_PROFILE_VERSION, value.struct_size == MemoryLayout<S2KMotionProfile>.size,
-          value.calibration.version == S2K_MOTION_CALIBRATION_VERSION,
-          value.calibration.struct_size == MemoryLayout<S2KMotionCalibration>.size,
+    // Reject an incompatible allocation using only its common ABI header.
+    // Copying the complete profile first could read beyond a shorter version.
+    guard profile.pointee.version == S2K_MOTION_PROFILE_VERSION,
+          profile.pointee.struct_size == MemoryLayout<S2KMotionProfile>.size,
           outputSize == MemoryLayout<S2KMotionCalibration>.size else { return Int32(S2K_ABI_MISMATCH) }
+    let value = profile.pointee
+    guard value.calibration.version == S2K_MOTION_CALIBRATION_VERSION,
+          value.calibration.struct_size == MemoryLayout<S2KMotionCalibration>.size else { return Int32(S2K_ABI_MISMATCH) }
     do {
         let validated = try swiftProfile(value)
         if let controller {

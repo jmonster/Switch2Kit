@@ -12,11 +12,13 @@ target_link_libraries(your_emulator PRIVATE Switch2Kit::SDL3)
 switch2kit_embed(your_emulator) # macOS application bundle; host signs it afterward
 ```
 
-The source dependency builds through the [C binding](cpp.md). Enable it for macOS 15+ hosts or the experimental [Linux/BlueZ backend](linux.md). Both use the same live C API and SDL adapter; Windows and Android remain unsupported. The adapter links the host's existing SDL target without patching SDL.
+The source dependency builds through the [C binding](cpp.md). Enable it for macOS 15+ hosts or the experimental [Linux/BlueZ](linux.md) and [Windows x64/WinRT](windows.md) backends. All three use the same live C API and SDL adapter. Android is unsupported. The separate [iOS Swift package integration](ios.md) does not establish iOS support for this desktop CMake/SDL packaging path. The adapter links the host's existing SDL target without patching SDL.
+
+The example above embeds a macOS bundle. Linux hosts use `switch2kit_install_linux(your_emulator)` and install the application; Windows hosts use `switch2kit_embed_windows(your_emulator)`. See the [platform-specific CMake helpers](cpp.md#build-with-cmake).
 
 ## Ownership and input loop
 
-Create `S2KContext` on the application's main thread, then start support and request a discovery window from controller settings. Initialize SDL's gamepad subsystem before constructing the adapter. On macOS, keep the main run loop active. The Linux C polling API does not require a GUI event loop.
+Create `S2KContext` on the application's main thread, then start support and request a discovery window from controller settings. Initialize SDL's gamepad subsystem before constructing the adapter. On macOS, keep the main run loop active. The Linux and Windows C polling APIs do not require a GUI event loop.
 
 ```cpp
 #include <Switch2KitSDL3.hpp>
@@ -67,6 +69,6 @@ S2K_SDL_SOURCE=/path/to/pinned/SDL bash tests/sdl-inprocess/verify.sh
 
 A separate Swift fixture supplies fake physical controllers to the real event hub and C ABI. The C++ test uses actual SDL3 enumeration, mapping, events, duration expiry and detach behavior. It checks all four models, all 256 GameCube trigger values, button edges, overload, reconnect identity, inactivity and rumble lifetime. The fixture is not part of the adapter library. The real SDL motion consumer also checks all four models, exact SI event payloads, independent streams, enable/disable, profile replacement, 5,000 sample pairs, invalid/equal/decreasing timestamps, sequence gaps, overflow and retirement. Host tests cover bounded explicit file loading, spaces in paths, invalid-import rollback and concurrent status reads. These tests do not claim physical Bluetooth or emulator gameplay validation.
 
-## Linux hosts
+## Linux and Windows hosts
 
-The same adapter uses the experimental [Linux/BlueZ live backend](linux.md). A C ABI fixture build is no longer the only Linux path. BlueZ permissions, native Swift runtime deployment, physical-controller qualification and unsupported Windows/Android transports are documented separately.
+The same adapter uses the experimental [Linux/BlueZ](linux.md) and [Windows x64/WinRT](windows.md) live backends. A C ABI fixture build is not the only path on these platforms. Their guides cover native runtime deployment, Bluetooth access, and physical-controller qualification limits.

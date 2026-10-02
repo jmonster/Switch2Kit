@@ -42,6 +42,7 @@ This is support for the **wireless NSO GameCube controller**, not an original wi
 | Platform | Current Switch2Kit support |
 | --- | --- |
 | macOS 15+ (Apple Silicon and Intel) | Live Bluetooth controller support, the maintained Dolphin/Cemu reference forks, Swift and C/C++ hosts, and the optional dashboard. |
+| iOS/iPadOS 18+ (experimental) | Swift package integration through CoreBluetooth. Compile-supported; physical pairing/gameplay and automatic button-wake reconnection are not qualified. [Host setup and limits](docs/switch2kit/ios.md). |
 | Linux / BlueZ (experimental) | Native Bluetooth controller engine, Swift/C/C++ hosts, and the maintained Dolphin/Cemu forks. [Requirements and setup](docs/switch2kit/linux.md). |
 | Windows x64 / WinRT (experimental) | Native Bluetooth LE controller engine, Swift/C/C++ hosts, and the maintained Dolphin/Cemu forks. [Requirements and setup](docs/switch2kit/windows.md). |
 | Android | No Switch2Kit controller backend. |
@@ -60,7 +61,7 @@ The SDL3 integrations run in the emulator's existing input backend. The emulator
 
 ### Library
 
-Requires Swift 6.2+. macOS hosts require macOS 15+ and Xcode 26+; Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md); Windows hosts use [WinRT and the x64 Swift toolchain](docs/switch2kit/windows.md).
+Requires Swift 6.2+. Apple builds use Xcode 26+, targeting macOS 15+ or experimental [iOS/iPadOS 18+](docs/switch2kit/ios.md). Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md); Windows hosts use [WinRT and the x64 Swift toolchain](docs/switch2kit/windows.md).
 
 ```swift
 .package(url: "https://github.com/jmonster/Switch2Kit.git", branch: "main")
@@ -94,11 +95,11 @@ final class ControllerInput {
 }
 ```
 
-On macOS, the host provides `NSBluetoothAlwaysUsageDescription` and, when sandboxed, `com.apple.security.device.bluetooth`. In-process input needs neither Accessibility permission nor CoreHID. Hold the controller's Sync button while discovery is active.
+On macOS and iOS, the host provides `NSBluetoothAlwaysUsageDescription`. Sandboxed macOS hosts also supply `com.apple.security.device.bluetooth`. In-process input needs neither Accessibility permission nor CoreHID. Hold the controller's Sync button while discovery is active; iOS hosts also follow the [scene-lifecycle and reconnection guidance](docs/switch2kit/ios.md).
 
 Raw motion telemetry is available through the library. Calibrated SDL motion requires an explicitly selected [physical motion profile](docs/switch2kit/motion-profiles.md); no measured built-in profiles are supplied. NSO GameCube's soft/strong firmware feedback clips are separate from its on/off game rumble. See [controller and feature coverage](docs/switch2kit/coverage.md) for transport, output, and physical-qualification boundaries.
 
-[Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
+[Library guide](docs/switch2kit/README.md) · [API](docs/switch2kit/api.md) · [iOS](docs/switch2kit/ios.md) · [SwiftUI](docs/switch2kit/swiftui.md) · [AppKit](docs/switch2kit/appkit.md) · [Bluetooth lifecycle](docs/switch2kit/bluetooth-lifecycle.md) · [Application actions](docs/switch2kit/actions.md)
 
 ## Dashboard
 
@@ -134,6 +135,6 @@ bash scripts/build-switch2kit-demo.sh
 bash scripts/verify-switch2kit-consumer.sh
 ```
 
-The [standalone demo](Examples/README.md) shows live controller input and local semantic navigation. Swift consumers use SwiftPM source integration; the independent consumer check needs no prebuilt framework. The [distribution note](docs/switch2kit/xcframework.md) covers migration from the standalone Swift XCFramework. The optional C/C++ integration retains its native library build and validation.
+The [standalone macOS demo](Examples/README.md) shows live controller input and local semantic navigation; it is not an iOS app target. See the [iOS guide](docs/switch2kit/ios.md#compile-checks) for simulator/device library compile checks. Swift consumers use SwiftPM source integration; the independent consumer check needs no prebuilt framework. The [distribution note](docs/switch2kit/xcframework.md) covers migration from the standalone Swift XCFramework. The optional C/C++ integration retains its native library build and validation.
 
-[Architecture](docs/switch2kit/architecture.md) · [Protocol](docs/protocol.md) · [Contributors](CREDITS.md)
+[Release readiness](docs/switch2kit/release-readiness.md) · [Architecture](docs/switch2kit/architecture.md) · [Protocol](docs/protocol.md) · [Contributors](CREDITS.md)

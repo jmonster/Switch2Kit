@@ -40,6 +40,64 @@ static S2KMotionProfile synthetic(int index, uint32_t model) {
     std::strcpy(p.orientation, "synthetic-test-only");
     return p;
 }
+static void profileRearmingTests() {
+    auto* context = test_input_create(); assert(context && s2k_start(context) == S2K_OK);
+    {
+        SDL3Adapter adapter(context);
+        S2KState state{};
+        const auto enqueue = [&](uint32_t buttons) {
+            ++state.sequence; state.buttons = buttons;
+            state.received_at = s2k_test_monotonic_time();
+            test_input_report(context, 0, S2K_PRO, &state);
+        };
+        const auto submit = [&](uint32_t buttons) {
+            enqueue(buttons);
+            assert(adapter.pump() == S2K_OK);
+        };
+        submit(S2K_BUTTON_A);
+        auto* pad = SDL_OpenGamepad(adapter.instance(physical(0))); assert(pad);
+        for (const bool queuedNeutral : {false, true}) for (int operation = 0; operation < 3; ++operation) {
+            assert(SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST));
+            assert(adapter.pump(false) == S2K_OK);
+            assert(adapter.pump(true) == S2K_OK);
+            assert(!SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST));
+            events();
+            if (queuedNeutral) {
+                enqueue(S2K_BUTTON_A);
+                enqueue(0);
+            }
+            if (operation == 2) adapter.removeMotionProfile(physical(0));
+            else {
+                auto profile = synthetic(0, S2K_PRO);
+                profile.calibration.angular_velocity.offset[0] += operation;
+                assert(adapter.installMotionProfile(profile) == S2K_OK);
+            }
+            assert(adapter.pump() == S2K_OK);
+            assert(!SDL_GamepadConnected(pad)); SDL_CloseGamepad(pad);
+            pad = SDL_OpenGamepad(adapter.instance(physical(0))); assert(pad);
+            // Sensor topology changes must not bypass the physical controller's
+            // neutral report requirement after reactivation.
+            assert(!SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST));
+            SDL_Event event{};
+            while (SDL_PollEvent(&event)) {
+                // A newer neutral snapshot must not rearm ahead of an older
+                // queued held report and leak a transient press before release.
+                assert(event.type != SDL_EVENT_JOYSTICK_BUTTON_DOWN);
+            }
+            submit(S2K_BUTTON_A);
+            if (!queuedNeutral) {
+                assert(!SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST));
+                submit(0);
+                submit(S2K_BUTTON_A);
+            }
+            assert(SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST));
+        }
+        SDL_CloseGamepad(pad);
+    }
+    s2k_destroy(context);
+    events();
+    std::puts("PASS neutral rearming survives motion profile install, replacement and removal");
+}
 int main() {
     // The private freshness clock never wraps when converting native tick ratios.
     assert(Switch2Kit::Detail::scaledTicksNS(24, 125, 3) == 1000);
@@ -337,5 +395,7 @@ int main() {
         assert(s2k_stop(context) == S2K_OK); pump(); assert(events().empty());
         std::puts("PASS proper orientation replacement, generation retirement, physical reconnect, removal and bounded profile cache");
     }
-    s2k_destroy(context); SDL_Quit();
+    s2k_destroy(context);
+    profileRearmingTests();
+    SDL_Quit();
 }
