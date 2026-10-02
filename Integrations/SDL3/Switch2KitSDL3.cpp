@@ -206,7 +206,9 @@ struct SDL3Adapter::Impl {
     S2KContext* context;
     std::map<Key, Device> devices;
     std::map<Key, S2KMotionProfile> profiles;
-    std::map<Key, bool> replacements; // At most one pending replacement per retained device.
+    // At most one pending topology replacement per retained device. Capture its
+    // neutral-rearm state at replacement time, after this pump's focus handling.
+    std::map<Key, bool> replacements;
     ClockPair previousClock{};
     S2KSnapshot snapshot{};
     S2KResult error = S2K_OK;
@@ -479,17 +481,28 @@ struct SDL3Adapter::Impl {
             stopEffect(d, active, clock.ticks, clock.continuous);
             if (d.hasProfile) invalidate(d, enabledSensors(d) ? SDL3MotionStatus::Waiting : SDL3MotionStatus::Disabled);
         }
-        for (const auto& [id, unused] : replacements) {
-            (void)unused;
-            const auto found = devices.find(id); if (found != devices.end()) remove(found);
+        for (auto& [id, armed] : replacements) {
+            const auto found = devices.find(id);
+            armed = found != devices.end() ? found->second.armed : active;
+            if (found != devices.end()) remove(found);
         }
         if (!replacements.empty()) {
             for (uint32_t i = 0; i < snapshot.count; ++i) {
                 const auto& c = snapshot.controllers[i];
-                if (replacements.count(key(c.id))) if (auto* d = ensure(c, active, now, continuous)) {
+                const auto replacement = replacements.find(key(c.id));
+                if (replacement != replacements.end()) if (auto* d = ensure(c, active, now, continuous)) {
+                    d->armed = replacement->second;
                     d->highSequence = c.state.sequence;
                     if (std::isfinite(c.state.received_at) && c.state.received_at <= clock.receive) d->highReceive = c.state.received_at;
-                    apply(*d, c.state, active);
+                    // Restore steady controls only if this batch has no reports
+                    // for the replacement. A newer neutral snapshot must not
+                    // rearm ahead of an older queued held report.
+                    const bool pendingInput = std::any_of(events.begin(), events.begin() + count,
+                        [&](const auto& event) {
+                            return (event.kind == S2K_EVENT_CONNECTED || event.kind == S2K_EVENT_INPUT) &&
+                                equal(event.controller.id, c.id) && equal(event.controller.connection_id, c.connection_id);
+                        });
+                    if (!pendingInput) apply(*d, c.state, active);
                 }
             }
             replacements.clear();

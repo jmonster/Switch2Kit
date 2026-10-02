@@ -126,8 +126,9 @@ typedef struct S2KConfig {
 uint32_t s2k_abi_version(void);
 /** Create on the main thread; does not start Bluetooth. NULL config uses defaults.
  * On failure returns NULL and writes result when non-NULL. No callbacks into C are used.
- * macOS uses CoreBluetooth; Linux uses BlueZ. Creation opens neither radio.
- * Other host platforms return UNSUPPORTED_PLATFORM.
+ * Apple platforms use CoreBluetooth; Linux uses BlueZ; Windows uses WinRT.
+ * Creation does not open the radio. Builds without a supported backend return
+ * UNSUPPORTED_PLATFORM. iOS host integration remains experimental.
  */
 S2KContext *s2k_create(const S2KConfig *config, S2KResult *result);
 /** Release one owning handle (NULL is allowed). Discards pending delivery synchronously,

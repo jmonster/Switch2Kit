@@ -137,4 +137,4 @@ bash scripts/verify-switch2kit-consumer.sh
 
 The [standalone macOS demo](Examples/README.md) shows live controller input and local semantic navigation; it is not an iOS app target. See the [iOS guide](docs/switch2kit/ios.md#compile-checks) for simulator/device library compile checks. Swift consumers use SwiftPM source integration; the independent consumer check needs no prebuilt framework. The [distribution note](docs/switch2kit/xcframework.md) covers migration from the standalone Swift XCFramework. The optional C/C++ integration retains its native library build and validation.
 
-[Architecture](docs/switch2kit/architecture.md) · [Protocol](docs/protocol.md) · [Contributors](CREDITS.md)
+[Release readiness](docs/switch2kit/release-readiness.md) · [Architecture](docs/switch2kit/architecture.md) · [Protocol](docs/protocol.md) · [Contributors](CREDITS.md)

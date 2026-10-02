@@ -22,7 +22,7 @@ final class BlueZIdentityTests: XCTestCase {
     }
     func testConservativeATTWriteLimits() {
         let uuid = UUID()
-        for (mtu, expected) in [(0, 0), (2, 0), (23, 20), (247, 244), (517, 512)] {
+        for (mtu, expected) in [(Int.min, 0), (-1, 0), (0, 0), (2, 0), (3, 0), (23, 20), (247, 244), (517, 512), (Int.max, 512)] {
             XCTAssertEqual(BlueZCharacteristic(path: "/test", uuid: uuid, flags: [], mtu: mtu).writeLimit, expected)
         }
     }

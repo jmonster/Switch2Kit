@@ -50,7 +50,7 @@ package final class BlueZCharacteristic {
         self.path = path; self.uuid = CBUUID(uuid); self.flags = flags
         // ATT writes have a three-byte header. Never guess a large MTU or split
         // Nintendo protocol frames. Missing MTU falls back to the ATT minimum.
-        self.writeLimit = max(0, min(512, mtu - 3))
+        self.writeLimit = min(512, max(3, mtu) - 3)
     }
 }
 package final class BlueZPeripheral: @unchecked Sendable {
