@@ -11,7 +11,7 @@ swift build --product Switch2KitC
 swift test -Xswiftc -warnings-as-errors
 ```
 
-Create the manager on the main actor, or call `s2k_create` on the main thread. Creation does not open the radio. Start support, request discovery, then hold Sync on the controller. The C polling API does not need a Linux GUI event loop; Swift hosts using main-actor presentation snapshots must keep their executor running. Combine/SwiftUI and the dashboard remain macOS features; use observation or `currentSnapshot` on Linux.
+Create the manager on the main actor, or call `s2k_create` on the main thread. Creation does not open the radio. Start support, request discovery, then hold Sync on the controller. The C polling API does not need a Linux GUI event loop; Swift hosts using main-actor presentation snapshots must keep their executor running. Combine/SwiftUI are Apple-platform features, and the dashboard remains macOS-only; use observation or `currentSnapshot` on Linux.
 
 The process uses the normal system-bus address and BlueZ permissions. It does not change adapter power, install permissive D-Bus rules, invoke `sudo`, call BlueZ `Pair`/`RemoveDevice`, or erase stored device bonds. A denied bus or GATT operation is reported rather than bypassed. Nintendo's existing controller-protocol bond handshake is separate from operating-system pairing; on Sync discovery it uses the selected adapter's address. Stop another application's connection before claiming the same controller.
 

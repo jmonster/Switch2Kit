@@ -111,3 +111,41 @@ test('active rumble owner can refresh its own effect', () => {
   assert.equal(ws.sent[1].phase, 'refresh');
   p.close();
 });
+
+test('controller slot reuse revokes the departed controller rumble owner', () => {
+  const f = fixture(), p = f.port(), ws = f.sockets[0]; ws.open();
+  ws.message({t:'connected',slot:0,model:'old',name:'old'});
+  p.send(JSON.stringify({t:'rumble',slot:0,strong:1,weak:0,phase:'start'}));
+  ws.message({t:'disconnected',slot:0});
+  ws.message({t:'connected',slot:0,model:'replacement',name:'replacement'});
+  const count = ws.sent.length;
+  p.send(JSON.stringify({t:'rumble',slot:0,strong:1,weak:0,phase:'refresh'}));
+  p.send(JSON.stringify({t:'rumble',slot:0,strong:0,weak:0,phase:'stop'}));
+  assert.equal(ws.sent.length, count, 'queued commands for the old controller must be ignored');
+  p.send(JSON.stringify({t:'rumble',slot:0,strong:0,weak:1,phase:'start'}));
+  assert.equal(ws.sent.length, count + 1, 'a fresh effect can claim the replacement');
+  p.close();
+});
+
+test('a replacement connection record also revokes stale rumble ownership', () => {
+  const f = fixture(), p = f.port(), ws = f.sockets[0]; ws.open();
+  ws.message({t:'connected',slot:0,model:'old',name:'old'});
+  p.send(JSON.stringify({t:'rumble',slot:0,strong:1,weak:0,phase:'start'}));
+  ws.message({t:'connected',slot:0,model:'replacement',name:'replacement'});
+  p.send(JSON.stringify({t:'rumble',slot:0,strong:1,weak:0,phase:'refresh'}));
+  assert.equal(ws.sent.length, 1);
+  p.close();
+  assert.equal(ws.sent.length, 1, 'departing tab must not stop the replacement controller');
+});
+
+test('a new tab during retry does not orphan the pending reconnect timer', () => {
+  const f = fixture(), a = f.port(), old = f.sockets[0]; old.open(); old.closed();
+  assert.equal(f.timers.size, 1);
+  const b = f.port();
+  assert.equal(f.sockets.length, 2, 'new tab can reconnect immediately');
+  assert.equal(f.timers.size, 0, 'the old retry must be cancelled');
+  f.sockets[1].closed();
+  assert.equal(f.timers.size, 1, 'only one retry is scheduled');
+  a.close(); b.close();
+  assert.equal(f.timers.size, 0, 'last tab cancels every pending retry');
+});

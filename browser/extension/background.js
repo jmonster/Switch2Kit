@@ -15,6 +15,9 @@ const fanOut = (text) => {
 };
 
 function connect() {
+  // A newly attached tab can reconnect before the scheduled retry fires.
+  // Retire that timer before losing its handle.
+  if (retryTimer !== null) clearTimeout(retryTimer);
   retryTimer = null;
   if (socket || ports.size === 0) return;
   let owner;
@@ -73,8 +76,15 @@ function track(text) {
   let m;
   try { m = JSON.parse(text); } catch { return; }
   if (!m || !Number.isInteger(m.slot) || m.slot < 0 || m.slot >= 4) return;
-  if (m.t === 'connected') replay.set(m.slot, {connection:m, state:null});
-  else if (m.t === 'disconnected') replay.delete(m.slot);
+  if (m.t === 'connected') {
+    // Slots are reused. An old tab's queued refresh/stop must not address
+    // the next controller occupying this slot.
+    rumbleOwners.delete(m.slot);
+    replay.set(m.slot, {connection:m, state:null});
+  } else if (m.t === 'disconnected') {
+    rumbleOwners.delete(m.slot);
+    replay.delete(m.slot);
+  }
   else {
     const saved = replay.get(m.slot);
     if (!saved) return;

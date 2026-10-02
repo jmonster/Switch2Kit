@@ -13,6 +13,9 @@ SCRIPT = Path(__file__).resolve().parents[1] / "support/compile-fixture.py"
 spec = importlib.util.spec_from_file_location("compile_fixture", SCRIPT)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
+prepare_spec = importlib.util.spec_from_file_location("prepare_sources", SCRIPT.with_name("prepare-sources.py"))
+prepare = importlib.util.module_from_spec(prepare_spec)
+prepare_spec.loader.exec_module(prepare)
 
 
 def description(name):
@@ -85,6 +88,18 @@ class ClangModuleTests(unittest.TestCase):
         for command in data["swiftCommands"].values():
             command["otherArguments"] += ["-Xcc", "-fmodule-map-file=/path with spaces/Radio/module.modulemap", "-Xcc", "-fPIC"]
         self.assertEqual(helper.clang_modules(data), ["-Xcc", "-fmodule-map-file=/path with spaces/Radio/module.modulemap"])
+
+
+class FixturePlatformTests(unittest.TestCase):
+    def test_fake_host_address_path_is_available_without_apple_frameworks(self):
+        body = "return IOBluetoothHostController.default()?.addressAsString()"
+        source = "#if canImport(IOBluetooth)\nimport IOBluetooth\n#endif\n" + \
+            "func address() -> String? {\n    #if canImport(IOBluetooth)\n" + body + "\n#else\nreturn nil\n#endif\n}"
+        result = prepare.fixture(source)
+        self.assertNotIn("import IOBluetooth", result)
+        self.assertEqual(result.count("#if canImport(IOBluetooth) || S2K_RADIO_FIXTURE"), 2)
+        self.assertIn(body, result)
+        self.assertIn("#else\nreturn nil\n#endif", result)
 
 
 if __name__ == "__main__":

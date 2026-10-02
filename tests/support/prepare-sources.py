@@ -1,6 +1,6 @@
 """Build radio-free fixtures from production method bodies.
 
-Only imports, outer platform guards and access control change. CoreBluetooth is
+Only imports, framework/platform guards and access control change. Frameworks are
 replaced by tests/session/FrameworkFakes.swift. Never change protocol/transport
 method bodies here: fixes belong in Sources and tests must exercise them there.
 """
@@ -15,6 +15,10 @@ def fixture(source: str) -> str:
         assert source.rstrip().endswith("#endif")
         source = source.split("\n", 1)[1].rstrip().removesuffix("#endif")
     source = re.sub(r"^import (CoreBluetooth|IOBluetooth|Switch2Kit)$", "", source, flags=re.M)
+    # The fixture provides IOBluetoothHostController even when the real framework
+    # is unavailable. Keep the production address parsing/bond path under test.
+    source = re.sub(r"^([ \t]*)#if canImport\(IOBluetooth\)$",
+                    r"\1#if canImport(IOBluetooth) || S2K_RADIO_FIXTURE", source, flags=re.M)
     source = re.sub(r"\b(?:fileprivate|private)(?:\(set\))?\s+", "", source)
     source = re.sub(r"\bpackage\s+", "", source)
     return "import CoreFoundation\n" + source

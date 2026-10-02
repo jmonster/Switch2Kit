@@ -17,11 +17,13 @@ public func abiVersion() -> UInt32 { 1 }
 /// C ABI entry point; ownership, threading and argument rules are specified in Switch2KitC.h.
 @_cdecl("s2k_create")
 public func createContext(_ config: UnsafePointer<S2KConfig>?, _ result: UnsafeMutablePointer<Int32>?) -> OpaquePointer? {
-    let capacity = config.map { Int($0.pointee.event_capacity) } ?? 256
-    let maximum = config.map { Int($0.pointee.maximum_controllers) } ?? 16
+    // Inspect only the common ABI header before reading version-specific fields.
+    // An incompatible caller may provide a shorter configuration allocation.
     if let config, config.pointee.abi_version != 1 || config.pointee.struct_size != MemoryLayout<S2KConfig>.size {
         result?.pointee = 2; return nil
     }
+    let capacity = config.map { Int($0.pointee.event_capacity) } ?? 256
+    let maximum = config.map { Int($0.pointee.maximum_controllers) } ?? 16
     guard (1...256).contains(capacity), (1...64).contains(maximum) else { result?.pointee = 1; return nil }
     #if canImport(CoreBluetooth) || os(Linux) || os(Windows)
     guard Thread.isMainThread else { result?.pointee = 4; return nil }

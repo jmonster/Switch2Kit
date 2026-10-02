@@ -1,7 +1,6 @@
 # Switch2Kit
 
-A source Swift package for **in-process Nintendo Switch 2 controller input on macOS**. Import `Switch2Kit` to own discovery and connections, receive calibrated physical-controller snapshots, and request supported rumble and player LEDs. The Switch2Kit dashboard uses this library.
-
+A source Swift package for **in-process Nintendo Switch 2 controller input**. Import `Switch2Kit` to own discovery and connections, receive calibrated physical-controller snapshots, and request supported rumble and player LEDs. The macOS Switch2Kit dashboard uses this library; other hosts embed it directly.
 
 ## Supported models and platforms
 
@@ -10,15 +9,24 @@ A source Swift package for **in-process Nintendo Switch 2 controller input on ma
 | Switch 2 Pro Controller (`0x2069`) | Left and right | Digital | HD rumble, two channels | Battery and raw motion |
 | Joy-Con 2 left (`0x2067`) | Left | Digital | Single actuator | Battery, raw motion and optical counters |
 | Joy-Con 2 right (`0x2066`) | Right | Digital | Single actuator | Battery, raw motion and optical counters |
-| NSO GameCube (`0x2073`) | Left and right | Independent analog travel and digital clicks | Soft/strong firmware clips | Battery and raw motion |
+| NSO GameCube (`0x2073`) | Left and right | Independent analog travel and digital clicks | On/off motor and separate soft/strong firmware clips | Battery and raw motion |
 
 Switch 1 controllers and arbitrary HID devices are not admitted. Nintendo company ID, vendor ID and supported product ID must all validate; names alone never authorize a connection. Joy-Con pairs remain two physical controllers.
 
-The declared deployment minimum is **macOS 15**. Build source with **Swift 6.2 or newer**; the repository's Apple-SDK builds use **Xcode 26 or newer**. The app's optional CoreHID output has separate availability/entitlement requirements that do not apply to this library.
+Build source with **Swift 6.2 or newer**; the repository's Apple-SDK builds use **Xcode 26 or newer**.
+
+| Host platform | Integration and qualification |
+| --- | --- |
+| macOS 15+ | CoreBluetooth, Swift/C/C++ hosts and the optional dashboard |
+| iOS/iPadOS 18+ | Experimental [Swift package integration](ios.md); compile-supported, with physical pairing/gameplay and button-wake reconnection unqualified |
+| Linux | Experimental [BlueZ backend](linux.md) for native Swift/C/C++ hosts |
+| Windows x64 | Experimental [WinRT backend](windows.md) for native Swift/C/C++ hosts |
+
+Android has no backend. The dashboard and standalone demo are macOS applications. The dashboard's optional CoreHID output has separate availability/entitlement requirements that do not apply to the library.
 
 ## Install the source package
 
-For local development, add the repository to your host's `Package.swift`:
+For a local macOS SwiftPM host, add the repository to its `Package.swift`:
 
 ```swift
 // swift-tools-version: 6.2
@@ -40,18 +48,18 @@ For Git integration, replace the path dependency with:
          branch: "main")
 ```
 
-In Xcode, use **File → Add Package Dependencies**, enter the repository URL, and add the **Switch2Kit** product to your host target. Use `revision:` instead of `branch:` to pin a specific commit.
+In Xcode, use **File → Add Package Dependencies**, enter the repository URL, and add the **Switch2Kit** product to your host target. Use `revision:` instead of `branch:` to pin a specific commit. For an iOS app target, follow the [iOS host checklist](ios.md); no replacement package manifest or copied sources are needed.
 
 ## Configure the host application
 
-In the **host's** Info.plist, provide a clear reason:
+On macOS and iOS, provide a clear reason in the **host's** Info.plist:
 
 ```xml
 <key>NSBluetoothAlwaysUsageDescription</key>
 <string>Connect Nintendo controllers to navigate and interact with this application.</string>
 ```
 
-A sandboxed host supplies its own Bluetooth capability where required:
+A sandboxed macOS host supplies its own Bluetooth capability:
 
 ```xml
 <key>com.apple.security.device.bluetooth</key>
@@ -121,9 +129,9 @@ func acknowledge(_ controller: Switch2Controller, using manager: Switch2Controll
 
 `playRumble` works on every supported model. Pro/Joy-Con play a 400 ms HD pulse; GameCube plays its soft firmware clip below intensity 0.5 or strong clip at 0.5 and above. Zero is mute. The device controls GameCube clip duration; a submitted clip cannot be cancelled.
 
-For amplitude-controlled effects, check `.continuousRumble` and use `setRumble` or `pulseRumble`. Pro strong/weak channels address left/right actuators; Joy-Con mixes them into one actuator. Pulses accept `0.01...0.5` seconds. Continuous intent expires after 500 ms unless renewed; zero stops it. See [rumble](../rumble.md).
+For sustained or duration-controlled effects, check `.continuousRumble` and use `setRumble` or `pulseRumble`. All four supported models provide it: Pro strong/weak channels address left/right actuators, Joy-Con mixes them into one actuator, and GameCube's separate motor turns on when either channel is nonzero. GameCube intensity is on/off, not proportional strength. Pulses accept `0.01...0.5` seconds. Continuous intent expires after 500 ms unless renewed; zero stops it. See [rumble](../rumble.md).
 
-## Run the independent sample
+## Run the independent macOS sample
 
 ```sh
 bash scripts/build-switch2kit-demo.sh
@@ -138,5 +146,4 @@ Switch2Kit does **not** make its devices appear as system `GCController` instanc
 
 ## Guides
 
-[SwiftUI](swiftui.md) · [AppKit](appkit.md) · [Bluetooth lifecycle](bluetooth-lifecycle.md) · [Application actions](actions.md) · [Navigation](navigation.md) · [API](api.md) · [Concurrency and logging](concurrency-and-logging.md) · [Troubleshooting](troubleshooting.md) · [Swift distribution](xcframework.md) · [Architecture](architecture.md)
-
+[iOS](ios.md) · [Linux](linux.md) · [Windows](windows.md) · [SwiftUI](swiftui.md) · [AppKit](appkit.md) · [Bluetooth lifecycle](bluetooth-lifecycle.md) · [Application actions](actions.md) · [Navigation](navigation.md) · [API](api.md) · [Concurrency and logging](concurrency-and-logging.md) · [Troubleshooting](troubleshooting.md) · [Swift distribution](xcframework.md) · [Architecture](architecture.md)

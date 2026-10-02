@@ -37,6 +37,32 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(documented, {"SL (L)": bits["slL"], "SR (L)": bits["srL"],
                                       "SL (R)": bits["slR"], "SR (R)": bits["srR"]})
 
+    def test_documented_apple_minima_match_package(self):
+        manifest = (ROOT / "Package.swift").read_text()
+        for platform, label in (("iOS", "iOS/iPadOS"), ("macOS", "macOS")):
+            minimum = re.search(rf"\.{platform}\(\.v(\d+)\)", manifest)
+            self.assertIsNotNone(minimum, f"Missing declared {platform} minimum")
+            guides = ["README.md", "docs/switch2kit/README.md"]
+            if platform == "iOS":
+                guides.append("docs/switch2kit/ios.md")
+            for path in guides:
+                with self.subTest(platform=platform, path=path):
+                    self.assertIn(f"{label} {minimum.group(1)}+", (ROOT / path).read_text())
+
+    def test_platform_guides_are_discoverable(self):
+        # These entry points previously omitted iOS or incorrectly denied Windows support.
+        for path in ("README.md", "docs/switch2kit/README.md",
+                     "docs/switch2kit/coverage.md", "docs/switch2kit/sdl3.md"):
+            document = ROOT / path
+            links = {
+                (document.parent / match.group(1).split("#", 1)[0]).resolve()
+                for match in re.finditer(r"\[[^\]\n]+\]\(([^)\s]+)\)", document.read_text())
+                if ":" not in match.group(1)
+            }
+            for platform in ("ios", "linux", "windows"):
+                with self.subTest(path=path, platform=platform):
+                    self.assertIn(ROOT / f"docs/switch2kit/{platform}.md", links)
+
     def test_source_only_tree(self):
         tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
         for path in filter(None, tracked):

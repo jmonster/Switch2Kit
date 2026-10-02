@@ -2,15 +2,15 @@
 
 ## First connection: advertise with Sync
 
-Own one `Switch2ControllerManager` in your host, attach an observation, call `start()`, then `try manager.discover(for: 60)`. Hold the controller's Sync button until its lights sweep. The library validates the complete Nintendo advertisement and connects directly with CoreBluetooth. It discovers services/characteristics, subscribes to command responses, reads identity and calibration, configures LEDs/features, performs the existing protocol bond when appropriate, subscribes to input, and waits for a valid input report.
+Own one `Switch2ControllerManager` in your host, attach an observation, call `start()`, then `try manager.discover(for: 60)`. Hold the controller's Sync button until its lights sweep. The library validates the complete Nintendo advertisement and connects through the platform Bluetooth backend. It discovers services/characteristics, subscribes to command responses, reads identity and calibration, configures LEDs/features, performs the existing protocol bond when appropriate, subscribes to input, and waits for a valid input report. See [iOS](ios.md), [Linux](linux.md), and [Windows](windows.md) for platform-specific requirements and qualification limits.
 
 `.connectionChanged(id, .connecting)` means only an admitted attempt. `.handshaking` means the link is open but is not yet usable. `.connected(controller)` and inclusion in `controllers` require **both the handshake and the first report**. An input-notification subscription alone is not readiness. Do not display a usable pad solely because a Bluetooth connection succeeded.
 
-## Protocol bond is not normal macOS pairing
+## Protocol bond is not operating-system pairing
 
 A Sync advertisement causes the retained application-level bond sequence. This is distinct from Bluetooth SMP pairing and from a normal device entry in Bluetooth Settings. The library does not initiate SMP pairing. Do not add an encrypted-characteristic/SMP pairing flow to try to make a Settings entry appear; that is not the protocol implemented here.
 
-The protocol bond stores host material on the controller for subsequent button-wake advertising. The retained implementation queries the host Bluetooth address through IOBluetooth. When that address is unavailable it skips the bond operation rather than inventing an address; the current link can still work, but later button-wake behavior is not guaranteed. Use Sync again if needed. A successful bond command sequence emits a diagnostic without printing its address/key material. Skipping the sequence does not emit a separate bond-status event; absence of a completion log is not proof of failure, and connection readiness alone is not proof that a new bond was written.
+The protocol bond stores host material on the controller for subsequent button-wake advertising. The macOS backend queries the host Bluetooth address through IOBluetooth; Linux and Windows use their native adapter APIs. CoreBluetooth does not expose that address on iOS. When it is unavailable the implementation skips the bond operation rather than inventing an address; later button-wake behavior is not guaranteed. Use Sync again if needed. A successful bond command sequence emits a diagnostic without printing its address/key material. Skipping the sequence does not emit a separate bond-status event; absence of a completion log is not proof of failure, and connection readiness alone is not proof that a new bond was written.
 
 No Settings entry is required as proof of this in-process connection. Conversely, a Settings entry does not prove that a host owns a live Switch2Kit session. Only one process should try to own the controller at a time.
 
@@ -32,13 +32,13 @@ The library reports typed errors without forwarding arbitrary platform error str
 
 ## Stop, disconnect, forget and termination
 
-`disconnect(id)` retires a pending or ready attempt, clears its ownership and asks CoreBluetooth to cancel. A later valid advertisement may reconnect while discovery permits it. `forget(id)` additionally removes the ID from the library's local remembered set. Neither operation erases controller-stored bond material, removes a macOS pairing entry, or deletes the host's mappings/preferences. Remove persisted mappings separately when that is the intended user action.
+`disconnect(id)` retires a pending or ready attempt, clears its ownership and asks the platform backend to cancel. A later valid advertisement may reconnect while discovery permits it. `forget(id)` additionally removes the ID from the library's local remembered set. Neither operation erases controller-stored bond material, removes an operating-system pairing entry, or deletes the host's mappings/preferences. Remove persisted mappings separately when that is the intended user action.
 
 `await manager.stop()` stops scanning, cancels windows/retry/deadline/keep-alive work, retires sessions and waits for transport teardown. It refreshes the observable presentation before returning. Repeated starts/stops are safe. A later start creates new session generations; a retired session cannot become active again. Callers that retained already-delivered immutable values still own those values, and a handler already executing may finish; no pending retired input is newly admitted to an observation.
 
 The callback overload `stop(completion:)` runs completion off the Bluetooth queue. AppKit hosts can use `.terminateLater` and reply to termination on the main actor after completion. Do not block the main actor waiting on a semaphore. Manager deallocation also requests shutdown, but an explicit awaited stop gives the host a deterministic lifecycle boundary.
 
-Switch2Kit has no workspace/menu-bar policy. The host listens for sleep and termination and decides what inactivity means. The sample stops on workspace sleep, restarts support on wake only when the user had it enabled, and uses on-demand discovery rather than silently scanning forever. Reopen discovery as needed after wake. The dashboard retains its existing suspend/resume and automatic-discovery policy.
+Switch2Kit has no workspace/menu-bar policy. The host listens for sleep and termination or scene-lifecycle changes and decides what inactivity means. The macOS sample stops on workspace sleep, restarts support on wake only when the user had it enabled, and uses on-demand discovery rather than silently scanning forever. Reopen discovery as needed after wake. The dashboard retains its existing suspend/resume and automatic-discovery policy. iOS hosts follow the [scene-lifecycle guidance](ios.md#scene-lifecycle-and-reconnection).
 
 ## Retry and retirement safeguards
 

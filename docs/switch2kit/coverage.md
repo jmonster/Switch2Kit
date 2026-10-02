@@ -54,10 +54,12 @@ Accessibility, synthetic keyboard input or system virtual HID.
 
 ## Platforms and hardware features outside this implementation
 
-The reusable engine has live macOS/CoreBluetooth and experimental Linux/BlueZ
-backends. Linux supports native Swift/C/SDL hosts, not the macOS dashboard. See
-[Linux requirements and qualification limits](linux.md). Windows and Android
-have no supported Switch2Kit backend. USB-driver work under
+The reusable engine has live macOS/CoreBluetooth and experimental
+[Linux/BlueZ](linux.md) and [Windows x64/WinRT](windows.md) backends. Linux and
+Windows support native Swift/C/SDL hosts; the dashboard remains macOS-only.
+Experimental [iOS/iPadOS 18+ Swift package integration](ios.md) uses CoreBluetooth
+and is compile-supported, without physical pairing/gameplay qualification or a
+button-wake reconnection guarantee. Android has no Switch2Kit backend. USB-driver work under
 [`sdl/`](../../sdl/README.md) is separate from these Bluetooth transports; it does
 not make USB a transport of the reusable Swift library.
 

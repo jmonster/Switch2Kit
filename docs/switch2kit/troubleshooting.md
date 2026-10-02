@@ -1,8 +1,13 @@
 # Troubleshooting in-process controller support
 
+The general input/lifecycle checks below apply across hosts. Permission UI and
+radio behavior depend on the platform; see the [iOS](ios.md), [Linux](linux.md),
+and [Windows](windows.md) guides for their setup and qualification limits. The
+dashboard and bundled demo discussed here are macOS applications.
+
 ## Bluetooth permission or power
 
-Inspect the manager's Bluetooth state, not just its ready-controller list. `.unauthorized` needs a host permission explanation and the appropriate macOS privacy settings; `.poweredOff` needs Bluetooth enabled. A usage string belongs in the host Info.plist, and a sandboxed host supplies its own Bluetooth entitlement where required. A library cannot grant those permissions or provide another app's privacy identity.
+Inspect the manager's Bluetooth state, not just its ready-controller list. `.unauthorized` needs a host permission explanation and the platform's Bluetooth access settings; `.poweredOff` needs Bluetooth enabled. On Apple platforms, a usage string belongs in the host Info.plist; a sandboxed macOS host also supplies its own Bluetooth entitlement. A library cannot grant those permissions or provide another app's privacy identity.
 
 Run a correctly bundled application when checking a privacy prompt. The sample build script creates that bundle. Repeatedly constructing managers or reinstalling output adapters does not repair denied Bluetooth permission. After the dashboard's explicit bundle-ID correction, approval for an older identifier is not evidence that the requested identifier is approved. Do not disable macOS security controls as a troubleshooting step.
 
@@ -42,4 +47,4 @@ Raw motion/current/optical values are not calibrated SI quantities. Zero is not 
 
 ## Useful problem reports
 
-Include the source revision, host macOS/toolchain, physical model and firmware when known, discovery policy, whether Sync or button wake was used, and the typed lifecycle/error sequence. Describe whether failure is discovery, handshake/first report, ongoing input, host UI or a dashboard output adapter. Review logs before sharing; do not include raw serials, peripheral IDs, advertisements, bond keys, tag contents or sensor/audio captures by default.
+Include the source revision, host OS/version and toolchain, physical model and firmware when known, discovery policy, whether Sync or button wake was used, and the typed lifecycle/error sequence. Describe whether failure is discovery, handshake/first report, ongoing input, host UI or a dashboard output adapter. Review logs before sharing; do not include raw serials, peripheral IDs, advertisements, bond keys, tag contents or sensor/audio captures by default.

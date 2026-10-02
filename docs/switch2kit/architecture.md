@@ -1,10 +1,15 @@
 # Architecture
 
 ```text
-Switch2KitApp ─────┐
-Switch2KitDemo ────┼── Switch2Kit ── CoreBluetooth
-Your application ─┘
+Switch2KitApp (macOS) ──┐                 ┌── CoreBluetooth (macOS/iOS)
+Switch2KitDemo (macOS) ─┼── Switch2Kit ────┼── BlueZ (Linux)
+Your application ──────┘                 └── WinRT (Windows x64)
 ```
+
+The [platform guide](README.md#supported-models-and-platforms) distinguishes
+desktop backends from experimental, compile-supported [iOS integration](ios.md).
+Each build selects its platform transport; the controller protocol and public
+manager API remain shared.
 
 ## Library
 
