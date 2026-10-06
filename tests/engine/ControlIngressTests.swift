@@ -1,11 +1,9 @@
 import Foundation
-import Synchronization
 
-// Reference storage avoids copying noncopyable Mutex captures in nested
-// DispatchQueue closures on Apple Swift. Synchronization and assertions stay intact.
+// Share synchronized counters between command delivery and assertions.
 private final class IngressCounters: Sendable {
-    let executed = Mutex(0)
-    let overflow = Mutex(false)
+    let executed = ControllerLock(0)
+    let overflow = ControllerLock(false)
 }
 
 @main enum ControlIngressTests {
@@ -52,7 +50,7 @@ private final class IngressCounters: Sendable {
             let current = engine.sessions[0]!, oldConnection = UUID()
             engine.submitRumble(id, strong: 0.3, weak: 0, duration: nil, expectedConnection: current.lifetime.id)
             engine.submitRumble(id, strong: 1, weak: 0, duration: nil, expectedConnection: oldConnection)
-            precondition(engine.rumbleInbox.withLock { $0.pending[id]?.strong } == 0.3,
+            precondition(engine.rumbleInbox.withLock { [id] in $0.pending[id]?.strong } == 0.3,
                          "An old caller must not overwrite a current connection's pending effect")
             engine.withSession(id, expectedConnection: oldConnection) { _ in counters.executed.withLock { $0 += 1 } }
             engine.disconnect(id, forget: true, expectedConnection: oldConnection)

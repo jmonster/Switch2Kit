@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import Switch2Kit
 
 // Injectable boundary for ABI tests. Implementations only enqueue library work;
@@ -24,7 +23,7 @@ package final class CContext: Sendable {
         var closed = false
         var automaticDiscovery = false
     }
-    private let lifecycle = Mutex(Lifecycle())
+    private let lifecycle = ControllerLock(Lifecycle())
     package let source: any ControllerSource
     private let reader: ControllerEventReader
     package init(source: any ControllerSource, capacity: Int) throws {
@@ -86,7 +85,7 @@ package final class CContext: Sendable {
         }
     }
     package func withController(id: UUID, connection: UUID,
-                                operation: (Switch2Controller, any ControllerSource) -> Int32) -> Int32 {
+                                operation: @Sendable (Switch2Controller, any ControllerSource) -> Int32) -> Int32 {
         lifecycle.withLock { value in
             guard value.running, !value.closed,
                   let controller = source.hub.snapshot.controllers.first(where: {

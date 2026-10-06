@@ -15,6 +15,8 @@ def fixture(source: str) -> str:
         assert source.rstrip().endswith("#endif")
         source = source.split("\n", 1)[1].rstrip().removesuffix("#endif")
     source = re.sub(r"^import (CoreBluetooth|IOBluetooth|Switch2Kit)$", "", source, flags=re.M)
+    # Exercise the macOS host-address branch with the fixture adapter on any OS.
+    source = source.replace("#if os(macOS) && canImport(IOBluetooth)", "#if S2K_RADIO_FIXTURE")
     source = re.sub(r"\b(?:fileprivate|private)(?:\(set\))?\s+", "", source)
     source = re.sub(r"\bpackage\s+", "", source)
     return "import CoreFoundation\n" + source

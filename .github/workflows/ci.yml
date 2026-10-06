@@ -55,10 +55,12 @@ jobs:
           xcodebuild -version
           # Includes swift test with warnings as errors and every tests/*/run.sh.
           bash tests/run.sh
-      - name: Actual Swift package on iOS Simulator and device
+      - name: Actual Swift package at iOS 17 and tvOS 17 deployment targets
         run: |
-          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-simulator CODE_SIGNING_ALLOWED=NO build
-          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS' -derivedDataPath build/ios-device CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-simulator IPHONEOS_DEPLOYMENT_TARGET=17.0 CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=iOS' -derivedDataPath build/ios-device IPHONEOS_DEPLOYMENT_TARGET=17.0 CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=tvOS Simulator' -derivedDataPath build/tvos-simulator TVOS_DEPLOYMENT_TARGET=17.0 CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -scheme Switch2Kit -destination 'generic/platform=tvOS' -derivedDataPath build/tvos-device TVOS_DEPLOYMENT_TARGET=17.0 CODE_SIGNING_ALLOWED=NO build
       - name: Independent public Swift consumer
         run: |
           cd "$RUNNER_TEMP"

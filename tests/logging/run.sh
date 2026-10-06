@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-swiftc -swift-version 6 -warnings-as-errors \
+swiftc -package-name Switch2Kit Sources/Switch2Kit/Platform/ControllerLock.swift -swift-version 6 -warnings-as-errors \
   Sources/Switch2KitApp/Logging/LogStore.swift \
   tests/logging/LogPipelineTests.swift -o "$work/log-tests"
 "$work/log-tests"
@@ -17,5 +17,5 @@ assert source.count(needle) == 1
 source = source.replace(needle, '                TestWrites.record(data.count)\n' + needle)
 Path(sys.argv[1], 'WriteBatch.swift').write_text(source + '\n' + Path('tests/logging/WriteBatchTests.swift').read_text())
 PY
-swiftc -parse-as-library -swift-version 6 -warnings-as-errors "$work/WriteBatch.swift" -o "$work/write-tests"
+swiftc -package-name Switch2Kit Sources/Switch2Kit/Platform/ControllerLock.swift -parse-as-library -swift-version 6 -warnings-as-errors "$work/WriteBatch.swift" -o "$work/write-tests"
 "$work/write-tests"

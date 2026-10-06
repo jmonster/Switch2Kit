@@ -1,6 +1,5 @@
 import Foundation
-import Synchronization
-final class ChangeCounter: Sendable { let value = Mutex(0) }
+final class ChangeCounter: Sendable { let value = ControllerLock(0) }
 
 @main enum PolicyTests {
     static func main() {

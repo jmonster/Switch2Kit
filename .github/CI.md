@@ -9,7 +9,7 @@ on-demand qualification tools, not eight independent per-commit build pipelines.
 | Lane | Work | Job timeout |
 | --- | --- | ---: |
 | Preflight | CI-policy tests, repository links/identity, notices, signing guards, source boundaries, complete-PR change classification | 2 min |
-| macOS 26 | Complete `tests/run.sh` (Swift package plus every portable shell suite), independent public Swift consumer, real demo/app, signing and current-runtime probe | 8 min |
+| macOS 26 | Complete `tests/run.sh` (Swift package plus every portable shell suite), iOS 17/tvOS 17 device and simulator deployment builds, independent macOS 14 public Swift consumer, real demo/app, signing and current-runtime probe | 8 min |
 | Linux / Swift 6.2.1 | Package tests, private-D-Bus BlueZ transport tests, one real SDL build for the adapter and automatic-discovery host consumers | 8 min |
 | Windows 2022 / Swift 6.2.1 | Native WinRT transport/package tests and release C facade | 8 min |
 | CI gate | Verify all expected outcomes, including intentional docs-only skips | 1 min |

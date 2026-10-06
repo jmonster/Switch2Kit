@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 @main enum Benchmark {
     static func main() {
@@ -9,7 +8,7 @@ import Synchronization
                 let queue = DispatchQueue(label: "buffer.benchmark")
                 queue.suspend()
                 let done = DispatchSemaphore(value: 0)
-                let calls = Mutex(0)
+                let calls = ControllerLock(0)
                 let box = EventMailbox(capacity: capacity, queue: queue, current: {
                     EventEnvelope(sequence: UInt64(capacity + 1), event: .snapshot(.init()), lifetime: nil)
                 }, handler: { _ in

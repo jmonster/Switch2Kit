@@ -78,7 +78,7 @@ public func readContext(_ handle: OpaquePointer?, _ events: UnsafeMutablePointer
 }
 
 private func control(_ handle: OpaquePointer?, _ id: UnsafePointer<S2KID>?, _ connection: UnsafePointer<S2KID>?,
-                     _ operation: (Switch2Controller, any ControllerSource) -> Int32) -> Int32 {
+                     _ operation: @Sendable (Switch2Controller, any ControllerSource) -> Int32) -> Int32 {
     guard let context = context(handle), let id, let connection else { return 1 }
     return context.withController(id: swiftID(id.pointee), connection: swiftID(connection.pointee), operation: operation)
 }

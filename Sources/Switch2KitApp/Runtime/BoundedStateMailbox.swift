@@ -1,5 +1,7 @@
 import Foundation
-import Synchronization
+#if canImport(Switch2Kit)
+import Switch2Kit
+#endif
 
 /// Bounded, single-consumer admission for high-rate state streams.
 ///
@@ -27,7 +29,7 @@ final class BoundedStateMailbox<State: Sendable>: Sendable {
         var drainScheduled = false
     }
 
-    private let storage = Mutex(Storage())
+    private let storage = ControllerLock(Storage())
     private let perSlotCapacity: Int
     private let maxAge: TimeInterval
     private let batchLimit: Int

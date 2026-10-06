@@ -1,6 +1,6 @@
 # Switch2Kit
 
-A source Swift package for **in-process Nintendo Switch 2 controller input on macOS**. Import `Switch2Kit` to own discovery and connections, receive calibrated physical-controller snapshots, and request supported rumble and player LEDs. The Switch2Kit dashboard uses this library.
+A source Swift package for **in-process Nintendo Switch 2 controller input on Apple platforms, Linux, and Windows**. Import `Switch2Kit` to own discovery and connections, receive calibrated physical-controller snapshots, and request supported rumble and player LEDs. The Switch2Kit dashboard uses this library.
 
 
 ## Supported models and platforms
@@ -14,7 +14,7 @@ A source Swift package for **in-process Nintendo Switch 2 controller input on ma
 
 Switch 1 controllers and arbitrary HID devices are not admitted. Nintendo company ID, vendor ID and supported product ID must all validate; names alone never authorize a connection. Joy-Con pairs remain two physical controllers.
 
-The declared deployment minimum is **macOS 15**. Build source with **Swift 6.2 or newer**; the repository's Apple-SDK builds use **Xcode 26 or newer**. The app's optional CoreHID output has separate availability/entitlement requirements that do not apply to this library.
+The source library declares **iOS 17, tvOS 17, and macOS 14** deployment targets. Build with **Swift 6.2 or newer** and **Xcode 26 or newer** for Apple SDKs. The optional dashboard remains macOS 15; its CoreHID output and entitlements are not library dependencies. A declared target is not runtime or controller qualification: see [Apple deployment and qualification](apple-platforms.md).
 
 ## Install the source package
 
@@ -25,7 +25,7 @@ For local development, add the repository to your host's `Package.swift`:
 import PackageDescription
 let package = Package(
     name: "MyControllerApp",
-    platforms: [.macOS(.v15)],
+    platforms: [.iOS(.v17), .tvOS(.v17), .macOS(.v14)],
     dependencies: [.package(path: "../Switch2Kit")],
     targets: [.executableTarget(name: "MyControllerApp", dependencies: [
         .product(name: "Switch2Kit", package: "Switch2Kit")

@@ -1,9 +1,8 @@
 // Appended to a temporary copy of WebSocketHub.swift by run.sh. Same-file
 // access tests queue-confined invariants without shipping test hooks in the app.
-import Synchronization
 
 enum TestJSON {
-    private static let counts = Mutex([String: Int]())
+    private static let counts = ControllerLock([String: Int]())
     static func record(_ object: [String: Any]) {
         guard let type = object["t"] as? String else { return }
         counts.withLock { $0[type, default: 0] += 1 }
@@ -69,7 +68,7 @@ extension WebSocketHub {
             hub.startPing()
             precondition(hub.pingTimer != nil)
             hub.rumbleOwners[0] = id
-            let stops = Mutex(0)
+            let stops = ControllerLock(0)
             hub.onRumble = { _, strong, weak in
                 if strong == 0 && weak == 0 { stops.withLock { $0 += 1 } }
             }

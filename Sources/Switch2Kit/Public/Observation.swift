@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 /// A cancellable, bounded event observation. Retain it for as long as events are needed.
 /// Cancellation is idempotent; queued work is discarded. A handler already executing
@@ -20,7 +19,7 @@ public final class Switch2ControllerObservation: Sendable {
 package final class SessionLifetime: Sendable {
     package init() {}
     package let id = UUID()
-    private let active = Mutex(true)
+    private let active = ControllerLock(true)
     package var isActive: Bool { active.withLock { $0 } }
     package func retire() { active.withLock { $0 = false } }
 }
@@ -107,7 +106,7 @@ package final class EventMailbox: EventSink {
         var cancelled = false
         var delivered: UInt64 = 0
     }
-    private let state: Mutex<State>
+    private let state: ControllerLock<State>
     private let capacity: Int
     private let queue: DispatchQueue
     private let interval: TimeInterval
@@ -117,7 +116,7 @@ package final class EventMailbox: EventSink {
                  current: @escaping @Sendable () -> EventEnvelope,
                  handler: @escaping @Sendable (Switch2ControllerEvent) -> Void) {
         self.capacity = min(4096, max(1, capacity)); self.queue = queue
-        self.state = Mutex(State(pending: PendingControllerEvents(capacity: self.capacity)))
+        self.state = ControllerLock(State(pending: PendingControllerEvents(capacity: self.capacity)))
         self.interval = interval; self.current = current; self.handler = handler
     }
     package func enqueue(_ event: EventEnvelope) {
@@ -150,9 +149,10 @@ package final class EventMailbox: EventSink {
             // the sequence watermark over valid queued input even without overflow.
             if envelope.snapshotLifetimes.contains(where: { !$0.isActive }) { envelope = current() }
             guard envelope.lifetime?.isActive != false else { continue }
+            let sequence = envelope.sequence
             let deliver = state.withLock { value in
-                guard !value.cancelled, envelope.sequence > value.delivered else { return false }
-                value.delivered = envelope.sequence
+                guard !value.cancelled, sequence > value.delivered else { return false }
+                value.delivered = sequence
                 value.pending.discard(through: value.delivered)
                 return true
             }
@@ -181,7 +181,7 @@ package final class ControllerEventHub: Sendable {
         var observers: [UInt64: any EventSink] = [:]
         var lifetimes: [Switch2ControllerID: SessionLifetime] = [:]
     }
-    private let state = Mutex(State())
+    private let state = ControllerLock(State())
 
     // Session teardown retires its token before the transport publishes removal.
     // Project through those tokens so reads and resynchronization cannot expose
@@ -274,14 +274,14 @@ package final class ControllerEventReader: EventSink {
         var cancelled = false
         var delivered: UInt64 = 0
     }
-    private let state: Mutex<State>
+    private let state: ControllerLock<State>
     private let capacity: Int
     private let current: @Sendable () -> EventEnvelope
     private let remove: @Sendable () -> Void
     package init(capacity: Int, current: @escaping @Sendable () -> EventEnvelope,
                  remove: @escaping @Sendable () -> Void) {
         self.capacity = capacity; self.current = current; self.remove = remove
-        self.state = Mutex(State(pending: PendingControllerEvents(capacity: capacity)))
+        self.state = ControllerLock(State(pending: PendingControllerEvents(capacity: capacity)))
     }
     package func enqueue(_ event: EventEnvelope) {
         state.withLock { value in

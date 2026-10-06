@@ -134,6 +134,21 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertEqual(repositories, ["libsdl-org/SDL"])
         self.assertEqual(sum(text.count("bash tests/run.sh") for text in runs.values()), 1)
 
+    def test_apple_source_deployment_targets(self):
+        manifest = (ROOT / "Package.swift").read_text()
+        for platform in [".iOS(.v17)", ".tvOS(.v17)", ".macOS(.v14)"]:
+            self.assertIn(platform, manifest)
+        commands = [line for step in self.ci["jobs"]["macos"]["steps"]
+                    for line in step.get("run", "").splitlines() if "xcodebuild -scheme Switch2Kit" in line]
+        for platform, setting in [("iOS", "IPHONEOS_DEPLOYMENT_TARGET"), ("tvOS", "TVOS_DEPLOYMENT_TARGET")]:
+            for suffix in ["", " Simulator"]:
+                destination = f"generic/platform={platform}{suffix}'"
+                selected = [command for command in commands if destination in command]
+                self.assertEqual(len(selected), 1)
+                self.assertIn(f"{setting}=17.0", selected[0])
+        self.assertIn("platforms: [.macOS(.v14)]",
+                      (ROOT / "scripts/verify-switch2kit-consumer.sh").read_text())
+
     def test_manual_qualification_keeps_secondary_platforms_and_explicit_emulators(self):
         windows = self.flows["windows-native.yml"]["jobs"]["windows"]["strategy"]["matrix"]["include"]
         self.assertEqual({cell["swift"] for cell in windows}, {"6.2.1", "6.3.3"})

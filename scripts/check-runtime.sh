@@ -26,7 +26,8 @@ assert m, 'Update the validator explicitly when adopting a custom package minimu
 def version(s):
     values = tuple(map(int, s.split('.')))
     return values + (0,) * (3-len(values))
-assert version(m.group(1)) == version(info['LSMinimumSystemVersion']) == version(probe['declaredMinimum'])
+assert version(m.group(1)) <= version(info['LSMinimumSystemVersion'])
+assert version(info['LSMinimumSystemVersion']) == version(probe['declaredMinimum'])
 build = subprocess.check_output(['xcrun', 'vtool', '-show-build', str(exe)], text=True)
 minimums = re.findall(r'^\s*minos\s+(\S+)', build, re.M)
 assert minimums and all(version(s) == version(probe['declaredMinimum']) for s in minimums), build

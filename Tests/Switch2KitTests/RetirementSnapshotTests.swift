@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import XCTest
 @testable import Switch2Kit
 
@@ -17,7 +16,7 @@ final class RetirementSnapshotTests: XCTestCase {
         let hub = ControllerEventHub(), lifetime = SessionLifetime()
         let value = controller(lifetime)
         hub.publish(.init(controllers: [value]), event: .connected(value), lifetime: lifetime)
-        let delivered = Mutex<[Switch2ControllerEvent]>([])
+        let delivered = ControllerLock<[Switch2ControllerEvent]>([])
         let observation = try hub.observe(queue: queue, capacity: 64) { event in
             delivered.withLock { $0.append(event) }
         }
@@ -64,7 +63,7 @@ final class RetirementSnapshotTests: XCTestCase {
         hub.publish(.init(controllers: [first]), event: .connected(first), lifetime: retired)
         hub.publish(.init(controllers: [first, second]), event: .connected(second), lifetime: active)
         retired.retire()
-        let delivered = Mutex<[Switch2ControllerEvent]>([])
+        let delivered = ControllerLock<[Switch2ControllerEvent]>([])
         let observation = try hub.observe(queue: queue, capacity: 256) { event in
             delivered.withLock { $0.append(event) }
         }
@@ -92,7 +91,7 @@ final class RetirementSnapshotTests: XCTestCase {
         let hub = ControllerEventHub(), lifetime = SessionLifetime()
         let value = controller(lifetime)
         hub.publish(.init(controllers: [value]), event: .connected(value), lifetime: lifetime)
-        let delivered = Mutex<[Switch2ControllerEvent]>([])
+        let delivered = ControllerLock<[Switch2ControllerEvent]>([])
         let observation = try hub.observe(queue: queue, capacity: 1) { event in
             delivered.withLock { $0.append(event) }
         }

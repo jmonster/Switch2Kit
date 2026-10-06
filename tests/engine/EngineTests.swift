@@ -1,12 +1,8 @@
 import Foundation
-import Synchronization
 
-// Keep Mutex in stable reference storage when captured by both the observer
-// and DispatchQueue.sync. Apple Swift 6.3.3 diagnoses a copy of a noncopyable
-// value for the equivalent local capture in this Swift 5 compatibility suite.
-// The counter remains synchronized; no assertion or production code changes.
+// Share the synchronized count between observation delivery and queue assertions.
 private final class InputCounter: Sendable {
-    let value = Mutex(0)
+    let value = ControllerLock(0)
 }
 
 @main enum EngineTests {

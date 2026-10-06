@@ -1,10 +1,9 @@
 // Appended to a temporary production source copy by run.sh. The injected
 // write counter does not ship in the application.
 import Foundation
-import Synchronization
 
 enum TestWrites {
-    private static let sizes = Mutex<[Int]>([])
+    private static let sizes = ControllerLock<[Int]>([])
     static func record(_ bytes: Int) { sizes.withLock { $0.append(bytes) } }
     static func reset() { sizes.withLock { $0.removeAll() } }
     static var snapshot: [Int] { sizes.withLock { $0 } }

@@ -11,7 +11,7 @@ final class ApplePlatformTests: XCTestCase {
     }
 
     func testHostAddressIsAbsentWithoutIOBluetooth() {
-        #if !canImport(IOBluetooth)
+        #if !os(macOS) || !canImport(IOBluetooth)
         XCTAssertNil(HostBluetooth.macAddressBytesLE)
         #endif
     }

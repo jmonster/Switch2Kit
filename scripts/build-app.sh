@@ -29,11 +29,13 @@ if [ -n "${PROVISIONING_PROFILE:-}" ]; then
     [ -n "$TEAM" ] && [ "$APP_ID" = "$TEAM.$BUNDLE_ID" ] || { echo "Entitlements do not identify this application" >&2; exit 2; }
 fi
 
-swift build -c release --product "$EXE"
+TRIPLE="$(uname -m)-apple-macosx15.0"
+swift build -c release --product "$EXE" --triple "$TRIPLE"
+BIN=$(swift build -c release --triple "$TRIPLE" --show-bin-path)
 
 rm -rf "$OUT"
 mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources"
-cp ".build/release/$EXE" "$OUT/Contents/MacOS/$EXE"
+cp "$BIN/$EXE" "$OUT/Contents/MacOS/$EXE"
 cp Resources/Info.plist "$OUT/Contents/Info.plist"
 if [ -f Resources/AppIcon.icns ]; then
     cp Resources/AppIcon.icns "$OUT/Contents/Resources/AppIcon.icns"

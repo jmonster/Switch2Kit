@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import XCTest
 @testable import Switch2Kit
 
@@ -15,7 +14,7 @@ final class ObservationTests: XCTestCase {
         let queue = DispatchQueue(label: "test.observation.fifo")
         queue.suspend()
         let hub = ControllerEventHub(), lifetime = SessionLifetime()
-        let reports = Mutex<[UInt64]>([])
+        let reports = ControllerLock<[UInt64]>([])
         let observation = try hub.observe(queue: queue, capacity: 256) { event in
             if case .input(let controller) = event { reports.withLock { $0.append(controller.state.sequence) } }
         }
@@ -33,7 +32,7 @@ final class ObservationTests: XCTestCase {
         let queue = DispatchQueue(label: "test.observation.overflow")
         queue.suspend()
         let hub = ControllerEventHub(), lifetime = SessionLifetime()
-        let values = Mutex<[Switch2ControllerEvent]>([])
+        let values = ControllerLock<[Switch2ControllerEvent]>([])
         let observation = try hub.observe(queue: queue, capacity: 4) { event in values.withLock { $0.append(event) } }
         let id = Switch2ControllerID(rawValue: UUID())
         for sequence in 1...10_000 {
@@ -54,7 +53,7 @@ final class ObservationTests: XCTestCase {
         let hub = ControllerEventHub(), lifetime = SessionLifetime()
         let value = controller(lifetime)
         hub.publish(.init(controllers: [value]), event: .connected(value), lifetime: lifetime)
-        let delivered = Mutex<[Switch2ControllerEvent]>([])
+        let delivered = ControllerLock<[Switch2ControllerEvent]>([])
         let observation = try hub.observe(queue: queue, capacity: 64) { event in delivered.withLock { $0.append(event) } }
         hub.publish(.init(controllers: [value]), event: .input(value), lifetime: lifetime)
         lifetime.retire()
@@ -73,7 +72,7 @@ final class ObservationTests: XCTestCase {
     func testCancellationAndObserverAdmissionAreBounded() throws {
         let queue = DispatchQueue(label: "test.observation.cancel")
         queue.suspend()
-        let hub = ControllerEventHub(), calls = Mutex(0)
+        let hub = ControllerEventHub(), calls = ControllerLock(0)
         var observations: [Switch2ControllerObservation] = []
         for _ in 0..<32 {
             observations.append(try hub.observe(queue: queue, capacity: 1) { _ in calls.withLock { $0 += 1 } })

@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import Switch2Kit
 import Switch2KitC
 
@@ -14,7 +13,7 @@ final class TestSource: ControllerSource {
         var calls: [String] = []
         var stopCompletion: (@Sendable () -> Void)?
     }
-    let state = Mutex(State())
+    let state = ControllerLock(State())
     func snapshot(_ value: State) -> Switch2ManagerSnapshot {
         .init(isRunning: value.running, bluetooth: .poweredOn, discovery: .paused,
               controllers: value.controllers.sorted { $0.key < $1.key }.map(\.value))

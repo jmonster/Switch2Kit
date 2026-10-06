@@ -1,9 +1,8 @@
 import Foundation
-import Synchronization
 
 final class Provider: OutputHealthProviding, Sendable {
     let outputBackend: OutputBackend
-    private let replies = Mutex<[@Sendable (OutputHealth) -> Void]>([])
+    private let replies = ControllerLock<[@Sendable (OutputHealth) -> Void]>([])
     init(_ backend: OutputBackend) { outputBackend = backend }
     func requestHealth(_ reply: @escaping @Sendable (OutputHealth) -> Void) {
         replies.withLock { $0.append(reply) }

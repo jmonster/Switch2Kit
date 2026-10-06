@@ -1,8 +1,7 @@
 import Foundation
-import Synchronization
 
 private final class RumbleErrors: Sendable {
-    let values = Mutex<[Switch2KitError]>([])
+    let values = ControllerLock<[Switch2KitError]>([])
 }
 
 @main enum RumbleRoutingTests {

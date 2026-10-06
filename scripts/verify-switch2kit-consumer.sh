@@ -11,7 +11,7 @@ import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 pathlib.Path(sys.argv[2]).write_text('''// swift-tools-version: 6.2
 import PackageDescription
-let package = Package(name: "IndependentConsumer", platforms: [.macOS(.v15)],
+let package = Package(name: "IndependentConsumer", platforms: [.macOS(.v14)],
     dependencies: [.package(path: %s)],
     targets: [.executableTarget(name: "Consumer", dependencies: [.product(name: "Switch2Kit", package: %s)])])
 ''' % (json.dumps(str(root)), json.dumps(root.name.lower())))

@@ -60,7 +60,7 @@ The SDL3 integrations run in the emulator's existing input backend. The emulator
 
 ### Library
 
-Requires Swift 6.2+. macOS hosts require macOS 15+ and Xcode 26+; Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md); Windows hosts use [WinRT and the x64 Swift toolchain](docs/switch2kit/windows.md).
+Requires Swift 6.2+. The source library declares iOS 17+, tvOS 17+, and macOS 14+ deployment targets with Xcode 26+. The optional dashboard remains macOS 15+. See [Apple deployment and qualification](docs/switch2kit/apple-platforms.md) for validation status and mobile bonding limits. Linux hosts use [BlueZ and the native Swift toolchain](docs/switch2kit/linux.md); Windows hosts use [WinRT and the x64 Swift toolchain](docs/switch2kit/windows.md).
 
 ```swift
 .package(url: "https://github.com/jmonster/Switch2Kit.git", branch: "main")

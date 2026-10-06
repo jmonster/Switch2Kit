@@ -8,6 +8,8 @@ Public snapshots are immutable `Sendable` values. `Switch2ControllerManager` con
 
 The dashboard's output queue is now separate from the library's Bluetooth queue. Slow keyboard/network/UI adapters cannot synchronously hold a Bluetooth callback. A host-provided logging handler likewise runs on a separate utility queue.
 
+Locks use `OSAllocatedUnfairLock` on Apple platforms and `Synchronization.Mutex` on Linux and Windows. One package-scoped typealias selects the native primitive without wrapping its fast path. State remains `Sendable`; each platform retains its native checked scoped-access API. Lock scopes stay synchronous and nonrecursive; neither host callbacks nor suspension points run while a delivery lock is held.
+
 ## Bounded observation contract
 
 `observe(on:bufferingNewest:handler:)` is the non-UI consumption mechanism. A retained `Switch2ControllerObservation` owns subscription lifetime; `cancel()` is idempotent and deallocation cancels. Registration accepts capacities 1–4096 and at most 32 observers, including the manager's internal presentation observer. Admission beyond that throws `observerLimitReached`.

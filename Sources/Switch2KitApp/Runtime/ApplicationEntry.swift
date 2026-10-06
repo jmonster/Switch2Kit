@@ -23,6 +23,10 @@ import SwiftUI
             if ApplicationSensorPolicy.selectedProfile != .compatibility {
                 bridgeLog(.warning, "app", "Unqualified sensor profile: \(ApplicationSensorPolicy.selectedProfile.rawValue). Some sensor features are disabled; normal relaunch and reconnect restores compatibility.")
             }
+            guard #available(macOS 15.0, *) else {
+                FileHandle.standardError.write(Data("The Switch2Kit dashboard requires macOS 15 or later.\n".utf8))
+                exit(1)
+            }
             Switch2KitApp.main()
             return
         }

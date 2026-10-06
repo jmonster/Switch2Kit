@@ -8,6 +8,7 @@
 import SwiftUI
 import ServiceManagement
 
+@available(macOS 15.0, *)
 struct Switch2KitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
@@ -101,7 +102,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         engine.addSink(OutputStatusStore.shared.register(UDPHub()))
         engine.addSink(OutputStatusStore.shared.register(WebSocketHub()))
         engine.addSink(OutputStatusStore.shared.register(NetworkGamepadSink()))
-        engine.addSink(OutputStatusStore.shared.register(VirtualHIDSink()))
+        if #available(macOS 15.0, *) {
+            engine.addSink(OutputStatusStore.shared.register(VirtualHIDSink()))
+        }
         notifications.attach(to: engine)
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

@@ -904,7 +904,7 @@ extension ControllerSession: CBPeripheralDelegate {
 // MARK: - Host Bluetooth adapter address
 
 #if canImport(CoreBluetooth) || S2K_RADIO_FIXTURE
-#if canImport(IOBluetooth)
+#if os(macOS) && canImport(IOBluetooth)
 import IOBluetooth
 #endif
 
@@ -912,7 +912,7 @@ enum HostBluetooth {
     /// The Mac's Bluetooth adapter MAC, little-endian bytes, for the
     /// protocol-level bond command. nil when unavailable.
     package static var macAddressBytesLE: Data? {
-        #if canImport(IOBluetooth)
+        #if os(macOS) && canImport(IOBluetooth)
         guard let addr = IOBluetoothHostController.default()?.addressAsString() else {
             return nil
         }
@@ -921,7 +921,7 @@ enum HostBluetooth {
         guard parts.count == 6 else { return nil }
         return Data(parts.reversed())
         #else
-        // CoreBluetooth does not expose the local adapter address on iOS.
+        // CoreBluetooth does not expose the local adapter address on iOS or tvOS.
         // Keep Sync-mode connections available without writing a fabricated bond.
         return nil
         #endif

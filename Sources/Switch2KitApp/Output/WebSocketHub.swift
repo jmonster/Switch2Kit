@@ -3,8 +3,10 @@
 // Opt-in and exact extension-Origin checks restrict browser access; they do
 // not authenticate native processes already running as the local user.
 import Foundation
+#if canImport(Switch2Kit)
+import Switch2Kit
+#endif
 import Network
-import Synchronization
 
 final class WebSocketHub: ControllerOutputSink, OutputHealthProviding, @unchecked Sendable {
     static let port: UInt16 = 24810
@@ -32,7 +34,7 @@ final class WebSocketHub: ControllerOutputSink, OutputHealthProviding, @unchecke
         var enabled = false
         var generation: UInt64 = 0
     }
-    private let admission = Mutex(Admission())
+    private let admission = ControllerLock(Admission())
     private let stateMailbox = BoundedStateMailbox<Input>(
         perSlotCapacity: 64, maxAge: 0.25, batchLimit: 32)
     private var requestedEnabled = false // queue confined

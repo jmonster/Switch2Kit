@@ -1,12 +1,11 @@
 import Foundation
-import Synchronization
 import XCTest
 @testable import Switch2Kit
 
 final class DiagnosticsTests: XCTestCase {
     func testSlowDiagnosticHandlerHasBoundedStorageAndReportsDrops() {
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0), done = DispatchSemaphore(value: 0)
-        let records = Mutex<[Switch2LogRecord]>([])
+        let records = ControllerLock<[Switch2LogRecord]>([])
         let diagnostics = Switch2Diagnostics(minimum: .warning) { record in
             let count = records.withLock { $0.append(record); return $0.count }
             if count == 1 { entered.signal(); release.wait() }

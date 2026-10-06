@@ -1,6 +1,6 @@
 # Runtime checks
 
-The package and application require macOS 15 or later. CI builds and runs the packaged loader on macOS 15 and 26, on both Apple Silicon and Intel. Each result records the actual OS patch, architecture, source revision and Xcode version.
+The dashboard application requires macOS 15 or later. The source library declares macOS 14; see [Apple deployment and qualification](switch2kit/apple-platforms.md). CI builds and runs the packaged loader on macOS 15 and 26, on both Apple Silicon and Intel. Each result records the actual OS patch, architecture, source revision and Xcode version.
 
 ```sh
 bash tests/runtime-qualification/run.sh

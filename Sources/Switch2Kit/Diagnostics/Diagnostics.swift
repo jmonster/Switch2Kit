@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 #if canImport(os)
 import os
 #endif
@@ -48,11 +47,11 @@ public struct Switch2LogRecord: Sendable {
 /// never on the Bluetooth queue or main actor. Hosts choose their own UI hop/persistence.
 public typealias Switch2LogHandler = @Sendable (Switch2LogRecord) -> Void
 
-// Mutable inbox is protected by Mutex; one utility-queue drain owns all handler calls.
+// Mutable inbox is protected by ControllerLock; one utility-queue drain owns all handler calls.
 // No file handles, directories, app preferences, or raw transport data are accepted here.
 package final class Switch2Diagnostics: Sendable {
     private struct Inbox: Sendable { var records: [Switch2LogRecord] = []; var scheduled = false; var dropped = 0 }
-    private let inbox = Mutex(Inbox())
+    private let inbox = ControllerLock(Inbox())
     private let queue = DispatchQueue(label: "Switch2Kit.diagnostics", qos: .utility)
     private let handler: Switch2LogHandler?
     private let minimum: Switch2LogLevel

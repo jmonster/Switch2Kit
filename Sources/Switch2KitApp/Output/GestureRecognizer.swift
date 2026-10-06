@@ -10,7 +10,9 @@
 // the "$1 recognizer" idea over the 3-axis gyro signal.
 
 import Foundation
-import Synchronization
+#if canImport(Switch2Kit)
+import Switch2Kit
+#endif
 import CoreGraphics
 import AppKit
 
@@ -45,7 +47,7 @@ final class GestureRecognizer: @unchecked Sendable {
         var recordingName: String?
         var onRecorded: (@Sendable (AirGesture) -> Void)?
     }
-    private let state = Mutex(State())
+    private let state = ControllerLock(State())
     var recordingName: String? {
         get { state.withLock { $0.recordingName } }
         set { state.withLock { $0.recordingName = newValue } }

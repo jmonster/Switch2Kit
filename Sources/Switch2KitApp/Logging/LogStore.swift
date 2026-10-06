@@ -3,9 +3,11 @@
 // every entry. A bounded pipeline batches UI delivery and serializes file IO.
 
 import Foundation
+#if canImport(Switch2Kit)
+import Switch2Kit
+#endif
 import Combine
 import os
-import Synchronization
 
 enum LogLevel: String, CaseIterable, Sendable {
     case debug = "DEBUG"
@@ -44,7 +46,7 @@ final class LogStore: ObservableObject {
         var entries: [LogEntry] = []
         var scheduled = false
     }
-    private nonisolated static let inbox = Mutex(Inbox())
+    private nonisolated static let inbox = ControllerLock(Inbox())
 
     // Display only the newest window of logs if the main actor stalls. The
     // file writer remains independent, and at most one UI task is queued.
@@ -98,7 +100,7 @@ final class LogPipeline: @unchecked Sendable {
     private let maxFileBytes: Int
     private let maxPending: Int
     private let batchSize: Int
-    private let buffer = Mutex(Buffer())
+    private let buffer = ControllerLock(Buffer())
     private let writerQueue = DispatchQueue(label: "org.switch2kit.logging", qos: .utility)
     private let logger = Logger(subsystem: "org.switch2kit", category: "bridge")
     private let formatter: DateFormatter

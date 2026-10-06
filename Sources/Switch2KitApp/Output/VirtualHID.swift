@@ -20,6 +20,7 @@
 import Foundation
 import CoreHID
 
+@available(macOS 15.0, *)
 final class VirtualHIDSink: ControllerOutputSink, OutputHealthProviding {
 
     // This descriptor has no rumble output report.
@@ -347,6 +348,7 @@ final class VirtualHIDSink: ControllerOutputSink, OutputHealthProviding {
 
 /// The controller has no meaningful get/set report handling on the virtual
 /// device (rumble travels the UDP path), but CoreHID requires a delegate.
+@available(macOS 15.0, *)
 final class NullHIDDelegate: HIDVirtualDeviceDelegate {
     static let shared = NullHIDDelegate()
 

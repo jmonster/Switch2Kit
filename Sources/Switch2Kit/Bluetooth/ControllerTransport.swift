@@ -3,7 +3,6 @@ import Foundation
 #if canImport(CoreBluetooth)
 import CoreBluetooth
 #endif
-import Synchronization
 
 // Sole production owner of the platform radio and physical sessions. Every mutable field
 // below is confined to btQueue. Public commands enqueue onto it; callbacks never
@@ -23,7 +22,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         var scheduled = false
         var overflowed = false
     }
-    private let rumbleInbox = Mutex(RumbleInbox())
+    private let rumbleInbox = ControllerLock(RumbleInbox())
     private struct ControlIntent: Sendable {
         let id: Switch2ControllerID
         let generation: UUID?
@@ -34,7 +33,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         var scheduled = false
         var overflowed = false
     }
-    private let controlInbox = Mutex(ControlInbox())
+    private let controlInbox = ControllerLock(ControlInbox())
     private let hub: ControllerEventHub
     private let diagnostics: Switch2Diagnostics
     private let configuration: Switch2ControllerConfiguration

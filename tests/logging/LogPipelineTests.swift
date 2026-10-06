@@ -1,15 +1,14 @@
 import Foundation
-import Synchronization
 
 @main
 enum LogPipelineTests {
     static func main() {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("switch2kit-log-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
-        let received = Mutex<[LogEntry]>([])
+        let received = ControllerLock<[LogEntry]>([])
         let entered = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
-        let deliveries = Mutex(0)
+        let deliveries = ControllerLock(0)
         let pipeline = LogPipeline(directory: root, maxFileBytes: 320, maxPending: 8, batchSize: 4) { entries in
             received.withLock { $0.append(contentsOf: entries) }
             let shouldBlock = deliveries.withLock { count -> Bool in
@@ -46,7 +45,7 @@ enum LogPipelineTests {
             precondition(LogStore.pendingPresentationCount <= 5_000)
         }
         // Flush must drain every batch present at entry, not only the first one.
-        let all = Mutex<[LogEntry]>([])
+        let all = ControllerLock<[LogEntry]>([])
         let bulk = LogPipeline(directory: root.appendingPathComponent("bulk"), maxPending: 1000, batchSize: 4) { batch in
             all.withLock { $0.append(contentsOf: batch) }
         }

@@ -1,5 +1,7 @@
 import Foundation
-import Synchronization
+#if canImport(Switch2Kit)
+import Switch2Kit
+#endif
 
 /// Presentation only: bounded newest snapshots and at most one main-queue task.
 /// This is deliberately NOT used for game input, whose press/release edges matter.
@@ -10,7 +12,7 @@ final class VisualizerMailbox<State: Sendable>: Sendable {
         var lastAdmission: TimeInterval = -.infinity
         var scheduled = false
     }
-    private let storage = Mutex(Storage())
+    private let storage = ControllerLock(Storage())
     private let maxSlots: Int
     private let interval: TimeInterval
 

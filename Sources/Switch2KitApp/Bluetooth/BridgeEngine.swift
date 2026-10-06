@@ -7,7 +7,6 @@
 // output queue); only @Published presentation properties are main-actor isolated.
 
 import Foundation
-import Synchronization
 import Combine
 import Switch2Kit
 
@@ -73,7 +72,7 @@ final class BridgeEngine: NSObject, ObservableObject, @unchecked Sendable {
         var press: (@Sendable (String, TimeInterval) -> Void)?
         var state: (@Sendable (String, ControllerState) -> Void)?
     }
-    private let callbacks = Mutex(Callbacks())
+    private let callbacks = ControllerLock(Callbacks())
     var onInputPermissionNeeded: (@Sendable (Bool) -> Void)? {
         get { callbacks.withLock { $0.permission } }
         set {

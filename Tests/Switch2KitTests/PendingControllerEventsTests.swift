@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import XCTest
 @testable import Switch2Kit
 
@@ -97,7 +96,7 @@ final class PendingControllerEventsTests: XCTestCase {
         let hub = ControllerEventHub(), lifetime = SessionLifetime()
         let id = Switch2ControllerID(rawValue: UUID())
         let queue = DispatchQueue(label: "test.observation.circular")
-        let reports = Mutex<[UInt64]>([])
+        let reports = ControllerLock<[UInt64]>([])
         let done = DispatchSemaphore(value: 0)
         let observation = try hub.observe(queue: queue, capacity: 4096) { event in
             if case .input(let controller) = event {
