@@ -61,6 +61,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     private var idleSweepTimer: DispatchSourceTimer?
     private var bluetoothState: Switch2BluetoothState = .unknown
     private var discoveryState: Switch2DiscoveryState = .stopped
+    private var pendingDiscoverySeconds: TimeInterval?
     private enum ScanPhase { case paused, off, unauthorized, scanning, connecting, idle, ready }
     private lazy var discovery = ControllerDiscoveryPolicy(queue: btQueue,
         mode: configuration.discoveryMode, remembered: configuration.rememberedControllers.map(\.rawValue),
@@ -159,7 +160,17 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     package func requestDiscoveryWindow(seconds: TimeInterval) {
         btQueue.async { [weak self] in
             guard let self, self.running, !self.suspended else { return }
-            guard self.discovery.openWindow(seconds: seconds) else { self.failure(nil, .invalidParameter); return }
+            guard seconds.isFinite, (0.1...300).contains(seconds) else { self.failure(nil, .invalidParameter); return }
+            switch self.central.state {
+            case .poweredOn, .unknown, .resetting: break
+            default:
+                self.pendingDiscoverySeconds = nil
+                self.failure(nil, .bluetoothUnavailable)
+                return
+            }
+            // Start the scan budget when the radio becomes usable, rather than
+            // spending it on initial state delivery or the permission prompt.
+            self.pendingDiscoverySeconds = seconds
             self.updateScanning()
         }
     }
@@ -167,6 +178,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         let limited = Array(remembered.prefix(64))
         btQueue.async { [weak self] in
             guard let self else { return }
+            if self.discovery.mode != mode { self.pendingDiscoverySeconds = nil }
             self.discovery.configure(mode: mode, remembered: limited.map(\.rawValue))
             if self.central != nil { self.updateScanning() }
             else { self.publishManagerStatus() }
@@ -175,6 +187,7 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
     package func useConnectedForDiscovery() {
         btQueue.async { [weak self] in
             guard let self, self.running else { return }
+            self.pendingDiscoverySeconds = nil
             self.discovery.useConnected(self.sessions.values.map { $0.peripheral.identifier })
             self.updateScanning()
         }
@@ -298,9 +311,12 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
         if recompute { publishManagerStatus(); updateScanning() }
     }
 
-    private func resetConnections(cancel: Bool, reason: Switch2DisconnectionReason = .stopped) {
+    private func resetConnections(cancel: Bool, reason: Switch2DisconnectionReason = .stopped, cancelDiscoveryWindow: Bool = true) {
         resetConnectionRetries()
-        discovery.cancelWindow()
+        if cancelDiscoveryWindow {
+            pendingDiscoverySeconds = nil
+            discovery.cancelWindow()
+        }
         central.stopScan()
         let current = Array(sessions.values) + connecting.values.map { $0.session }
         for session in current { retire(session, cancel: cancel, recompute: false, reason: reason) }
@@ -417,6 +433,10 @@ package final class ControllerTransport: NSObject, @unchecked Sendable {
             central.stopScan(); resetConnectionRetries(); publishState(.paused); return
         }
         guard central.state == .poweredOn else { resetConnectionRetries(); publishState(.off); return }
+        if let seconds = pendingDiscoverySeconds {
+            pendingDiscoverySeconds = nil
+            _ = discovery.openWindow(seconds: seconds)
+        }
         let now = ControllerClock.now
         retryAdvertisements = retryAdvertisements.filter { $0.value.expiresAt > now }
         // Complete one connection/handshake before admitting another. Existing
@@ -494,6 +514,11 @@ extension ControllerTransport: CBCentralManagerDelegate {
         case .poweredOff:
             resetConnections(cancel: false, reason: .bluetoothUnavailable)
             bridgeLog(.warning, "engine", "Bluetooth is off")
+            publishState(.off)
+        case .unknown, .resetting:
+            // A user request can precede the initial radio/permission callback.
+            // Retire invalid links, but preserve the original bounded search intent.
+            resetConnections(cancel: false, reason: .bluetoothUnavailable, cancelDiscoveryWindow: false)
             publishState(.off)
         default:
             resetConnections(cancel: false, reason: .bluetoothUnavailable)
